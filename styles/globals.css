@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap');
+
+/* Estilo base: todo en Roboto Light */
+body {
+  font-family: 'Roboto', sans-serif;
+  font-weight: 300;
+}
+
+@import "tailwindcss";
+
+/* Variables de color por defecto */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+/* Modo oscuro */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Fondo blanco claro siempre (hasta que implementes dark mode conscientemente) */
+html, body {
+  background-color: #ffffff !important; /* Fija blanco puro */
+  color: #171717;
+  scroll-behavior: smooth;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Elimina override por variable para evitar el parpadeo */
+body {
+  background: #ffffff !important;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap');
+
+.font-light {
+  font-weight: 300;
+}
+
+.font-times {
+  font-family: 'Times New Roman', serif;
+}
+
+.font-roboto {
+  font-family: 'Roboto', sans-serif;
+}

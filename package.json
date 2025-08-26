@@ -1,0 +1,43 @@
+{
+  "name": "walcord",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deadcode": "ts-prune -p tsconfig.json --ignore '^pages/|^middleware\\.ts$' > dead-exports.txt || true",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/auth-helpers-react": "^0.5.0",
+    "@supabase/supabase-js": "^2.54.0",
+    "build": "^0.1.4",
+    "framer-motion": "^12.23.12",
+    "lucide-react": "^0.541.0",
+    "next": "15.4.5",
+    "npm": "^11.5.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "run": "^1.5.0"
+  },
+  "devDependencies": {
+    "@babel/generator": "^7.28.3",
+    "@babel/parser": "^7.28.3",
+    "@babel/traverse": "^7.28.3",
+    "@babel/types": "^7.28.2",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "24.1.0",
+    "@types/react": "19.1.9",
+    "@types/uuid": "^10.0.0",
+    "depcheck": "^1.4.7",
+    "eslint": "^9",
+    "eslint-config-next": "15.4.5",
+    "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "ts-prune": "^0.10.3",
+    "typescript": "^5.9.2"
+  }
+}
