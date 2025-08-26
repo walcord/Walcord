@@ -167,7 +167,7 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-white text-black font-[Roboto]">
       {/* Banner unificado */}
       <div className="w-full h-20 flex items-center justify-between px-6 bg-[#1F48AF]">
-        <Image src="/Logotipo.png" alt="Walcord Logo" width={56} height={56} />
+        <Image src="/logotipo.png" alt="Walcord Logo" width={56} height={56} />
         {/* Botón The Wall a la derecha */}
         <a
           href="/feed"

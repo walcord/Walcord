@@ -25,7 +25,7 @@ export default function PublicFriendsWrapper() {
     return (
       <main className="min-h-screen bg-white text-black font-[Roboto]">
         <div className="w-full h-20 flex items-center justify-between px-12 bg-[#1F48AF]">
-          <Image src="/Logotipo.png" alt="Walcord Logo" width={62} height={62} />
+          <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
           <a href={`/u/${username || ''}`} className="inline-flex items-center gap-2 rounded-full bg-white/95 text-black px-3 py-1.5 text-xs border border-white/60">
             Back
           </a>

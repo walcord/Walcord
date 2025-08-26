@@ -68,7 +68,7 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
     return (
       <main className="min-h-screen bg-white text-black font-[Roboto]">
         <div className="w-full h-20 flex items-center px-12 bg-[#1F48AF]">
-          <Image src="/Logotipo.png" alt="Walcord Logo" width={62} height={62} />
+          <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
         </div>
         <div className="w-full flex justify-center mt-10">
           <p className="text-sm text-neutral-600">Loading…</p>
@@ -80,7 +80,7 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
       <div className="w-full h-20 flex items-center px-12 bg-[#1F48AF]">
-        <Image src="/Logotipo.png" alt="Walcord Logo" width={62} height={62} />
+        <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
       </div>
 
       <div className="w-full flex flex-col items-center mt-10 mb-6">

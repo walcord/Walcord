@@ -75,7 +75,7 @@ export default function FriendsViewer({ viewerId }: { viewerId: string }) {
     <main className="min-h-screen bg-white">
       {/* Banner */}
       <div className="w-full h-20 flex items-center justify-between px-12 bg-[#1F48AF]">
-        <Image src="/Logotipo.png" width={56} height={56} alt="Walcord" priority />
+        <Image src="/logotipo.png" width={56} height={56} alt="Walcord" priority />
       </div>
 
       {/* Título */}

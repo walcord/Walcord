@@ -290,7 +290,7 @@ export default function RecordProfile() {
       {/* Header */}
       <div className="w-full h-20 flex items-center px-12 bg-[#1F48AF]">
         <Link href="/profile">
-          <Image src="/Logotipo.png" alt="Walcord Logo" width={62} height={62} />
+          <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
         </Link>
       </div>
 
