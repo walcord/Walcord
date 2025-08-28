@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "Walcord",
+    "slug": "walcord-app",
+    "scheme": "walcord",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.walcord.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "mailto",
+          "tel"
+        ]
+      },
+      "associatedDomains": [
+        "applinks:walcord.com"
+      ]
+    },
+    "android": {
+      "package": "com.walcord.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "walcord.com",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": []
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "25a635aa-fdc0-49ba-bc9f-0a672bd80ec1"
+      }
+    }
+  }
+}
