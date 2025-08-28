@@ -14,21 +14,14 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.walcord.app",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": [
-          "mailto",
-          "tel"
-        ]
+        "LSApplicationQueriesSchemes": ["mailto", "tel"]
       },
-      "associatedDomains": [
-        "applinks:walcord.com"
-      ]
+      "associatedDomains": ["applinks:walcord.com"]
     },
     "android": {
       "package": "com.walcord.app",
@@ -43,18 +36,12 @@
               "pathPrefix": "/"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ],
       "permissions": []
     },
-    "plugins": [
-      "expo-asset",
-      "expo-font"
-    ],
+    "plugins": ["expo-asset", "expo-font"],
     "extra": {
       "eas": {
         "projectId": "25a635aa-fdc0-49ba-bc9f-0a672bd80ec1"

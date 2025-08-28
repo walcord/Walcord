@@ -5,6 +5,10 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 
+// ⬇️ Botones sociales (mantengo tus componentes y les paso el userId de destino)
+import FollowButton from '../social/FollowButton'
+import AddFriendButton from '../social/AddFriendButton'
+
 const WALCORD_BLUES = {
   blue1: '#3268bbff',
   blue2: '#284072ff',
@@ -123,9 +127,27 @@ export default function PublicUserHeader({ userId }: Props) {
             {genres.length === 2 ? `${genres[0]} and ${genres[1]}` : '—'}
           </p>
 
-          <h1 className="text-[clamp(2rem,5vw,2.625rem)] font-normal mt-1 mb-3" style={{ fontFamily: 'Times New Roman, serif' }}>
+          <h1 className="text-[clamp(2rem,5vw,2.625rem)] font-normal mt-1 mb-2" style={{ fontFamily: 'Times New Roman, serif' }}>
             {fullName}
           </h1>
+
+          {/* Botones sociales: Follow / Add friend */}
+          <div className="mb-3 flex items-center gap-2">
+            {/* Follow */}
+            <FollowButton
+              {...({ userId, targetUserId: userId, toUserId: userId } as any)}
+              className="px-3 py-[6px] text-[13px] rounded bg-[#1F48AF] text-white hover:opacity-90 transition"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+              size="sm"
+            />
+            {/* Add friend */}
+            <AddFriendButton
+              {...({ userId, targetUserId: userId, toUserId: userId } as any)}
+              className="px-3 py-[6px] text-[13px] rounded border border-[#1F48AF] text-[#1F48AF] hover:bg-[#1F48AF] hover:text-white transition"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+              size="sm"
+            />
+          </div>
 
           {/* Favourite blocks */}
           <div className="flex flex-wrap justify-center sm:justify-start gap-6 mb-4">
@@ -163,7 +185,7 @@ export default function PublicUserHeader({ userId }: Props) {
               aria-disabled={!username}
               className={`flex items-center gap-3 hover:opacity-80 transition-all ${disabledLinkClass}`}
             >
-              <div className="relative w-[48px] h-[48px]">
+              <div className="relative w>[48px] h-[48px]">
                 {favouriteArtists.length >= 2 ? (
                   favouriteArtists.slice(0, 2).map((art, i) => (
                     <div

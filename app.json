@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "b7c2fecf-019c-4c82-a01b-7f9439ed5cd4"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.walcord.walcord",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

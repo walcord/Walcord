@@ -12,18 +12,27 @@ class MyDocument extends Document {
           <meta name="theme-color" content="#1F4CED" />
 
           {/* SEO básico por defecto */}
-          <meta name="description" content="Walcord — The Wall: memories, concerts, content and more." />
+          <meta
+            name="description"
+            content="Walcord — The Wall: memories, concerts, content and more."
+          />
 
           {/* Open Graph / Twitter (para enlaces compartidos) */}
           <meta property="og:site_name" content="Walcord" />
           <meta property="og:title" content="Walcord" />
-          <meta property="og:description" content="The Wall: memories, concerts, content and more." />
+          <meta
+            property="og:description"
+            content="The Wall: memories, concerts, content and more."
+          />
           <meta property="og:type" content="website" />
           <meta property="og:url" content="https://walcord.com/" />
           <meta property="og:image" content="https://walcord.com/logotipo.png" />
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content="Walcord" />
-          <meta name="twitter:description" content="The Wall: memories, concerts, content and more." />
+          <meta
+            name="twitter:description"
+            content="The Wall: memories, concerts, content and more."
+          />
           <meta name="twitter:image" content="https://walcord.com/logotipo.png" />
 
           {/* JSON-LD mínimo */}
@@ -31,11 +40,11 @@ class MyDocument extends Document {
             type="application/ld+json"
             dangerouslySetInnerHTML={{
               __html: JSON.stringify({
-                "@context": "https://schema.org",
-                "@type": "WebSite",
-                "name": "Walcord",
-                "url": "https://walcord.com/"
-              })
+                '@context': 'https://schema.org',
+                '@type': 'WebSite',
+                name: 'Walcord',
+                url: 'https://walcord.com/',
+              }),
             }}
           />
         </Head>
