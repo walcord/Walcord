@@ -1,26 +1,29 @@
 {
+  "cli": {
+    "version": ">= 14.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
-    "production": {
-      "distribution": "store",
+    "preview": {
+      "distribution": "internal",
+      "autoIncrement": true,
       "ios": {
-        "autoIncrement": true
-      },
-      "android": {
-        "gradleCommand": ":app:bundleRelease"
+        "simulator": false
       }
     },
-    "preview": {
-      "distribution": "internal"
-    },
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "simulator": false
+      }
     }
   },
   "submit": {
-    "production": {}
-  },
-  "cli": {
-    "appVersionSource": "remote"
+    "production": {
+      "ios": {
+        "appleId": "hello@walcord.com"
+      }
+    }
   }
 }
