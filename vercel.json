@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/support", "destination": "/support.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(privacy|support)(\\.html)?",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=60" }]
+    }
+  ]
+}
