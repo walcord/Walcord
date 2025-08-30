@@ -38,20 +38,42 @@ export default function FavouriteSongsPage() {
 
   useEffect(() => {
     const fetchAllTracks = async () => {
-      const { data, error } = await supabase
-        .from('tracks')
-        .select(`
-          *,
-          records:record (
-            id,
-            title,
-            artist_name,
-            vibe_color,
-            cover_color
-          )
-        `)
-        .order('track');
-      if (!error) setTracks(data || []);
+      // --- FIX: paginación para traer TODAS las canciones (límite PostgREST ~1000) ---
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      let to = PAGE_SIZE - 1;
+      const all: any[] = [];
+
+      // mantenemos el mismo select y el mismo alias de relación
+      while (true) {
+        const { data, error } = await supabase
+          .from('tracks')
+          .select(`
+            *,
+            records:record (
+              id,
+              title,
+              artist_name,
+              vibe_color,
+              cover_color
+            )
+          `)
+          .order('track', { ascending: true })
+          .range(from, to);
+
+        if (error) break;
+
+        const chunk = data || [];
+        all.push(...chunk);
+
+        // si el bloque viene incompleto, ya no hay más filas
+        if (chunk.length < PAGE_SIZE) break;
+
+        from += PAGE_SIZE;
+        to += PAGE_SIZE;
+      }
+
+      setTracks(all);
     };
 
     const fetchFavouriteTracks = async () => {
@@ -98,7 +120,7 @@ export default function FavouriteSongsPage() {
 
   const isSelected = (trackId: string) => selected.includes(trackId);
   const filteredTracks = useMemo(
-    () => tracks.filter((track) => track.track.toLowerCase().includes(search.toLowerCase())),
+    () => tracks.filter((track) => (track.track || '').toLowerCase().includes(search.toLowerCase())),
     [tracks, search]
   );
   const selectedSongs = tracks.filter((t) => selected.includes(t.id));
