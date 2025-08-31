@@ -2,7 +2,7 @@
 
 /* ==========================================================================================
    Walcord — The Wall (Feed)
-   Hot‑fix v3.3.1:
+   Hot-fix v3.3.1:
    - Banner idéntico a Concerts (h-20 + logo 56px) con botón “Profile” a la derecha.
    - Orden de botones: Memories · Concerts · Content · Recommendations · Pending.
    - 🔇 Sin “temblores” de posts (sin animaciones verticales en las cards).
@@ -403,7 +403,7 @@ const Lightbox: React.FC<{
 };
 
 /* ===============================
-   Buscador de usuarios (sin follow/friend)
+   Buscador de usuarios (con Follow/Add Friend)
    =============================== */
 const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
   const supabase = useSupabaseClient();
@@ -415,12 +415,154 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
   >([]);
   const [open, setOpen] = useState(false);
 
+  // Estado social
+  const [following, setFollowing] = useState<Record<string, boolean>>({});
+  type FriendState = "none" | "outgoing" | "incoming" | "friends";
+  const [friendship, setFriendship] = useState<Record<string, FriendState>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  // Helpers sociales
+  const refreshSocial = async (userIds: string[]) => {
+    if (!meId || userIds.length === 0) return;
+
+    // Following
+    const { data: fRows } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", meId)
+      .in("following_id", userIds);
+
+    const fMap: Record<string, boolean> = {};
+    (fRows || []).forEach((r: any) => (fMap[r.following_id] = true));
+
+    // Friendships (outgoing e incoming)
+    const [{ data: outRows }, { data: inRows }, { data: accA }, { data: accB }] = await Promise.all([
+      supabase
+        .from("friendships")
+        .select("receiver_id,status")
+        .eq("requester_id", meId)
+        .in("receiver_id", userIds),
+      supabase
+        .from("friendships")
+        .select("requester_id,status")
+        .eq("receiver_id", meId)
+        .in("requester_id", userIds),
+      supabase
+        .from("friendships")
+        .select("requester_id,receiver_id,status")
+        .eq("requester_id", meId)
+        .eq("status", "accepted")
+        .in("receiver_id", userIds),
+      supabase
+        .from("friendships")
+        .select("requester_id,receiver_id,status")
+        .eq("receiver_id", meId)
+        .eq("status", "accepted")
+        .in("requester_id", userIds),
+    ]);
+
+    const fs: Record<string, FriendState> = {};
+    const accepted = new Set<string>();
+    (accA || []).forEach((r: any) => accepted.add(r.receiver_id));
+    (accB || []).forEach((r: any) => accepted.add(r.requester_id));
+
+    userIds.forEach((id) => {
+      if (accepted.has(id)) {
+        fs[id] = "friends";
+        return;
+      }
+      const out = (outRows || []).find((r: any) => r.receiver_id === id);
+      const inc = (inRows || []).find((r: any) => r.requester_id === id);
+      if (out) fs[id] = "outgoing";
+      else if (inc) fs[id] = "incoming";
+      else fs[id] = "none";
+    });
+
+    setFollowing((prev) => ({ ...prev, ...fMap }));
+    setFriendship((prev) => ({ ...prev, ...fs }));
+  };
+
+  const toggleFollow = async (targetId: string) => {
+    if (!meId || meId === targetId) return;
+    const isFollowing = !!following[targetId];
+
+    setBusy((p) => ({ ...p, [targetId]: true }));
+    setFollowing((p) => ({ ...p, [targetId]: !isFollowing }));
+
+    try {
+      if (isFollowing) {
+        await supabase
+          .from("follows")
+          .delete()
+          .eq("follower_id", meId)
+          .eq("following_id", targetId);
+      } else {
+        await supabase.from("follows").insert({
+          follower_id: meId,
+          following_id: targetId,
+          created_at: new Date().toISOString(),
+        });
+      }
+    } catch (e) {
+      // revert
+      setFollowing((p) => ({ ...p, [targetId]: isFollowing }));
+      console.error("toggleFollow error", e);
+    } finally {
+      setBusy((p) => ({ ...p, [targetId]: false }));
+    }
+  };
+
+  const sendFriendRequest = async (targetId: string) => {
+    if (!meId || meId === targetId) return;
+    if (friendship[targetId] === "outgoing" || friendship[targetId] === "friends") return;
+
+    setBusy((p) => ({ ...p, [targetId]: true }));
+    setFriendship((p) => ({ ...p, [targetId]: "outgoing" }));
+    try {
+      await supabase.from("friendships").insert({
+        requester_id: meId,
+        receiver_id: targetId,
+        status: "pending",
+        created_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      // revert
+      setFriendship((p) => ({ ...p, [targetId]: "none" }));
+      console.error("sendFriendRequest error", e);
+    } finally {
+      setBusy((p) => ({ ...p, [targetId]: false }));
+    }
+  };
+
+  const acceptFriendRequest = async (targetId: string) => {
+    if (!meId) return;
+    if (friendship[targetId] !== "incoming") return;
+
+    setBusy((p) => ({ ...p, [targetId]: true }));
+    try {
+      const { error } = await supabase
+        .from("friendships")
+        .update({ status: "accepted" })
+        .eq("requester_id", targetId)
+        .eq("receiver_id", meId);
+      if (!error) setFriendship((p) => ({ ...p, [targetId]: "friends" }));
+    } catch (e) {
+      console.error("acceptFriendRequest error", e);
+    } finally {
+      setBusy((p) => ({ ...p, [targetId]: false }));
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(async () => {
       const q = deferred.trim();
       if (q.length < 2) {
-        if (!cancelled) setResults([]);
+        if (!cancelled) {
+          setResults([]);
+          setFollowing({});
+          setFriendship({});
+        }
         return;
       }
       setSearchLoading(true);
@@ -443,6 +585,9 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
               avatar_url: r.avatar_url,
             })) ?? [];
           setResults(mapped);
+          // cargar estado social
+          const ids = mapped.map((m) => m.id);
+          await refreshSocial(ids);
         }
       } finally {
         if (!cancelled) setSearchLoading(false);
@@ -499,24 +644,96 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
             <div className="p-4 text-sm text-neutral-500">No users found</div>
           ) : (
             <ul className="divide-y divide-neutral-100 max-h-[420px] overflow-auto">
-              {results.map((p) => (
-                <li
-                  key={p.id}
-                  className="p-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors"
-                >
-                  <Link
-                    href={`/profile/${p.username}`}
-                    className="flex items-center gap-3 flex-1"
-                    onClick={() => setOpen(false)}
+              {results.map((p) => {
+                const fState = friendship[p.id] || "none";
+                const isFollowing = !!following[p.id];
+                const isBusy = !!busy[p.id];
+
+                return (
+                  <li
+                    key={p.id}
+                    className="p-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors"
                   >
-                    <Avatar size={32} src={p.avatar_url} alt={p.full_name || p.username} />
-                    <div>
-                      <div className="text-sm">{p.full_name || "—"}</div>
-                      <div className="text-xs text-neutral-500">@{p.username}</div>
+                    <Link
+                      href={`/profile/${p.username}`}
+                      className="flex items-center gap-3 flex-1 min-w-0"
+                      onClick={() => setOpen(false)}
+                    >
+                      <Avatar size={32} src={p.avatar_url} alt={p.full_name || p.username} />
+                      <div className="min-w-0">
+                        <div className="text-sm line-clamp-1">{p.full_name || "—"}</div>
+                        <div className="text-xs text-neutral-500">@{p.username}</div>
+                      </div>
+                    </Link>
+
+                    {/* Botones de acción */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          toggleFollow(p.id);
+                        }}
+                        disabled={isBusy}
+                        className={[
+                          "px-3 py-1.5 rounded-full text-[12px] border transition-colors",
+                          isFollowing
+                            ? "bg-[#1F48AF] text-white border-[#1F48AF]"
+                            : "bg-white text-black border-neutral-200 hover:border-[#1F48AF]/40",
+                        ].join(" ")}
+                        aria-pressed={isFollowing ? "true" : "false"}
+                        aria-label={isFollowing ? "Unfollow" : "Follow"}
+                      >
+                        {isFollowing ? "Following" : "Follow"}
+                      </button>
+
+                      {fState === "incoming" ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            acceptFriendRequest(p.id);
+                          }}
+                          disabled={isBusy}
+                          className="px-3 py-1.5 rounded-full text-[12px] border bg-[#1F48AF] text-white border-[#1F48AF] disabled:opacity-60"
+                          aria-label="Accept friend request"
+                        >
+                          Accept
+                        </button>
+                      ) : fState === "outgoing" ? (
+                        <button
+                          disabled
+                          className="px-3 py-1.5 rounded-full text-[12px] border bg-neutral-100 text-neutral-600 border-neutral-200"
+                          aria-label="Friend request sent"
+                        >
+                          Requested
+                        </button>
+                      ) : fState === "friends" ? (
+                        <button
+                          disabled
+                          className="px-3 py-1.5 rounded-full text-[12px] border bg-neutral-100 text-neutral-600 border-neutral-200"
+                          aria-label="Already friends"
+                        >
+                          Friends
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            sendFriendRequest(p.id);
+                          }}
+                          disabled={isBusy}
+                          className="px-3 py-1.5 rounded-full text-[12px] border bg-white text-black border-neutral-200 hover:border-[#1F48AF]/40 disabled:opacity-60"
+                          aria-label="Add friend"
+                        >
+                          Add friend
+                        </button>
+                      )}
                     </div>
-                  </Link>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
           <div className="p-2 text-right">
@@ -959,7 +1176,7 @@ export const Feed: React.FC = () => {
       } catch (e: any) {
         alert(e?.message || "Could not comment");
       } finally {
-        setSending(false);
+               setSending(false);
       }
     };
     return (
