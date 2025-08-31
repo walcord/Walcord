@@ -52,14 +52,15 @@ export default function NewPostPage() {
     }
     setSearching(true)
     if (debouncer.current) clearTimeout(debouncer.current)
-    debouncer.current = setTimeout(async () => {
+    // LÍNEA 55 MODIFICADA:
+    debouncer.current = (setTimeout(async () => {
       try {
         const res = await searchRecords(term)
         setResults(res as any)
       } finally {
         setSearching(false)
       }
-    }, 200)
+    }, 200) as unknown as Timeout);
   }, [q])
 
   /* ------------------------------ submit handler ------------------------------ */
