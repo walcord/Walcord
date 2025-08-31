@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // ✅ Desbloquear build en Vercel (ignora ESLint/TS solo en "next build")
+  // ✅ Ignorar ESLint y TypeScript en "next build" (solo para desbloquear deploy)
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
 
