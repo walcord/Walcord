@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/navigation';
 
 export default function Signup() {
   const router = useRouter();
@@ -15,9 +15,19 @@ export default function Signup() {
 
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const origin = useMemo(() => {
+    // Redirección segura para el email de confirmación
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return window.location.origin;
+    }
+    // Si no hay window (SSR), usa variable pública si la tienes configurada
+    return process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  }, []);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setError('');
     setSuccessMessage('');
   };
@@ -27,48 +37,82 @@ export default function Signup() {
 
   const isValidPassword = (password) => password.length >= 6;
 
+  const normalize = (s) => (s || '').trim();
+
+  const mapSupabaseError = (message) => {
+    // Mensajes más amables para los casos típicos
+    if (!message) return 'Something went wrong. Please try again.';
+    const msg = message.toLowerCase();
+
+    if (msg.includes('user already registered')) {
+      return 'This email is already registered.';
+    }
+    if (msg.includes('rate limit')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
+    if (msg.includes('database error saving new user')) {
+      // Suele ser por policies/constraints en tu tabla de perfiles o un trigger
+      return 'Database error saving new user. Please try again in a minute. If it persists, review your profiles table constraints and RLS policies.';
+    }
+    if (msg.includes('invalid email')) {
+      return 'Please enter a valid email address.';
+    }
+    if (msg.includes('password')) {
+      return 'Password must be at least 6 characters long.';
+    }
+    return message;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { name, email, password } = form;
+    setError('');
+    setSuccessMessage('');
+
+    const name = normalize(form.name);
+    const email = normalize(form.email);
+    const password = form.password;
 
     if (!name || !email || !password) {
       setError('Please complete all fields.');
       return;
     }
-
     if (!isValidEmail(email)) {
       setError('Please enter a valid email address.');
       return;
     }
-
     if (!isValidPassword(password)) {
       setError('Password must be at least 6 characters long.');
       return;
     }
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-  email,
-  password,
-  options: {
-    emailRedirectTo: `${window.location.origin}/login`,
-    data: {
-      full_name: name,
-    },
-  },
-});
+    setLoading(true);
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          // Tras confirmar el email, llévalos al login (ajústalo si prefieres otra ruta)
+          emailRedirectTo: `${origin}/login`,
+          data: {
+            full_name: name,
+          },
+        },
+      });
 
-    if (signUpError) {
-      if (signUpError.message === 'User already registered') {
-        setError('This email is already registered.');
-      } else {
-        setError(signUpError.message);
+      if (signUpError) {
+        setError(mapSupabaseError(signUpError.message));
+        setLoading(false);
+        return;
       }
-      return;
-    }
 
-    // ✅ Mostrar mensaje de éxito
-    setSuccessMessage('Account created. Please check your email to confirm.');
-    setForm({ name: '', email: '', password: '' });
+      // Si confirm email está activado, el usuario debe confirmar antes de poder iniciar sesión
+      setSuccessMessage('Account created. Please check your email to confirm.');
+      setForm({ name: '', email: '', password: '' });
+    } catch (err) {
+      setError(mapSupabaseError(err?.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -89,6 +133,8 @@ export default function Signup() {
               placeholder="Name and Surname"
               value={form.name}
               onChange={handleChange}
+              autoComplete="name"
+              required
               className="w-full outline-none bg-transparent text-sm font-light placeholder-gray-400"
               style={{ fontFamily: 'Roboto, sans-serif' }}
             />
@@ -101,6 +147,8 @@ export default function Signup() {
               placeholder="Email"
               value={form.email}
               onChange={handleChange}
+              autoComplete="email"
+              required
               className="w-full outline-none bg-transparent text-sm font-light placeholder-gray-400"
               style={{ fontFamily: 'Roboto, sans-serif' }}
             />
@@ -113,6 +161,9 @@ export default function Signup() {
               placeholder="Password"
               value={form.password}
               onChange={handleChange}
+              autoComplete="new-password"
+              required
+              minLength={6}
               className="w-full outline-none bg-transparent text-sm font-light placeholder-gray-400"
               style={{ fontFamily: 'Roboto, sans-serif' }}
             />
@@ -138,7 +189,8 @@ export default function Signup() {
 
           <button
             type="submit"
-            className="mt-6 w-full py-2 text-white text-sm tracking-wide rounded-md transition-all duration-300 hover:opacity-90 active:scale-95"
+            disabled={loading}
+            className="mt-6 w-full py-2 text-white text-sm tracking-wide rounded-md transition-all duration-300 hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             style={{
               backgroundColor: '#1F48AF',
               fontFamily: 'Roboto, sans-serif',
@@ -146,7 +198,7 @@ export default function Signup() {
               fontSize: '0.9rem',
             }}
           >
-            Come Together
+            {loading ? 'Creating account…' : 'Come Together'}
           </button>
         </form>
       </div>
