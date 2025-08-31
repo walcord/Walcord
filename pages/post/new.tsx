@@ -4,6 +4,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPost, uploadPostImages, searchRecords } from '../../lib/posts'
 
+// 👇 NUEVO: alias compatible para setTimeout en browser y Node
+type TimeoutId = ReturnType<typeof setTimeout>;
+
 type RecordItem = {
   id: string
   title: string
@@ -40,7 +43,8 @@ export default function NewPostPage() {
 
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState<string | null>(null)
-  const debouncer = useRef<NodeJS.Timeout | null>(null)
+  // ⬇️ MODIFICADO: antes NodeJS.Timeout | null
+  const debouncer = useRef<TimeoutId | null>(null)
 
   /* ----------------------------- search (debounced) ---------------------------- */
   useEffect(() => {
@@ -52,15 +56,14 @@ export default function NewPostPage() {
     }
     setSearching(true)
     if (debouncer.current) clearTimeout(debouncer.current)
-    // LÍNEA 55 MODIFICADA:
-    debouncer.current = (setTimeout(async () => {
+    debouncer.current = setTimeout(async () => {
       try {
         const res = await searchRecords(term)
         setResults(res as any)
       } finally {
         setSearching(false)
       }
-    }, 200) as unknown as Timeout);
+    }, 200)
   }, [q])
 
   /* ------------------------------ submit handler ------------------------------ */
