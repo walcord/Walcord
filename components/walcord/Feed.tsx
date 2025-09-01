@@ -864,10 +864,34 @@ export const Feed: React.FC = () => {
   };
 
   /* ---------------- Memories ---------------- */
+
+  // *** NUEVO HELPER (visibilidad estricta por seguidos / amistades / yo) ***
+  const getVisibleUserIds = async (): Promise<string[]> => {
+    if (!user?.id) return [];
+    const [followsRes, frA, frB] = await Promise.all([
+      supabase.from("follows").select("following_id").eq("follower_id", user.id),
+      supabase.from("friendships").select("receiver_id").eq("requester_id", user.id).eq("status", "accepted"),
+      supabase.from("friendships").select("requester_id").eq("receiver_id", user.id).eq("status", "accepted"),
+    ]);
+    const ids = new Set<string>();
+    ids.add(user.id);
+    (followsRes.data || []).forEach((r: any) => ids.add(r.following_id));
+    (frA.data || []).forEach((r: any) => ids.add(r.receiver_id));
+    (frB.data || []).forEach((r: any) => ids.add(r.requester_id));
+    return Array.from(ids);
+  };
+
   const fetchMemories = async (reset = false) => {
     if (!user) return;
     setMemoriesLoading(true);
     try {
+      const visible = await getVisibleUserIds();
+      if (visible.length === 0) {
+        setMemories([]);
+        setMemoriesPage(0);
+        return;
+      }
+
       const from = reset ? 0 : memoriesPage * pageSize;
       const to = from + pageSize - 1;
 
@@ -877,6 +901,7 @@ export const Feed: React.FC = () => {
           "viewer_id, post_id, author_id, created_at, caption, image_urls, username, avatar_url, record_id, record_title, artist_name, record_vibe_color, record_cover_color"
         )
         .eq("viewer_id", user.id)
+        .in("author_id", visible) // <<<<<< FILTRO DURO: solo seguidos / amistades / yo
         .order("created_at", { ascending: false })
         .range(from, to);
 

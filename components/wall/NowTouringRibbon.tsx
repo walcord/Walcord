@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSupabaseClient } from "@supabase/auth-helpers-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
 import Link from "next/link";
 
 type RibbonItem = {
@@ -19,15 +19,54 @@ type RibbonItem = {
 
 export default function NowTouringRibbon() {
   const supabase = useSupabaseClient();
+  const user = useUser();
   const [items, setItems] = useState<RibbonItem[]>([]);
+  const visibleIdsRef = useRef<string[] | null>(null);
+
+  /** Tú + seguidos + amistades aceptadas (ambos sentidos). */
+  const getVisibleUserIds = async (): Promise<string[]> => {
+    if (!user?.id) return [];
+    if (visibleIdsRef.current) return visibleIdsRef.current;
+
+    const [followsRes, frA, frB] = await Promise.all([
+      supabase.from("follows").select("following_id").eq("follower_id", user.id),
+      supabase
+        .from("friendships")
+        .select("receiver_id")
+        .eq("requester_id", user.id)
+        .eq("status", "accepted"),
+      supabase
+        .from("friendships")
+        .select("requester_id")
+        .eq("receiver_id", user.id)
+        .eq("status", "accepted"),
+    ]);
+
+    const ids = new Set<string>([user.id]);
+    (followsRes.data || []).forEach((r: any) => ids.add(r.following_id));
+    (frA.data || []).forEach((r: any) => ids.add(r.receiver_id));
+    (frB.data || []).forEach((r: any) => ids.add(r.requester_id));
+
+    visibleIdsRef.current = Array.from(ids);
+    return visibleIdsRef.current;
+  };
 
   useEffect(() => {
     let mounted = true;
+    visibleIdsRef.current = null; // reset si cambia el usuario
+
     (async () => {
-      // Últimas 24 fotos subidas
+      const ids = await getVisibleUserIds();
+      if (ids.length === 0) {
+        if (mounted) setItems([]);
+        return;
+      }
+
+      // ✅ Solo fotos de tus seguidos/amigos/tú
       const { data: ph, error } = await supabase
         .from("concert_photos")
         .select("id, user_id, concert_id, created_at")
+        .in("user_id", ids)
         .order("created_at", { ascending: false })
         .limit(24);
 
@@ -36,26 +75,41 @@ export default function NowTouringRibbon() {
         return;
       }
 
-      const concertIds = [...new Set(ph.map(x => x.concert_id))];
-      const userIds    = [...new Set(ph.map(x => x.user_id))];
+      const concertIds = [...new Set(ph.map((x) => x.concert_id))];
+      const userIds = [...new Set(ph.map((x) => x.user_id))];
 
       const [{ data: concerts }, { data: users }] = await Promise.all([
-        supabase.from("concerts")
+        supabase
+          .from("concerts")
           .select("id, artist_name, tour, city, country, year")
           .in("id", concertIds),
-        supabase.from("profiles")
+        supabase
+          .from("profiles")
           .select("id, username, full_name")
           .in("id", userIds),
       ]);
 
-      const artistNames = [...new Set((concerts ?? []).map((c: any) => c.artist_name).filter(Boolean))] as string[];
+      const artistNames = [
+        ...new Set(
+          (concerts ?? []).map((c: any) => c.artist_name).filter(Boolean)
+        ),
+      ] as string[];
       const { data: artists } = artistNames.length
-        ? await supabase.from("artists").select("id, name").in("name", artistNames)
+        ? await supabase
+            .from("artists")
+            .select("id, name")
+            .in("name", artistNames)
         : { data: [] as any[] };
 
-      const idByName = Object.fromEntries((artists ?? []).map((a: any) => [a.name, a.id]));
-      const cById = Object.fromEntries((concerts ?? []).map((c: any) => [c.id, c]));
-      const uById = Object.fromEntries((users ?? []).map((u: any) => [u.id, u]));
+      const idByName = Object.fromEntries(
+        (artists ?? []).map((a: any) => [a.name, a.id])
+      );
+      const cById = Object.fromEntries(
+        (concerts ?? []).map((c: any) => [c.id, c])
+      );
+      const uById = Object.fromEntries(
+        (users ?? []).map((u: any) => [u.id, u])
+      );
 
       // 1 item por concierto (evita duplicados)
       const seen = new Set<string>();
@@ -82,19 +136,28 @@ export default function NowTouringRibbon() {
 
       if (mounted) setItems(built);
     })();
-    return () => { mounted = false; };
-  }, [supabase]);
+
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, supabase]);
 
   const stream = useMemo(() => {
     return items.map((it) => {
-      const who    = it.full_name || it.username || "—";
-      const place  = it.city && it.country ? `${it.city}, ${it.country}` : it.city || it.country || "";
-      const when   = it.year ? ` (${it.year})` : "";
+      const who = it.full_name || it.username || "—";
+      const place =
+        it.city && it.country
+          ? `${it.city}, ${it.country}`
+          : it.city || it.country || "";
+      const when = it.year ? ` (${it.year})` : "";
       const artist = it.artist_name || "—";
-      const tour   = it.tour ? ` — ${it.tour}` : "";
+      const tour = it.tour ? ` — ${it.tour}` : "";
       // Enlace al perfil real del artista por ID
-      const href   = it.artist_id ? `/artist/${it.artist_id}` : "#";
-      const text   = `${who} went to ${artist}${tour}${place ? ` in ${place}` : ""}${when}`;
+      const href = it.artist_id ? `/artist/${it.artist_id}` : "#";
+      const text = `${who} went to ${artist}${tour}${
+        place ? ` in ${place}` : ""
+      }${when}`;
       return { text, href };
     });
   }, [items]);
@@ -117,7 +180,11 @@ export default function NowTouringRibbon() {
         <div className="w-full overflow-hidden">
           <div className="flex gap-8 animate-[ticker_40s_linear_infinite] whitespace-nowrap px-4 py-3 text-sm">
             {stream.concat(stream).map((row, i) => (
-              <Link key={i} href={row.href} className="text-black hover:text-[#1F48AF] transition">
+              <Link
+                key={i}
+                href={row.href}
+                className="text-black hover:text-[#1F48AF] transition"
+              >
                 {row.text}
               </Link>
             ))}
@@ -126,8 +193,12 @@ export default function NowTouringRibbon() {
       </div>
       <style jsx>{`
         @keyframes ticker {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
         }
       `}</style>
     </div>

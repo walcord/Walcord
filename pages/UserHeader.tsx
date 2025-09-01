@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import FriendRequestsSheet from '../components/social/FriendRequestsSheet';
 
-// 🎨 Azules Walcord
 const WALCORD_BLUES = {
   blue1: '#3268bbff',
   blue2: '#284072ff',
@@ -20,28 +19,28 @@ export default function UserHeader(_: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Datos base
+  // Perfil base
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [username, setUsername] = useState('');
-  const [genres, setGenres] = useState<string[]>([]);
-  const [songs, setSongs] = useState<string[]>([]);
+  const [editingName, setEditingName] = useState(false);
+  const [savingName, setSavingName] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   // Favoritos
+  const [genres, setGenres] = useState<string[]>([]);
+  const [songs, setSongs] = useState<string[]>([]);
   const [favouriteArtists, setFavouriteArtists] = useState<any[]>([]);
   const [favouriteRecords, setFavouriteRecords] = useState<any[]>([]);
 
   // Social
-  const [profileId, setProfileId] = useState<string | null>(null);
   const [followersCount, setFollowersCount] = useState<number>(0);
   const [pendingCount, setPendingCount] = useState<number>(0);
 
-  // Colores
   const [color1, color2, color3, color4] = useMemo(
     () => [WALCORD_BLUES.blue2, WALCORD_BLUES.blue1, WALCORD_BLUES.blue4, WALCORD_BLUES.blue3],
     []
   );
 
-  // Tamaño dinámico del nombre
   const nameFontSizePx = useMemo(() => {
     const len = username.trim().length;
     if (len === 0) return undefined;
@@ -51,36 +50,58 @@ export default function UserHeader(_: Props) {
     return 28;
   }, [username]);
 
-  /* ========== Upload avatar ========== */
+  /* ========== Upload avatar (con guardado en profiles) ========== */
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
+      console.error('Auth error:', userErr?.message || 'not logged in');
+      return;
+    }
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}-${crypto.randomUUID()}.${fileExt}`;
-    const filePath = `${fileName}`;
-
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, { upsert: true });
-    if (uploadError) return console.error('Upload error:', uploadError.message);
-
-    const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-    const publicUrl = publicUrlData.publicUrl;
-
-    const { error: updateError } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
-    if (updateError) return console.error('Error updating profile:', updateError.message);
-
-    setProfileImage(publicUrl);
     try {
-      localStorage.setItem('walcord_avatar_url', publicUrl);
-    } catch {}
+      const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError.message);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const publicUrl = publicUrlData.publicUrl;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Error updating profile avatar_url:', updateError.message);
+        return;
+      }
+
+      setProfileImage(publicUrl);
+      try {
+        localStorage.setItem('walcord_avatar_url', publicUrl);
+      } catch {}
+    } catch (err) {
+      console.error('Unexpected upload error:', err);
+    } finally {
+      // reset input para permitir re-subir el mismo archivo si quiere
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
-  /* ========== Perfil base con precarga local (sin lag) ========== */
+  /* ========== Carga de perfil con caché local ========== */
   useEffect(() => {
-    // cache -> muestra instantáneo
     try {
       const cachedName = localStorage.getItem('walcord_full_name');
       const cachedAvatar = localStorage.getItem('walcord_avatar_url');
@@ -108,7 +129,6 @@ export default function UserHeader(_: Props) {
       const name = (data?.full_name as string) || 'User';
       setProfileImage(avatar);
       setUsername(name);
-
       try {
         localStorage.setItem('walcord_full_name', name);
         if (avatar) localStorage.setItem('walcord_avatar_url', avatar);
@@ -118,17 +138,48 @@ export default function UserHeader(_: Props) {
     fetchProfile();
   }, []);
 
-  /* ========== Followers + Pending requests (counts) + realtime ========== */
+  /* ========== Update de nombre (inline) ========== */
+  const saveName = async (newName: string) => {
+    if (!newName.trim()) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setSavingName(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: newName.trim() })
+      .eq('id', user.id);
+    setSavingName(false);
+    if (error) {
+      console.error('Error updating full_name:', error.message);
+      return;
+    }
+    setUsername(newName.trim());
+    try { localStorage.setItem('walcord_full_name', newName.trim()); } catch {}
+    setEditingName(false);
+  };
+
+  /* ========== Followers + Pending requests ========== */
   useEffect(() => {
     if (!profileId) return;
 
     const loadCounts = async () => {
+      // 1) intenta leer vista agregada
       const { data: fcounts } = await supabase
         .from('profile_follow_counts')
         .select('followers_count')
         .eq('profile_id', profileId)
-        .single();
-      setFollowersCount(fcounts?.followers_count ?? 0);
+        .maybeSingle();
+
+      if (fcounts?.followers_count != null) {
+        setFollowersCount(fcounts.followers_count);
+      } else {
+        // 2) fallback directo a tabla follows
+        const { count } = await supabase
+          .from('follows')
+          .select('follower_id', { count: 'exact', head: true })
+          .eq('following_id', profileId);
+        setFollowersCount(count ?? 0);
+      }
 
       const { data: pend } = await supabase
         .from('friendships')
@@ -138,7 +189,6 @@ export default function UserHeader(_: Props) {
       setPendingCount(pend?.length ?? 0);
     };
 
-    // NO devolver promesas en el efecto:
     void loadCounts();
 
     const ch = supabase
@@ -155,11 +205,10 @@ export default function UserHeader(_: Props) {
       )
       .subscribe();
 
-    // el único return del efecto: cleanup
     return () => { supabase.removeChannel(ch); };
   }, [profileId]);
 
-  /* ========== Géneros favoritos (máx 2) ========== */
+  /* ========== Favoritos: géneros (máx 2) ========== */
   useEffect(() => {
     const fetchGenres = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -185,7 +234,7 @@ export default function UserHeader(_: Props) {
     fetchGenres();
   }, []);
 
-  /* ========== Top songs (is_top = true, máx 3) ========== */
+  /* ========== Favoritos: top songs (is_top = true, máx 3) ========== */
   useEffect(() => {
     const fetchTopSongs = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -206,7 +255,7 @@ export default function UserHeader(_: Props) {
     fetchTopSongs();
   }, []);
 
-  /* ========== Artistas favoritos ========== */
+  /* ========== Favoritos: artistas y discos ========== */
   useEffect(() => {
     const fetchFavouriteArtists = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -222,11 +271,6 @@ export default function UserHeader(_: Props) {
       setFavouriteArtists(data || []);
     };
 
-    fetchFavouriteArtists();
-  }, []);
-
-  /* ========== Discos favoritos ========== */
-  useEffect(() => {
     const fetchFavouriteRecords = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -241,6 +285,7 @@ export default function UserHeader(_: Props) {
       setFavouriteRecords(data || []);
     };
 
+    fetchFavouriteArtists();
     fetchFavouriteRecords();
   }, []);
 
@@ -265,7 +310,7 @@ export default function UserHeader(_: Props) {
 
         {/* Info */}
         <div className="flex flex-col items-center sm:items-start text-center sm:text-left w-full">
-          {/* Géneros favoritos — sin subrayado al hover */}
+          {/* Géneros favoritos */}
           <p
             onClick={() => router.push('/select-genres')}
             className="text-[15px] font-light text-[#1d1d1d] leading-tight cursor-pointer transition-all duration-200 hover:opacity-70"
@@ -274,13 +319,32 @@ export default function UserHeader(_: Props) {
             {genres.length === 2 ? `${genres[0]} and ${genres[1]}` : 'Select your favourite genres'}
           </p>
 
-          {/* Nombre */}
-          <h1
-            className="mt-1 mb-6 font-normal whitespace-nowrap overflow-hidden text-ellipsis"
-            style={{ fontFamily: 'Times New Roman, serif', fontSize: nameFontSizePx ? `${nameFontSizePx}px` : undefined }}
-          >
-            {username || ' '}
-          </h1>
+          {/* Nombre (editable) */}
+          <div className="mt-1 mb-6">
+            {editingName ? (
+              <input
+                autoFocus
+                defaultValue={username}
+                disabled={savingName}
+                onBlur={(e) => saveName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveName((e.target as HTMLInputElement).value);
+                  if (e.key === 'Escape') setEditingName(false);
+                }}
+                className="bg-transparent outline-none border-b border-neutral-400 text-center sm:text-left"
+                style={{ fontFamily: 'Times New Roman, serif', fontSize: nameFontSizePx ? `${nameFontSizePx}px` : undefined }}
+              />
+            ) : (
+              <h1
+                className="font-normal whitespace-nowrap overflow-hidden text-ellipsis cursor-text"
+                style={{ fontFamily: 'Times New Roman, serif', fontSize: nameFontSizePx ? `${nameFontSizePx}px` : undefined }}
+                onClick={() => setEditingName(true)}
+                title="Click to edit name"
+              >
+                {username || ' '}
+              </h1>
+            )}
+          </div>
 
           {/* Favourite blocks */}
           <div className="flex flex-wrap justify-center sm:justify-start gap-6 mb-5">
@@ -354,7 +418,7 @@ export default function UserHeader(_: Props) {
             Concerts
           </button>
 
-          {/* Favourite Songs — sin subrayado al hover */}
+          {/* Favourite Songs */}
           <div
             onClick={() => router.push('/favourite-songs')}
             className="mt-5 text-[13px] font-light leading-tight cursor-pointer transition-all duration-200 hover:opacity-70"
@@ -375,7 +439,6 @@ export default function UserHeader(_: Props) {
               {followersCount} followers
             </span>
 
-            {/* Hoja de Friend Requests con badge */}
             {profileId && <FriendRequestsSheet ownerProfileId={profileId} badgeCount={pendingCount} />}
 
             <a
