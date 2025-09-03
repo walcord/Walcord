@@ -10,14 +10,9 @@ import { ARTIST_COLOR_PALETTE } from "../lib/artist.Colors";
 import NowTouringRibbon from "../components/wall/NowTouringRibbon";
 
 /* ===========================================================================
-   Walcord — Favourite Artists (MOBILE‑FIRST, banner igual que ConcertsPage)
+   Walcord — Favourite Artists (MOBILE-FIRST, banner igual que ConcertsPage)
    - Header 80px + logo 56px, seguido de NowTouringRibbon.
-   - AVATARES SIEMPRE CIRCULARES (sin deformaciones):
-       • Wrapper cuadrado (aspect-square) + rounded-full + overflow-hidden.
-       • <Image fill className="object-cover rounded-full" /> para cubrir.
-   - Botones "Add as Favourite" con tamaño coherente en móvil:
-       • Altura fija h-10, min-w-[140px], centrados con flex.
-   - Cards del buscador: layout estable y táctil.
+   - AVATARES SIEMPRE CIRCULARES (sin deformaciones)
    =========================================================================== */
 
 const currentYear = new Date().getFullYear();
@@ -183,7 +178,6 @@ export default function FavouriteArtists() {
             >
               {/* LADO IZQUIERDO: avatar + datos */}
               <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                {/* Avatar SIEMPRE perfecto círculo */}
                 <div
                   className="relative aspect-square w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden shrink-0 border border-black/5"
                   style={{ backgroundColor: getArtistColor(artist.id) }}
@@ -212,10 +206,10 @@ export default function FavouriteArtists() {
                 </div>
               </div>
 
-              {/* LADO DERECHO: estado favorito / botón coherente */}
+              {/* LADO DERECHO: estado favorito / botón */}
               {isFavourite(artist.id) ? (
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  <span className="inline-flex items-center justify-center h-10 min-w-[140px] px-3 rounded-full text-sm text-white font-light bg-[#1F48AF]">
+                  <span className="inline-flex items-center justify-center h-10 min-w-[120px] sm:min-w-[140px] px-3 rounded-full text-xs sm:text-sm text-white font-light bg-[#1F48AF]">
                     Since {isFavourite(artist.id)?.since_year}
                   </span>
                   {!readonly && (
@@ -234,7 +228,7 @@ export default function FavouriteArtists() {
               ) : (
                 !readonly && (
                   <button
-                    className="inline-flex items-center justify-center h-10 min-w-[140px] px-4 rounded-full text-sm text-white font-light bg-[#1F48AF] hover:opacity-90 transition shrink-0"
+                    className="inline-flex items-center justify-center h-10 min-w-[120px] sm:min-w-[140px] px-4 rounded-full text-xs sm:text-sm text-white font-light bg-[#1F48AF] hover:opacity-90 transition shrink-0"
                     onClick={(e) => {
                       e.preventDefault();
                       setNewArtist(artist);
@@ -250,61 +244,63 @@ export default function FavouriteArtists() {
         </div>
       )}
 
-      {/* Favoritos */}
+      {/* Favoritos (GRID 2 columnas en móvil) */}
       {favourites.length > 0 ? (
-        <div className="w-full flex flex-wrap justify-center gap-6 px-6 pb-24">
-          {favourites.map((fav) => {
-            const artist = artists.find((a) => a.id === fav.artist_id);
-            if (!artist) return null;
-            const color = getArtistColor(artist.id);
+        <div className="w-full px-4 sm:px-6 pb-24">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            {favourites.map((fav) => {
+              const artist = artists.find((a) => a.id === fav.artist_id);
+              if (!artist) return null;
+              const color = getArtistColor(artist.id);
 
-            return (
-              <Link
-                key={fav.artist_id}
-                href={`/artist/${fav.artist_id}`}
-                className="w-64 shadow-sm rounded-3xl overflow-hidden hover:bg-neutral-50 transition"
-              >
-                <div
-                  className="w-full h-40 flex items-center justify-center"
-                  style={{ backgroundColor: color }}
+              return (
+                <Link
+                  key={fav.artist_id}
+                  href={`/artist/${fav.artist_id}`}
+                  className="shadow-sm rounded-3xl overflow-hidden hover:bg-neutral-50 transition"
                 >
-                  <div className="relative w-24 h-24 rounded-full overflow-hidden">
-                    {artist.image_url ? (
-                      <Image
-                        src={artist.image_url}
-                        alt={artist.name}
-                        fill
-                        className="object-cover rounded-full"
-                        sizes="96px"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-white/40" />
-                    )}
-                  </div>
-                </div>
-                <div className="p-4 text-center">
-                  <p
-                    className="text-lg truncate"
-                    style={{
-                      fontFamily: "Times New Roman, serif",
-                      fontWeight: 400,
-                      opacity: 0.9,
-                    }}
+                  <div
+                    className="w-full h-36 sm:h-40 flex items-center justify-center"
+                    style={{ backgroundColor: color }}
                   >
-                    {artist.name}
-                  </p>
-                  <p className="text-sm text-gray-500 font-light truncate">
-                    {artist.place}
-                  </p>
-                  <div className="mt-3 mb-1">
-                    <span className="inline-flex items-center justify-center h-9 min-w-[120px] px-4 rounded-full text-sm text-white font-light bg-[#1F48AF]">
-                      Since {fav.since_year}
-                    </span>
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden">
+                      {artist.image_url ? (
+                        <Image
+                          src={artist.image_url}
+                          alt={artist.name}
+                          fill
+                          className="object-cover rounded-full"
+                          sizes="96px"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-white/40" />
+                      )}
+                    </div>
                   </div>
-                </div>
-              </Link>
-            );
-          })}
+                  <div className="p-3 sm:p-4 text-center">
+                    <p
+                      className="text-sm sm:text-lg truncate"
+                      style={{
+                        fontFamily: "Times New Roman, serif",
+                        fontWeight: 400,
+                        opacity: 0.9,
+                      }}
+                    >
+                      {artist.name}
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-500 font-light truncate">
+                      {artist.place}
+                    </p>
+                    <div className="mt-2 sm:mt-3 mb-1">
+                      <span className="inline-flex items-center justify-center h-8 sm:h-9 px-3 sm:px-4 rounded-full text-xs sm:text-sm text-white font-light bg-[#1F48AF]">
+                        Since {fav.since_year}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       ) : (
         <p className="text-center text-neutral-500 pb-16">No artists yet.</p>

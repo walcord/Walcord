@@ -123,11 +123,11 @@ export default function NewPostPage() {
   /* ----------------------------------- UI ------------------------------------ */
   return (
     <div className="min-h-screen bg-[#1F48AF]/6">
-      <main className="mx-auto max-w-5xl px-6 py-12">
+      <main className="mx-auto max-w-3xl lg:max-w-5xl px-4 sm:px-6 py-10 sm:py-12">
         {/* Header */}
-        <header className="mb-8">
+        <header className="mb-6 sm:mb-8">
           <h1
-            className="text-[44px] leading-none tracking-tight"
+            className="text-[clamp(1.75rem,5vw,44px)] leading-[1.1] tracking-tight"
             style={{ fontFamily: '"Times New Roman", Times, serif', fontWeight: 400 }}
           >
             Share a Memory
@@ -141,12 +141,12 @@ export default function NewPostPage() {
         </header>
 
         {/* Layout 2 columnas (editorial, limpio) */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           {/* Columna izquierda: Record / Era / Caption */}
           <div>
             {/* RECORD SEARCH / SELECTED */}
             {record ? (
-              <div className="mb-7 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm">
+              <div className="mb-6 sm:mb-7 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div
                     className="relative h-10 w-10 rounded-xl shadow"
@@ -181,7 +181,7 @@ export default function NewPostPage() {
                 </button>
               </div>
             ) : (
-              <div className="mb-7">
+              <div className="mb-6 sm:mb-7">
                 <label
                   className="block text-xs uppercase tracking-widest text-neutral-600"
                   style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
@@ -263,7 +263,7 @@ export default function NewPostPage() {
             )}
 
             {/* ERA */}
-            <div className="mb-7">
+            <div className="mb-6 sm:mb-7">
               <label
                 className="block text-xs uppercase tracking-widest text-neutral-600"
                 style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
@@ -290,7 +290,7 @@ export default function NewPostPage() {
             </div>
 
             {/* CAPTION */}
-            <div className="mb-7">
+            <div className="mb-6 sm:mb-7">
               <label
                 className="block text-xs uppercase tracking-widest text-neutral-600"
                 style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
@@ -328,7 +328,7 @@ export default function NewPostPage() {
               }}
               onDragOver={(ev) => ev.preventDefault()}
               className={[
-                'mt-2 rounded-2xl border border-dashed p-5 bg-white/70 backdrop-blur transition',
+                'mt-2 rounded-2xl border border-dashed p-4 sm:p-5 bg-white/70 backdrop-blur transition',
                 isDragging
                   ? 'border-[#1F48AF] ring-2 ring-[#1F48AF]/40'
                   : 'border-neutral-300',

@@ -1,4 +1,3 @@
-// lib/posts.ts
 import { supabase } from './supabaseClient'
 
 export type Post = {
@@ -25,6 +24,32 @@ export type PostWithCounts = Post & {
   author?: { username?: string | null; avatar_url?: string | null }
 }
 
+/* ------------------------- Helpers: normalizar imágenes ------------------------- */
+/**
+ * Convierte una URL pública de Supabase Storage a la ruta de render con ancho limitado.
+ * No cambia tu esquema: sólo transforma la URL para servir una versión más ligera.
+ * Ej.: /object/public/...  ->  /render/image/public/... ?width=1080&quality=80
+ */
+function normalizeImageUrl(url: string, width = 1080, quality = 80): string {
+  try {
+    if (!url) return url
+    const u = new URL(url)
+    // Reemplaza /object/public/ por /render/image/public/
+    u.pathname = u.pathname.replace('/object/public/', '/render/image/public/')
+    // Evita duplicar query si ya hay parámetros
+    u.searchParams.set('width', String(width))
+    u.searchParams.set('quality', String(quality))
+    return u.toString()
+  } catch {
+    return url
+  }
+}
+
+function normalizeImageArray(urls: string[] | null | undefined, width = 1080): string[] {
+  if (!urls?.length) return []
+  return urls.map(u => normalizeImageUrl(u, width))
+}
+
 /* -------------------------- Upload imágenes (Storage) -------------------------- */
 export async function uploadPostImages(files: File[]): Promise<string[]> {
   if (!files?.length) return []
@@ -40,7 +65,8 @@ export async function uploadPostImages(files: File[]): Promise<string[]> {
     })
     if (error) throw error
     const { data } = supabase.storage.from('post_images').getPublicUrl(path)
-    urls.push(data.publicUrl)
+    // Guardamos ya normalizada para móvil
+    urls.push(normalizeImageUrl(data.publicUrl, 1280))
   }
   return urls
 }
@@ -63,7 +89,8 @@ export async function createPost(input: {
       record_id: input.record_id,
       era: input.era,
       caption: input.caption ?? null,
-      image_urls: input.image_urls ?? []
+      // si vienen URLs desde otro flujo, las normalizamos también
+      image_urls: normalizeImageArray(input.image_urls, 1280)
     })
     .select(`
       *,
@@ -78,6 +105,8 @@ export async function createPost(input: {
 
   return {
     ...(data as any),
+    // garantizamos URLs normalizadas al devolver
+    image_urls: normalizeImageArray((data as any)?.image_urls, 1080),
     likes_count: (data as any)?.post_likes?.[0]?.count ?? 0,
     comments_count: (data as any)?.post_comments?.[0]?.count ?? 0
   } as PostWithCounts
@@ -109,7 +138,7 @@ export async function listComments(post_id: string) {
 export async function searchRecords(q: string) {
   const term = q.trim()
   if (!term) return []
-  // Busca por título O artista; trae siempre los colores para la mini‑cover
+  // Busca por título O artista; trae siempre los colores para la mini-cover
   const { data, error } = await supabase
     .from('records')
     .select('id, title, artist_name, cover_url, vibe_color, cover_color')
@@ -140,6 +169,7 @@ export async function getPostsByRecordId(recordId: string) {
 
   return (data ?? []).map((p: any) => ({
     ...p,
+    image_urls: normalizeImageArray(p?.image_urls, 1080),
     likes_count: p?.post_likes?.[0]?.count ?? 0,
     comments_count: p?.post_comments?.[0]?.count ?? 0
   })) as PostWithCounts[]
@@ -171,6 +201,7 @@ export async function getPostsByUsernameGroupedByEra(username: string) {
     const key = p.era || 'From my twenties'
     const item: PostWithCounts = {
       ...p,
+      image_urls: normalizeImageArray(p?.image_urls, 1080),
       likes_count: p?.post_likes?.[0]?.count ?? 0,
       comments_count: p?.post_comments?.[0]?.count ?? 0
     }
@@ -198,6 +229,7 @@ export async function getUserPostsGroupedByEra(user_id: string) {
     const key = p.era || 'From my twenties'
     const item: PostWithCounts = {
       ...p,
+      image_urls: normalizeImageArray(p?.image_urls, 1080),
       likes_count: p?.post_likes?.[0]?.count ?? 0,
       comments_count: p?.post_comments?.[0]?.count ?? 0
     }

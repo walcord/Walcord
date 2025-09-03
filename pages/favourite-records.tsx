@@ -140,63 +140,65 @@ export default function FavouriteRecords() {
       </div>
 
       {/* Buscador */}
-      <div className="w-full flex flex-col items-center gap-6 mb-10">
+      <div className="w-full flex flex-col items-center gap-6 mb-8">
         <input
           type="text"
           placeholder={readonly ? "Search records…" : "Find your record"}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-[90%] max-w-2xl px-5 py-3 border border-black rounded-full text-base placeholder-gray-500 focus:outline-none transition-all duration-200 text-center font-light"
+          className="w-[90%] max-w-2xl px-5 h-12 border border-black rounded-full text-base placeholder-gray-500 focus:outline-none transition-all duration-200 text-center font-light"
         />
       </div>
 
-      {/* Resultados */}
+      {/* Resultados (GRID 2 columnas en móvil) */}
       {loading ? (
         <p className="text-center text-gray-500 text-sm mb-32">Loading records...</p>
       ) : search || favourites.length > 0 ? (
-        <div className="w-full flex flex-wrap justify-center gap-10 px-6 mb-24">
-          {showing.map((record) => {
-            const fav = isFavourite(record.id);
-            return (
-              <div key={record.id} className="flex flex-col items-center text-center w-40">
-                <div
-                  onClick={() => goToRecordProfile(record.id)}
-                  className="w-32 h-32 rounded-md shadow-md flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-105"
-                  style={{ backgroundColor: record.vibe_color || "#000000" }}
-                >
-                  <div className="w-8 h-8" style={{ backgroundColor: record.cover_color || "#FFFFFF" }} />
-                </div>
+        <div className="w-full px-4 sm:px-6 mb-24">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            {showing.map((record) => {
+              const fav = isFavourite(record.id);
+              return (
+                <div key={record.id} className="flex flex-col items-center text-center">
+                  <div
+                    onClick={() => goToRecordProfile(record.id)}
+                    className="w-36 h-36 sm:w-40 sm:h-40 rounded-xl shadow-md flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.03]"
+                    style={{ backgroundColor: record.vibe_color || "#000000" }}
+                  >
+                    <div className="w-10 h-10 sm:w-12 sm:h-12" style={{ backgroundColor: record.cover_color || "#FFFFFF" }} />
+                  </div>
 
-                <p
-                  className="text-sm font-normal leading-tight line-clamp-2 mt-3"
-                  style={{ fontFamily: "Times New Roman, serif", opacity: 0.9 }}
-                >
-                  {record.title}
-                </p>
-                <p className="text-xs text-gray-600 font-light">{record.artist_name}</p>
-                <p className="text-xs text-gray-500 font-light mb-2">{record.release_year}</p>
+                  <p
+                    className="mt-2 text-[13px] sm:text-sm font-normal leading-tight line-clamp-2"
+                    style={{ fontFamily: "Times New Roman, serif", opacity: 0.9 }}
+                  >
+                    {record.title}
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-gray-600 font-light">{record.artist_name}</p>
+                  <p className="text-[11px] sm:text-xs text-gray-500 font-light mb-1">{record.release_year}</p>
 
-                {fav ? (
-                  !readonly ? (
-                    <button onClick={() => handleRemoveFavourite(record.id)} className="text-lg text-gray-500 hover:text-black transition font-light">
-                      ✕
-                    </button>
+                  {fav ? (
+                    !readonly ? (
+                      <button onClick={() => handleRemoveFavourite(record.id)} className="text-base sm:text-lg text-gray-500 hover:text-black transition font-light">
+                        ✕
+                      </button>
+                    ) : (
+                      <span className="text-[10px] sm:text-[11px] text-neutral-500">Favourite</span>
+                    )
                   ) : (
-                    <span className="text-[11px] text-neutral-500">Favourite</span>
-                  )
-                ) : (
-                  !readonly && (
-                    <button
-                      onClick={() => handleAddFavourite(record.id)}
-                      className="bg-[#1F48AF] text-white px-4 py-1.5 text-sm rounded-full hover:bg-[#1A3A95] transition font-light"
-                    >
-                      Add
-                    </button>
-                  )
-                )}
-              </div>
-            );
-          })}
+                    !readonly && (
+                      <button
+                        onClick={() => handleAddFavourite(record.id)}
+                        className="bg-[#1F48AF] text-white px-3 sm:px-4 py-1.5 text-xs sm:text-sm rounded-full hover:bg-[#1A3A95] transition font-light"
+                      >
+                        Add
+                      </button>
+                    )
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
         <p className="text-center text-neutral-500">No records yet.</p>
