@@ -143,7 +143,7 @@ export default function PostDetail() {
       </header>
 
       {/* Contenido */}
-      <main className="mx-auto w/full max-w-6xl px-6 py-8">
+      <main className="mx-auto w-full max-w-6xl px-6 py-8">{/* <- w-full FIX */}
         {post?.caption && (
           <p className="mb-6 text-[20px] leading-7 text-black/90" style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}>
             {post.caption}
@@ -152,11 +152,17 @@ export default function PostDetail() {
 
         {images.length > 0 && (
           <section className="mb-8">
-            <div className="columns-1 gap-6 sm:columns-2 lg:columns-3">
+            {/* GRID 2 cols en móvil + ancho contenido */}
+            <div className="mx-auto max-w-[520px] sm:max-w-none grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
               {images.map((url, i) => (
-                <div key={i} className="group mb-6 break-inside-avoid overflow-hidden rounded-2xl">
+                <div key={i} className="relative w-full aspect-[4/5] overflow-hidden rounded-2xl">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt={`photo-${i}`} className="w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02] group-hover:blur-[1px] group-hover:opacity-95" />
+                  <img
+                    src={url}
+                    alt={`photo-${i}`}
+                    className="absolute inset-0 h-full w-full object-cover transition duration-500 ease-out hover:scale-[1.02]"
+                    loading="lazy"
+                  />
                 </div>
               ))}
             </div>

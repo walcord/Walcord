@@ -1,10 +1,8 @@
-// pages/post/new.tsx
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPost, uploadPostImages, searchRecords } from '../../lib/posts'
 
-// 👇 NUEVO: alias compatible para setTimeout en browser y Node
 type TimeoutId = ReturnType<typeof setTimeout>;
 
 type RecordItem = {
@@ -43,10 +41,8 @@ export default function NewPostPage() {
 
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState<string | null>(null)
-  // ⬇️ MODIFICADO: antes NodeJS.Timeout | null
   const debouncer = useRef<TimeoutId | null>(null)
 
-  /* ----------------------------- search (debounced) ---------------------------- */
   useEffect(() => {
     const term = q.trim()
     if (!term || term.length < 2) {
@@ -66,14 +62,12 @@ export default function NewPostPage() {
     }, 200)
   }, [q])
 
-  /* ------------------------------ submit handler ------------------------------ */
   const onSubmit = async () => {
     if (!record) return alert('Please select a record')
     setSubmitting(true)
     setDone(null)
     try {
-      const urls =
-        files && files.length ? await uploadPostImages(Array.from(files)) : []
+      const urls = files && files.length ? await uploadPostImages(Array.from(files)) : []
       await createPost({
         record_id: record.id,
         era,
@@ -90,7 +84,6 @@ export default function NewPostPage() {
     }
   }
 
-  /* ------------------------------- file helpers ------------------------------- */
   const makeFileList = (arr: File[]) => {
     const dt = new DataTransfer()
     arr.forEach((f) => dt.items.add(f))
@@ -114,16 +107,15 @@ export default function NewPostPage() {
     setFiles(arr.length ? makeFileList(arr) : null)
   }
 
-  /* --------------------------------- previews -------------------------------- */
   const previews = useMemo(() => {
     if (!files?.length) return []
     return Array.from(files).slice(0, 9).map((f) => URL.createObjectURL(f))
   }, [files])
 
-  /* ----------------------------------- UI ------------------------------------ */
   return (
     <div className="min-h-screen bg-[#1F48AF]/6">
-      <main className="mx-auto max-w-3xl lg:max-w-5xl px-4 sm:px-6 py-10 sm:py-12">
+      {/* Márgenes laterales en móvil (+ contenido más estrecho) */}
+      <main className="mx-auto w-full max-w-3xl lg:max-w-5xl px-5 sm:px-6 py-10 sm:py-12">
         {/* Header */}
         <header className="mb-6 sm:mb-8">
           <h1
@@ -140,11 +132,10 @@ export default function NewPostPage() {
           </p>
         </header>
 
-        {/* Layout 2 columnas (editorial, limpio) */}
+        {/* Layout 2 columnas */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           {/* Columna izquierda: Record / Era / Caption */}
           <div>
-            {/* RECORD SEARCH / SELECTED */}
             {record ? (
               <div className="mb-6 sm:mb-7 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-3">
@@ -194,7 +185,7 @@ export default function NewPostPage() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search a record by title or artist…"
-                    className="w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm italic"
+                    className="w-full rounded-xl border border-neutral-200 bg.white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm italic"
                     style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
                   />
                   {(searching || results.length > 0) && (
@@ -230,17 +221,11 @@ export default function NewPostPage() {
                               />
                             </div>
                             <div className="min-w-0">
-                              <div
-                                className="truncate"
-                                style={{ fontFamily: '"Times New Roman", Times, serif' }}
-                              >
+                              <div className="truncate" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
                                 {r.title}
                               </div>
                               {r.artist_name && (
-                                <div
-                                  className="truncate text-sm text-neutral-500"
-                                  style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-                                >
+                                <div className="truncate text-sm text-neutral-500" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                                   {r.artist_name}
                                 </div>
                               )}
@@ -249,10 +234,7 @@ export default function NewPostPage() {
                         ))}
 
                       {!searching && results.length === 0 && q.trim().length >= 2 && (
-                        <div
-                          className="px-4 py-3 text-sm text-neutral-500"
-                          style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-                        >
+                        <div className="px-4 py-3 text-sm text-neutral-500" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                           No records found.
                         </div>
                       )}
@@ -264,10 +246,7 @@ export default function NewPostPage() {
 
             {/* ERA */}
             <div className="mb-6 sm:mb-7">
-              <label
-                className="block text-xs uppercase tracking-widest text-neutral-600"
-                style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-              >
+              <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                 Era
               </label>
               <div className="mt-2 relative">
@@ -278,23 +257,16 @@ export default function NewPostPage() {
                   style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
                 >
                   {ERAS.map((e) => (
-                    <option key={e} value={e}>
-                      {e}
-                    </option>
+                    <option key={e} value={e}>{e}</option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
-                  ▾
-                </span>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">▾</span>
               </div>
             </div>
 
             {/* CAPTION */}
             <div className="mb-6 sm:mb-7">
-              <label
-                className="block text-xs uppercase tracking-widest text-neutral-600"
-                style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-              >
+              <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                 Caption
               </label>
               <textarea
@@ -308,12 +280,9 @@ export default function NewPostPage() {
             </div>
           </div>
 
-          {/* Columna derecha: Images (drag & drop + previews) */}
+          {/* Columna derecha: Images */}
           <div>
-            <label
-              className="block text-xs uppercase tracking-widest text-neutral-600"
-              style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-            >
+            <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
               Images
             </label>
 
@@ -329,9 +298,7 @@ export default function NewPostPage() {
               onDragOver={(ev) => ev.preventDefault()}
               className={[
                 'mt-2 rounded-2xl border border-dashed p-4 sm:p-5 bg-white/70 backdrop-blur transition',
-                isDragging
-                  ? 'border-[#1F48AF] ring-2 ring-[#1F48AF]/40'
-                  : 'border-neutral-300',
+                isDragging ? 'border-[#1F48AF] ring-2 ring-[#1F48AF]/40' : 'border-neutral-300',
               ].join(' ')}
             >
               <input
@@ -345,26 +312,15 @@ export default function NewPostPage() {
 
               {files?.length ? (
                 <div className="mt-3 flex items-center justify-between">
-                  <span
-                    className="text-sm text-neutral-600"
-                    style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-                  >
+                  <span className="text-sm text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                     {files.length} image{files.length > 1 ? 's' : ''} selected
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setFiles(null)}
-                    className="text-sm text-[#1F48AF] hover:underline"
-                    style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-                  >
+                  <button type="button" onClick={() => setFiles(null)} className="text-sm text-[#1F48AF] hover:underline" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                     Clear
                   </button>
                 </div>
               ) : (
-                <p
-                  className="mt-2 text-xs text-neutral-500 italic"
-                  style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-                >
+                <p className="mt-2 text-xs text-neutral-500 italic" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                   Drag & drop images here or choose files.
                 </p>
               )}
@@ -374,11 +330,7 @@ export default function NewPostPage() {
                   {previews.map((src, i) => (
                     <div key={i} className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={src}
-                        alt=""
-                        className="h-28 w-full rounded-xl object-cover"
-                      />
+                      <img src={src} alt="" className="h-28 w-full rounded-xl object-cover" />
                       <button
                         type="button"
                         onClick={() => removeFileAt(i)}
@@ -406,10 +358,7 @@ export default function NewPostPage() {
             {submitting ? 'Publishing…' : 'Publish'}
           </button>
           {done && (
-            <span
-              className="text-sm text-green-600"
-              style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-            >
+            <span className="text-sm text-green-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
               {done}
             </span>
           )}
