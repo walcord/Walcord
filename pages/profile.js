@@ -10,12 +10,12 @@ import PostCard from '../components/PostCard';
 export default function ProfilePage() {
   const router = useRouter();
 
-  // Perfil
+  // ===== Estado perfil =====
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [profileLoading, setProfileLoading] = useState(true);
   const [userId, setUserId] = useState(null);
 
-  // Posts
+  // ===== Estado posts =====
   const [postsLoading, setPostsLoading] = useState(true);
   const [posts, setPosts] = useState([]);
   const [eraOrder] = useState([
@@ -30,6 +30,11 @@ export default function ProfilePage() {
     'From my eighties',
     'From my nineties',
   ]);
+
+  // ===== Estado eliminación de cuenta (UI) =====
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState(null);
 
   // ===== 1) Cargar perfil =====
   useEffect(() => {
@@ -132,7 +137,7 @@ export default function ProfilePage() {
     };
   }, [userId]);
 
-  // Agrupar por era
+  // ===== Agrupar por era (JS puro, sin tipos) =====
   const groupedByEra = useMemo(() => {
     const g = {};
     for (const p of posts) {
@@ -153,6 +158,32 @@ export default function ProfilePage() {
       .forEach((k) => (ordered[k] = g[k]));
     return ordered;
   }, [posts, eraOrder]);
+
+  // ===== Eliminar cuenta (acción) =====
+  const handleConfirmDelete = async () => {
+    try {
+      setDeleteBusy(true);
+      setDeleteErr(null);
+
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('No active session');
+
+      const resp = await fetch('/api/delete-account', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || 'Delete failed');
+
+      await supabase.auth.signOut();
+      router.replace('/goodbye');
+    } catch (e) {
+      setDeleteErr(e?.message || 'Unexpected error');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   // ===== Render =====
   if (profileLoading) {
@@ -233,6 +264,60 @@ export default function ProfilePage() {
           )}
         </aside>
       </div>
+
+      {/* ===== Footer minimal (abajo del todo) ===== */}
+      <div className="px-10 sm:px-12 mt-12 mb-10">
+        <div className="border-t border-gray-200 pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-gray-500">
+            <div className="mb-1">Manage your data & policies.</div>
+            <a
+              href="/privacy.html" /* archivo en public/privacy.html */
+              className="underline decoration-gray-400 hover:decoration-gray-800"
+            >
+              Privacy & Policies
+            </a>
+          </div>
+
+          {userId && (
+            <button
+              onClick={() => setDeleteOpen(true)}
+              className="self-start rounded-xl border border-red-600 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+            >
+              Delete account
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ===== Modal confirmación (minimalista) ===== */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="mb-2 text-base font-semibold">Delete account</h3>
+            <p className="mb-4 text-sm text-gray-600">
+              You’re about to permanently delete your account and associated data. This action cannot be undone. Are you sure?
+            </p>
+            {deleteErr && <div className="mb-3 text-xs text-red-600">{deleteErr}</div>}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDeleteOpen(false)}
+                disabled={deleteBusy}
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteBusy}
+                className="rounded-xl border border-red-600 px-3 py-2 text-sm text-white"
+                style={{ background: deleteBusy ? '#9f1239' : '#dc2626' }}
+              >
+                {deleteBusy ? 'Deleting…' : 'Yes, delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
