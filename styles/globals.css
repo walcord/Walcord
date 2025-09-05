@@ -1,12 +1,8 @@
 /* === Tipografías === */
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap');
-
-/* Si usas Tailwind, mantenlo; si no, no pasa nada */
 @import "tailwindcss";
 
-/* =========================
-   Variables + Safe Area
-   ========================= */
+/* Variables + Safe Area */
 :root{
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -25,83 +21,74 @@ html, body{
   font-weight:300;
 }
 
-/* =========================
-   CONTENEDOR CENTRAL
-   ========================= */
-.wc-container{
-  max-width:820px;
-  margin:0 auto;
-  padding:0 16px;
+/* Utilidades tipográficas */
+.font-light{ font-weight:300; }
+.font-roboto{ font-family:'Roboto', sans-serif; }
+.font-times{ font-family:'Times New Roman', serif; }
+
+/* Contenedor central */
+.wc-container{ max-width:820px; margin:0 auto; padding:0 16px; }
+
+/* Superficie clara */
+.page-surface{
+  background:#F7F7F9;
+  border-top-left-radius:16px; border-top-right-radius:16px;
 }
 
-/* =========================
-   WELCOME (pantalla fija full)
-   ========================= */
+/* Welcome fijo full */
 .wc-welcome{
-  min-height:100svh; /* estable en iOS */
-  min-height:100dvh;
+  min-height:100svh; min-height:100dvh;
   background:var(--wc-blue);
   padding-top:calc(var(--safe-top) + 32px);
   padding-bottom:calc(var(--safe-bottom) + 24px);
 }
 
-/* =========================
-   SUPERFICIE CLARA (feed/profile)
-   ========================= */
-.page-surface{
-  background:#F7F7F9;
-  border-top-left-radius:16px;
-  border-top-right-radius:16px;
-}
-
-/* Si alguna vez tienes header fijo propio, esto empuja el contenido bajo él */
-.main-with-topbar{ padding-top:calc(var(--safe-top) + 56px); }
-
-/* =========================
-   MODO APP (WebView)
-   - Oculta banners/topbars/navbars/logos molestos
-   ========================= */
-.is-app header,               /* headers HTML */
+/* ===== MODO APP ===== */
+/* Oculta headers/navbars/banners/logos que puedan existir en la web */
+.is-app header,
 .is-app .topbar,
 .is-app .navbar,
 .is-app .app-navbar,
 .is-app .wc-banner,
 .is-app [data-topbar],
-.is-app [data-role="banner"]{
+.is-app [role="banner"],
+.is-app [class*="Header"],
+.is-app [class*="AppBar"],
+.is-app [class*="Navbar"]{
   display:none !important;
 }
 
-/* El body no debe tener margen superior en app */
-.is-app body{ margin-top:0 !important; }
-
-/* =========================
-   Botones flotantes SOLO app
-   ========================= */
-.wc-fabs{
+/* Overlay azul para tapar cualquier resto del banner al hacer scroll */
+.app-overlay{
   position:fixed;
-  top:calc(var(--safe-top) + 10px);
-  right:10px;
-  display:flex;
-  gap:8px;
+  top:0; left:0; right:0;
+  height:calc(var(--safe-top) + 8px);
+  background:var(--wc-blue);
   z-index:9999;
+  pointer-events:none;
 }
+html:not(.is-app) .app-overlay{ display:none; }
+
+/* Botones flotantes (arriba-derecha) */
+.wc-fabs{
+  position:fixed; top:calc(var(--safe-top) + 10px); right:10px;
+  display:flex; gap:8px; z-index:10000;
+}
+html:not(.is-app) .wc-fabs{ display:none; }
+
 .wc-fab{
-  border:none;
-  border-radius:12px;
-  padding:8px 14px;
-  font-weight:600;
-  line-height:1;
+  border:none; border-radius:12px; padding:8px 12px;
+  font-weight:600; line-height:1; cursor:pointer;
   box-shadow:0 2px 8px rgba(0,0,0,.15);
-  cursor:pointer;
 }
 .wc-fab-primary{ background:var(--wc-blue); color:#fff; }
 .wc-fab-light{ background:#fff; color:var(--wc-blue-dark); }
-.wc-fab-ghost{ background:transparent; color:#fff; border:1px solid rgba(255,255,255,.6); }
+.wc-fab-icon{
+  background:var(--wc-blue); color:#fff;
+  width:34px; height:34px; padding:0; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+}
 
-/* Oculta completamente los FABS cuando no estamos en la app */
-html:not(.is-app) .wc-fabs{ display:none; }
-
-/* =========================
-   Utilidades
-   ========================= */
-.font-times{ font-family: 'Times New Roman', serif; }
+/* Modo compacto (más minimalista) */
+.wc-fabs--compact .wc-fab{ padding:6px 10px; border-radius:10px; }
+.wc-fabs--compact .wc-fab-icon{ width:30px; height:30px; box-shadow:0 1px 5px rgba(0,0,0,.18); }
