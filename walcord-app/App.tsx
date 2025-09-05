@@ -42,30 +42,33 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={Platform.OS === "ios" ? "dark-content" : "light-content"} />
       <View style={styles.webviewWrap}>
-        <WebView
-          ref={webviewRef}
-          source={{ uri: HOME_URL }}
-          originWhitelist={["*"]}
-          javaScriptEnabled
-          domStorageEnabled
-          allowsInlineMediaPlayback
-          setSupportMultipleWindows={true}
-          onOpenWindow={handleOpenWindow}
-          onShouldStartLoadWithRequest={handleShouldStart}
-          onNavigationStateChange={(state) => setCanGoBack(!!state.canGoBack)}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          // Sesiones/cookies para login web dentro del contenedor
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          // Pull to refresh en Android
-          pullToRefreshEnabled={Platform.OS === "android"}
-          // User-Agent identificable (útil para métricas)
-          userAgent={`WalcordApp/1.0 (${Platform.OS})`}
-          // Medios mixtos (por si hay recursos externos)
-          mixedContentMode="always"
-          style={styles.webview}
-        />
+        {/* Añadido padding lateral para mejorar la vista en pantallas pequeñas/grandes */}
+        <View style={styles.responsiveWrap}>
+          <WebView
+            ref={webviewRef}
+            source={{ uri: HOME_URL }}
+            originWhitelist={["*"]}
+            javaScriptEnabled
+            domStorageEnabled
+            allowsInlineMediaPlayback
+            setSupportMultipleWindows={true}
+            onOpenWindow={handleOpenWindow}
+            onShouldStartLoadWithRequest={handleShouldStart}
+            onNavigationStateChange={(state) => setCanGoBack(!!state.canGoBack)}
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+            // Sesiones/cookies para login web dentro del contenedor
+            sharedCookiesEnabled
+            thirdPartyCookiesEnabled
+            // Pull to refresh en Android
+            pullToRefreshEnabled={Platform.OS === "android"}
+            // User-Agent identificable (útil para métricas)
+            userAgent={`WalcordApp/1.0 (${Platform.OS})`}
+            // Medios mixtos (por si hay recursos externos)
+            mixedContentMode="always"
+            style={styles.webview}
+          />
+        </View>
         {loading && (
           <View style={styles.loader}>
             <ActivityIndicator size="large" />
@@ -79,6 +82,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#ffffff" },
   webviewWrap: { flex: 1 },
+  responsiveWrap: { flex: 1, marginHorizontal: 12 }, // <--- aquí está el margen lateral
   webview: { backgroundColor: "#ffffff" },
   loader: {
     position: "absolute",
