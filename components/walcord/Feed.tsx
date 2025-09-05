@@ -10,7 +10,7 @@
    ========================================================================================== */
 
 import React, { useEffect, useRef, useState, useDeferredValue } from "react";
-import Image from "next/image";
+// import Image from "next/image"; // CHANGED: eliminado porque ya no se usa
 import Link from "next/link";
 import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -351,7 +351,7 @@ const Lightbox: React.FC<{
     document.addEventListener("keydown", onEsc);
     document.body.style.overflow = "hidden";
     return () => {
-    document.removeEventListener("keydown", onEsc);
+      document.removeEventListener("keydown", onEsc);
       document.body.style.overflow = "";
     };
   }, [onClose, total]);
@@ -1100,7 +1100,7 @@ export const Feed: React.FC = () => {
     if (!user) return;
     const liked = likedByMe[postId];
 
-  // Optimista
+    // Optimista
     setLikedByMe((p) => ({ ...p, [postId]: !liked }));
     setCounts((p) => ({
       ...p,
@@ -1191,7 +1191,7 @@ export const Feed: React.FC = () => {
 
   const CommentBox: React.FC<{ postId: string }> = ({ postId }) => {
     const [text, setText] = useState("");
-    const [sending, setSending] = useState(false);
+       const [sending, setSending] = useState(false);
     const onSend = async () => {
       if (!user || !text.trim()) return;
       setSending(true);
@@ -1201,7 +1201,7 @@ export const Feed: React.FC = () => {
       } catch (e: any) {
         alert(e?.message || "Could not comment");
       } finally {
-               setSending(false);
+        setSending(false);
       }
     };
     return (
@@ -1745,14 +1745,13 @@ export const Feed: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Banner idéntico a Concerts con botón Profile a la derecha */}
-      <header className="w-full h-20 bg-[#1F48AF] flex items-center justify-between px-4 sm:px-6">
-        <Image src="/logotipo.png" alt="Walcord" width={56} height={56} priority />
-
+      {/* Banner azul MÁS GRANDE sin logo */}
+      <header
+className="w-full h-36 bg-[#1F48AF] flex items-end justify-end px-4 sm:px-6 pb-4">
         <Link
           href="/profile"
           aria-label="Go to Profile"
-          className="inline-flex items-center gap-2 rounded-full bg-white/95 backdrop-blur px-3 py-1.5 text-[12px] sm:text-xs text-black border border-white/60 hover:bg-white transition-all"
+          className="inline-flex items-center gap-1 rounded-full bg-white/95 backdrop-blur px-3 py-1.5 text-[12px] sm:text-xs text-black border border-white/60 hover:bg-white transition-all"
         >
           <span className="hidden sm:inline">Profile</span>
           <ArrowRight className="w-4 h-4" />
