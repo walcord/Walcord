@@ -1,0 +1,30 @@
+/* styles/ios-fixes.css */
+/* Desactiva el “agrandado” automático de texto en WKWebView */
+html {
+  -webkit-text-size-adjust: 100% !important;
+  text-size-adjust: 100% !important;
+}
+
+/* Evita zoom al enfocar inputs en iOS */
+input, select, textarea, button {
+  font-size: 16px !important;
+}
+
+/* Suavizado y safe areas para notches */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Medios no se “desbordan” ni estiran */
+img, video, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Evita saltos raros al hacer scroll */
+html, body { overscroll-behavior: none; }
