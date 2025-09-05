@@ -43,26 +43,16 @@ export default function Signup() {
   const normalize = (s) => (s || '').trim();
 
   const mapSupabaseError = (message) => {
-    // Mensajes más amables para los casos típicos
     if (!message) return 'Something went wrong. Please try again.';
-    const msg = message.toLowerCase();
+    const msg = String(message).toLowerCase();
 
-    if (msg.includes('user already registered')) {
-      return 'This email is already registered.';
-    }
-    if (msg.includes('rate limit')) {
-      return 'Too many attempts. Please wait a moment and try again.';
-    }
+    if (msg.includes('user already registered')) return 'This email is already registered.';
+    if (msg.includes('rate limit')) return 'Too many attempts. Please wait a moment and try again.';
     if (msg.includes('database error saving new user')) {
-      // Suele ser por policies/constraints en tu tabla de perfiles o un trigger
       return 'Database error saving new user. Please try again in a minute. If it persists, review your profiles table constraints and RLS policies.';
     }
-    if (msg.includes('invalid email')) {
-      return 'Please enter a valid email address.';
-    }
-    if (msg.includes('password')) {
-      return 'Password must be at least 6 characters long.';
-    }
+    if (msg.includes('invalid email')) return 'Please enter a valid email address.';
+    if (msg.includes('password')) return 'Password must be at least 6 characters long.';
     return message;
   };
 
@@ -88,7 +78,6 @@ export default function Signup() {
       return;
     }
 
-    // exigir aceptación de términos
     if (!agreed) {
       setError('Please accept the Terms of Use.');
       return;
@@ -96,15 +85,12 @@ export default function Signup() {
 
     setLoading(true);
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          // Tras confirmar el email, llévalos al login (ajústalo si prefieres otra ruta)
           emailRedirectTo: `${origin}/login`,
-          data: {
-            full_name: name,
-          },
+          data: { full_name: name },
         },
       });
 
@@ -114,7 +100,6 @@ export default function Signup() {
         return;
       }
 
-      // Si confirm email está activado, el usuario debe confirmar antes de poder iniciar sesión
       setSuccessMessage('Account created. Please check your email to confirm.');
       setForm({ name: '', email: '', password: '' });
     } catch (err) {

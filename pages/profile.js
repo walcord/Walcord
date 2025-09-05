@@ -39,17 +39,14 @@ export default function ProfilePage() {
   // ===== 1) Cargar perfil =====
   useEffect(() => {
     const initProfile = async () => {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      const { data, error: authError } = await supabase.auth.getUser();
 
-      if (authError || !user) {
+      if (authError || !data?.user) {
         router.push('/login');
         return;
       }
 
-      const uid = user.id;
+      const uid = data.user.id;
       setUserId(uid);
 
       const { data: profile, error: profileError } = await supabase
@@ -72,9 +69,10 @@ export default function ProfilePage() {
           .single();
 
         if (paletteData?.colors?.length) {
-          const colors = paletteData.colors;
-          const shuffled = [...colors].sort(() => 0.5 - Math.random());
-          const [color1, color2] = shuffled.slice(0, 2);
+          const colors = paletteData.colors.slice();
+          const shuffled = colors.sort(() => 0.5 - Math.random());
+          const color1 = shuffled[0];
+          const color2 = shuffled[1];
           await supabase
             .from('profiles')
             .update({ favourite_color_1: color1, favourite_color_2: color2 })
@@ -137,7 +135,7 @@ export default function ProfilePage() {
     };
   }, [userId]);
 
-  // ===== Agrupar por era (JS puro, sin tipos) =====
+  // ===== Agrupar por era =====
   const groupedByEra = useMemo(() => {
     const g = {};
     for (const p of posts) {
@@ -185,6 +183,19 @@ export default function ProfilePage() {
     }
   };
 
+  // ===== Logout (confirmación) =====
+  const handleLogout = async () => {
+    const ok = window.confirm('Are you sure you want to log out?');
+    if (!ok) return;
+    try {
+      await supabase.auth.signOut();
+      router.replace('/welcome');
+    } catch (e) {
+      console.error(e);
+      alert('There was an error logging out. Please try again.');
+    }
+  };
+
   // ===== Render =====
   if (profileLoading) {
     return (
@@ -210,6 +221,16 @@ export default function ProfilePage() {
           </svg>
           <span className="hidden sm:inline">The Wall</span>
         </a>
+      </div>
+
+      {/* LOG OUT (fijo, arriba derecha; convive con la botonera global) */}
+      <div className="fixed top-12 right-2 z-[10000]">
+        <button
+          onClick={handleLogout}
+          className="px-3 h-8 rounded-full border border-white/40 bg-[#1F48AF] text-white text-[12px] leading-8 font-light tracking-wide hover:opacity-90 transition"
+        >
+          Log out
+        </button>
       </div>
 
       {/* Título + línea + botón (+) */}
@@ -271,7 +292,7 @@ export default function ProfilePage() {
           <div className="text-xs text-gray-500">
             <div className="mb-1">Manage your data & policies.</div>
             <a
-              href="/privacy.html" /* archivo en public/privacy.html */
+              href="/privacy.html"
               className="underline decoration-gray-400 hover:decoration-gray-800"
             >
               Privacy & Policies
