@@ -17,13 +17,16 @@ export default function Signup() {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // exigir aceptación de términos
+  const [agreed, setAgreed] = useState(false);
+
   const origin = useMemo(() => {
     // Redirección segura para el email de confirmación
     if (typeof window !== 'undefined' && window.location?.origin) {
       return window.location.origin;
     }
     // Si no hay window (SSR), usa variable pública si la tienes configurada
-    return process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    return process.env.NEXT_PUBLIC_SITE_URL || 'https://walcord.com';
   }, []);
 
   const handleChange = (e) => {
@@ -40,26 +43,16 @@ export default function Signup() {
   const normalize = (s) => (s || '').trim();
 
   const mapSupabaseError = (message) => {
-    // Mensajes más amables para los casos típicos
     if (!message) return 'Something went wrong. Please try again.';
-    const msg = message.toLowerCase();
+    const msg = String(message).toLowerCase();
 
-    if (msg.includes('user already registered')) {
-      return 'This email is already registered.';
-    }
-    if (msg.includes('rate limit')) {
-      return 'Too many attempts. Please wait a moment and try again.';
-    }
+    if (msg.includes('user already registered')) return 'This email is already registered.';
+    if (msg.includes('rate limit')) return 'Too many attempts. Please wait a moment and try again.';
     if (msg.includes('database error saving new user')) {
-      // Suele ser por policies/constraints en tu tabla de perfiles o un trigger
       return 'Database error saving new user. Please try again in a minute. If it persists, review your profiles table constraints and RLS policies.';
     }
-    if (msg.includes('invalid email')) {
-      return 'Please enter a valid email address.';
-    }
-    if (msg.includes('password')) {
-      return 'Password must be at least 6 characters long.';
-    }
+    if (msg.includes('invalid email')) return 'Please enter a valid email address.';
+    if (msg.includes('password')) return 'Password must be at least 6 characters long.';
     return message;
   };
 
@@ -85,17 +78,19 @@ export default function Signup() {
       return;
     }
 
+    if (!agreed) {
+      setError('Please accept the Terms of Use.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          // Tras confirmar el email, llévalos al login (ajústalo si prefieres otra ruta)
           emailRedirectTo: `${origin}/login`,
-          data: {
-            full_name: name,
-          },
+          data: { full_name: name },
         },
       });
 
@@ -105,7 +100,6 @@ export default function Signup() {
         return;
       }
 
-      // Si confirm email está activado, el usuario debe confirmar antes de poder iniciar sesión
       setSuccessMessage('Account created. Please check your email to confirm.');
       setForm({ name: '', email: '', password: '' });
     } catch (err) {
@@ -187,10 +181,25 @@ export default function Signup() {
             </p>
           )}
 
+          {/* Checkbox de términos */}
+          <label className="flex gap-3 items-start -mt-1">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              required
+              aria-label="Agree to Terms of Use"
+              className="mt-1"
+            />
+            <span className="text-[13px]" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
+              I agree to the <a href="/terms" className="underline text-[#1F48AF]">Terms of Use</a>. Objectionable content is not allowed. Reports are reviewed.
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={loading}
-            className="mt-6 w-full py-2 text-white text-sm tracking-wide rounded-md transition-all duration-300 hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading || !agreed}
+            className="mt-3 w-full py-2 text-white text-sm tracking-wide rounded-md transition-all duration-300 hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             style={{
               backgroundColor: '#1F48AF',
               fontFamily: 'Roboto, sans-serif',

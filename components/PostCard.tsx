@@ -10,6 +10,13 @@ export default function PostCard({ post }: Props) {
   const [vibe, setVibe] = useState<string | null>(post.record?.vibe_color ?? null)
   const [cover, setCover] = useState<string | null>(post.record?.cover_color ?? null)
 
+  // --- minimal report/delete state ---
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  const [reported, setReported] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
+
   useEffect(() => {
     let active = true
     async function ensureColors() {
@@ -31,11 +38,80 @@ export default function PostCard({ post }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.record_id])
 
+  // detectar si el post es del usuario actual (intenta varias claves comunes)
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      const ownerId =
+        (post as any).user_id ??
+        (post as any).author_id ??
+        (post as any).profile_id ??
+        null
+      if (user && ownerId && user.id === ownerId) setIsOwner(true)
+    })()
+  }, [post])
+
   const bg = post.image_urls?.[0] || null
   const href = `/post/${post.id}`
 
   const vibeSafe = useMemo(() => vibe || '#222222', [vibe])
   const coverSafe = useMemo(() => cover || '#FFFFFF', [cover])
+
+  // --- actions (paran navegación del Link) ---
+  function toggleMenu(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setMenuOpen((s) => !s)
+  }
+
+  async function handleReport(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (reported || reporting) return
+    const ok = window.confirm('Report this post?')
+    if (!ok) return
+    try {
+      setReporting(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        alert('Please sign in to report.')
+        return
+      }
+      await supabase.from('reports').insert({
+        user_id: user.id,
+        post_id: post.id,
+        reason: 'inappropriate'
+      })
+      setReported(true)
+      setMenuOpen(false)
+    } catch {
+      alert('Could not send report. Please try again.')
+    } finally {
+      setReporting(false)
+    }
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isOwner || deleting) return
+    const ok = window.confirm('Delete this post? This cannot be undone.')
+    if (!ok) return
+    try {
+      setDeleting(true)
+      const { error } = await supabase.from('posts').delete().eq('id', post.id)
+      if (error) {
+        alert('Could not delete this post.')
+      } else {
+        setMenuOpen(false)
+        alert('Post deleted.')
+        // refresco simple del feed
+        window.location.reload()
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <Link href={href} aria-label={`Open post ${post.id}`}>
@@ -47,6 +123,52 @@ export default function PostCard({ post }: Props) {
           w-full
         "
       >
+        {/* Botón minimal (⋯) */}
+        <button
+          type="button"
+          onClick={toggleMenu}
+          aria-label={menuOpen ? 'Close menu' : 'More options'}
+          className="
+            absolute z-20 top-2 right-2 h-8 w-8
+            flex items-center justify-center
+            rounded-full bg-black/30 hover:bg-black/40
+            text-white text-base backdrop-blur-sm
+          "
+        >
+          {menuOpen ? '×' : '⋯'}
+        </button>
+
+        {/* Mini-menú minimalista */}
+        {menuOpen && (
+          <div
+            className="
+              absolute z-20 top-10 right-2
+              rounded-md bg-black/70 text-white text-xs
+              backdrop-blur-sm shadow-sm overflow-hidden
+            "
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          >
+            <button
+              type="button"
+              onClick={handleReport}
+              className="block w-full px-3 py-2 text-left hover:bg-white/10"
+              aria-label="Report post"
+            >
+              {reported ? 'Reported ✓' : (reporting ? 'Reporting…' : 'Report')}
+            </button>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="block w-full px-3 py-2 text-left hover:bg-white/10"
+                aria-label="Delete post"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Fondo (foto) */}
         {bg && (
           // eslint-disable-next-line @next/next/no-img-element

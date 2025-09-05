@@ -1,89 +1,85 @@
-import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Linking, Platform, SafeAreaView, StatusBar, StyleSheet, View } from "react-native";
-import { WebView } from "react-native-webview";
+import type { AppProps } from 'next/app';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import '../styles/globals.css';
 
-const HOME_URL = "https://walcord.com";
-
-export default function App() {
-  const webviewRef = useRef<WebView>(null);
-  const [canGoBack, setCanGoBack] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // Volver con botón atrás en Android si hay historial
-  useEffect(() => {
-    const onBackPress = () => {
-      if (canGoBack && webviewRef.current) {
-        webviewRef.current.goBack();
-        return true;
-      }
-      return false;
-    };
-    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-    return () => sub.remove();
-  }, [canGoBack]);
-
-  const handleShouldStart = (req: any) => {
-    // Permite http(s). Si es mailto/tel u otro esquema, abre fuera.
-    const url = req?.url ?? "";
-    if (!url.startsWith("http")) {
-      Linking.openURL(url).catch(() => {});
-      return false;
+function AppButtons({ pathname }: { pathname: string }) {
+  const go = (path: string) => {
+    try {
+      // Next router (si existe) o fallback duro
+      // @ts-ignore
+      if (window?.next?.router?.push) window.next.router.push(path);
+      else window.location.assign(path);
+    } catch {
+      window.location.assign(path);
     }
-    return true;
   };
 
-  const handleOpenWindow = (event: any) => {
-    // Para targets _blank o ventanas nuevas, abre en navegador del sistema
-    const targetUrl = event?.nativeEvent?.targetUrl;
-    if (targetUrl) Linking.openURL(targetUrl).catch(() => {});
+  const back = () => {
+    if (history.length > 1) history.back();
+    else go('/wall');
   };
+
+  // No mostrar NADA en /welcome
+  if (pathname === '/welcome') return null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={Platform.OS === "ios" ? "dark-content" : "light-content"} />
-      <View style={styles.webviewWrap}>
-        <WebView
-          ref={webviewRef}
-          source={{ uri: HOME_URL }}
-          originWhitelist={["*"]}
-          javaScriptEnabled
-          domStorageEnabled
-          allowsInlineMediaPlayback
-          setSupportMultipleWindows={true}
-          onOpenWindow={handleOpenWindow}
-          onShouldStartLoadWithRequest={handleShouldStart}
-          onNavigationStateChange={(state) => setCanGoBack(!!state.canGoBack)}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          // Sesiones/cookies para login web dentro del contenedor
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          // Pull to refresh en Android
-          pullToRefreshEnabled={Platform.OS === "android"}
-          // User-Agent identificable (útil para métricas)
-          userAgent={`WalcordApp/1.0 (${Platform.OS})`}
-          // Medios mixtos (por si hay recursos externos)
-          mixedContentMode="always"
-          style={styles.webview}
-        />
-        {loading && (
-          <View style={styles.loader}>
-            <ActivityIndicator size="large" />
-          </View>
-        )}
-      </View>
-    </SafeAreaView>
+    <>
+      {/* Franja azul fija que tapa cualquier banner del WebView */}
+      <div
+        className="fixed top-0 left-0 w-full z-[9999] pointer-events-none"
+        aria-hidden="true"
+      >
+        <div className="h-8 w-full" style={{ backgroundColor: '#1F48AF' }} />
+      </div>
+
+      {/* Botonera minimal (arriba-derecha) */}
+      <div className="fixed top-2 right-2 z-[10000] flex gap-2">
+        <button
+          onClick={back}
+          aria-label="Back"
+          className="px-3 h-8 rounded-full border border-white/40 bg-black/40 backdrop-blur text-white text-[12px] leading-8 font-light tracking-wide hover:bg-black/60 transition"
+        >
+          ←
+        </button>
+
+        <button
+          onClick={() => go('/wall')}
+          className="px-3 h-8 rounded-full border border-white/40 bg-black/40 backdrop-blur text-white text-[12px] leading-8 font-light tracking-wide hover:bg-black/60 transition"
+        >
+          Wall
+        </button>
+
+        <button
+          onClick={() => go('/profile')}
+          className="px-3 h-8 rounded-full border border-white/40 bg-black/40 backdrop-blur text-white text-[12px] leading-8 font-light tracking-wide hover:bg-black/60 transition"
+        >
+          Profile
+        </button>
+      </div>
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#ffffff" },
-  webviewWrap: { flex: 1 },
-  webview: { backgroundColor: "#ffffff" },
-  loader: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+export default function MyApp({ Component, pageProps }: AppProps) {
+  const [isApp, setIsApp] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const ua = navigator.userAgent || '';
+    const is =
+      /WalcordApp/i.test(ua) ||
+      new URLSearchParams(location.search).get('app') === '1';
+    setIsApp(is);
+    const html = document.documentElement;
+    if (is) html.classList.add('is-app');
+    else html.classList.remove('is-app');
+  }, []);
+
+  return (
+    <>
+      {isApp && <AppButtons pathname={router.pathname} />}
+      <Component {...pageProps} />
+    </>
+  );
+}

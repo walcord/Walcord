@@ -148,3 +148,6 @@ export default function ExternalProfilePage() {
     </main>
   )
 }
+
+// --- SSR para evitar getStaticPaths/getStaticProps ---
+export async function getServerSideProps() { return { props: {} }; }

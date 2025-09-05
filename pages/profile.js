@@ -39,17 +39,14 @@ export default function ProfilePage() {
   // ===== 1) Cargar perfil =====
   useEffect(() => {
     const initProfile = async () => {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      const { data, error: authError } = await supabase.auth.getUser();
 
-      if (authError || !user) {
+      if (authError || !data?.user) {
         router.push('/login');
         return;
       }
 
-      const uid = user.id;
+      const uid = data.user.id;
       setUserId(uid);
 
       const { data: profile, error: profileError } = await supabase
@@ -72,9 +69,10 @@ export default function ProfilePage() {
           .single();
 
         if (paletteData?.colors?.length) {
-          const colors = paletteData.colors;
-          const shuffled = [...colors].sort(() => 0.5 - Math.random());
-          const [color1, color2] = shuffled.slice(0, 2);
+          const colors = paletteData.colors.slice();
+          const shuffled = colors.sort(() => 0.5 - Math.random());
+          const color1 = shuffled[0];
+          const color2 = shuffled[1];
           await supabase
             .from('profiles')
             .update({ favourite_color_1: color1, favourite_color_2: color2 })
@@ -137,7 +135,7 @@ export default function ProfilePage() {
     };
   }, [userId]);
 
-  // ===== Agrupar por era (JS puro, sin tipos) =====
+  // ===== Agrupar por era =====
   const groupedByEra = useMemo(() => {
     const g = {};
     for (const p of posts) {
@@ -185,6 +183,19 @@ export default function ProfilePage() {
     }
   };
 
+  // ===== Logout (confirmación) =====
+  const handleLogout = async () => {
+    const ok = window.confirm('Are you sure you want to log out?');
+    if (!ok) return;
+    try {
+      await supabase.auth.signOut();
+      router.replace('/welcome');
+    } catch (e) {
+      console.error(e);
+      alert('There was an error logging out. Please try again.');
+    }
+  };
+
   // ===== Render =====
   if (profileLoading) {
     return (
@@ -197,19 +208,35 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
       {/* Banner unificado */}
-      <div className="w-full h-20 flex items-center justify-between px-6 bg-[#1F48AF]">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={56} height={56} />
-        {/* Botón The Wall a la derecha */}
-        <a
-          href="/feed"
-          aria-label="Back to The Wall"
-          className="inline-flex items-center gap-2 rounded-full bg-white/95 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition-all"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M19 12H5m6 7l-7-7 7-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span className="hidden sm:inline">The Wall</span>
-        </a>
+      <div className="w-full h-24 flex items-end justify-between px-6 bg-[#1F48AF] pb-3 pt-[env(safe-area-inset-top)]">
+        {/* Botones a la derecha */}
+        <div className="flex items-center gap-2 ml-auto">
+          <a
+            href="/feed"
+            aria-label="Back to The Wall"
+            className="inline-flex items-center gap-2 rounded-full bg-white/95 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition-all"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M19 12H5m6 7l-7-7 7-7"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="hidden sm:inline">The Wall</span>
+          </a>
+
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-full bg-white/90 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition-all"
+            aria-label="Log out"
+            title="Log out"
+          >
+            Log out
+          </button>
+        </div>
       </div>
 
       {/* Título + línea + botón (+) */}
@@ -271,7 +298,7 @@ export default function ProfilePage() {
           <div className="text-xs text-gray-500">
             <div className="mb-1">Manage your data & policies.</div>
             <a
-              href="/privacy.html" /* archivo en public/privacy.html */
+              href="/privacy.html"
               className="underline decoration-gray-400 hover:decoration-gray-800"
             >
               Privacy & Policies
@@ -291,7 +318,11 @@ export default function ProfilePage() {
 
       {/* ===== Modal confirmación (minimalista) ===== */}
       {deleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="mb-2 text-base font-semibold">Delete account</h3>
             <p className="mb-4 text-sm text-gray-600">

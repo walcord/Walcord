@@ -4,6 +4,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
+import FollowButton from '../social/FollowButton'
+import AddFriendButton from '../social/AddFriendButton'
 
 const WALCORD_BLUES = {
   blue1: '#3268bbff',
@@ -23,6 +25,12 @@ export default function PublicUserHeader({ userId }: Props) {
   const [favouriteArtists, setFavouriteArtists] = useState<any[]>([])
   const [favouriteRecords, setFavouriteRecords] = useState<any[]>([])
   const [followersCount, setFollowersCount] = useState<number>(0)
+
+  // auth + menú ⋯
+  const [me, setMe] = useState<string | null>(null)
+  const [authed, setAuthed] = useState<boolean | null>(null) // null = cargando
+  const [menuOpen, setMenuOpen] = useState(false)
+  const isSelf = !!me && me === userId
 
   const [color1, color2, color3, color4] = useMemo(
     () => [WALCORD_BLUES.blue2, WALCORD_BLUES.blue1, WALCORD_BLUES.blue4, WALCORD_BLUES.blue3],
@@ -52,6 +60,22 @@ export default function PublicUserHeader({ userId }: Props) {
     }
     run()
   }, [userId])
+
+  // sesión (usamos getSession para fiabilidad)
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!active) return
+      setAuthed(!!session?.user)
+      setMe(session?.user?.id ?? null)
+    })()
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setAuthed(!!session?.user)
+      setMe(session?.user?.id ?? null)
+    })
+    return () => { sub.subscription.unsubscribe(); active = false }
+  }, [])
 
   // Géneros
   useEffect(() => {
@@ -108,6 +132,31 @@ export default function PublicUserHeader({ userId }: Props) {
   const queryUser = username ? `?username=${encodeURIComponent(username)}` : ''
   const disabledLinkClass = username ? '' : 'pointer-events-none opacity-60'
 
+  function toggleMenu(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setMenuOpen(s => !s)
+  }
+  async function onBlock(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    if (!authed || !me || isSelf) return
+    if (!confirm(`Block @${username || 'user'}?`)) return
+    try {
+      await supabase.from('blocked_users').insert({ blocker_id: me, blocked_id: userId })
+      alert('User blocked.')
+      setMenuOpen(false)
+    } catch {
+      alert('Could not block user. Please try again.')
+    }
+  }
+  function onReportUser(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    const subject = encodeURIComponent(`Report user @${username || userId}`)
+    const body = encodeURIComponent(`I want to report user ${username ? '@'+username : userId} (id: ${userId}). Reason:\n\n`)
+    window.location.href = `mailto:support@walcord.com?subject=${subject}&body=${body}`
+    setMenuOpen(false)
+  }
+
   return (
     <section className="w-full px-6 sm:px-12">
       <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-10">
@@ -145,8 +194,8 @@ export default function PublicUserHeader({ userId }: Props) {
                   ))
                 ) : (
                   <>
-                    <div className="absolute left-0 top-0 w-[40px] h-[40px] rounded-sm z-10" style={{ backgroundColor: color1 }} />
-                    <div className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-sm z-0" style={{ backgroundColor: color2 }} />
+                    <div className="absolute left-0 top-0 w-[40px] h-[40px] rounded-sm z-10" style={{ backgroundColor: WALCORD_BLUES.blue2 }} />
+                    <div className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-sm z-0" style={{ backgroundColor: WALCORD_BLUES.blue1 }} />
                   </>
                 )}
               </div>
@@ -173,8 +222,8 @@ export default function PublicUserHeader({ userId }: Props) {
                   ))
                 ) : (
                   <>
-                    <div className="absolute left-0 top-0 w-[40px] h-[40px] rounded-full z-10" style={{ backgroundColor: color3 }} />
-                    <div className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-full z-0" style={{ backgroundColor: color4 }} />
+                    <div className="absolute left-0 top-0 w-[40px] h-[40px] rounded-full z-10" style={{ backgroundColor: WALCORD_BLUES.blue4 }} />
+                    <div className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-full z-0" style={{ backgroundColor: WALCORD_BLUES.blue3 }} />
                   </>
                 )}
               </div>
@@ -195,7 +244,7 @@ export default function PublicUserHeader({ userId }: Props) {
             Concerts
           </Link>
 
-          {/* Favourite Songs (solo texto) */}
+          {/* Favourite Songs */}
           <div
             className="mt-4 text-left text-[13px] font-light leading-tight"
             style={{ fontFamily: 'Roboto, sans-serif' }}
@@ -205,19 +254,82 @@ export default function PublicUserHeader({ userId }: Props) {
           </div>
 
           {/* Social */}
-          <div className="mt-6 flex items-center gap-3">
-            <span className="text-sm text-neutral-700 select-none" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
-              {followersCount} followers
-            </span>
+          <div className="mt-6 w-full flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-[220px]">
+              <span className="text-sm text-neutral-700 select-none" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
+                {followersCount} followers
+              </span>
+              <Link
+                href={username ? `/u/friends${queryUser}` : '#'}
+                aria-disabled={!username}
+                className={`text-sm text-[#1F48AF] underline-offset-4 hover:underline ${disabledLinkClass}`}
+                style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+              >
+                See all friends
+              </Link>
+            </div>
 
-            <Link
-              href={username ? `/u/friends${queryUser}` : '#'}
-              aria-disabled={!username}
-              className={`text-sm text-[#1F48AF] underline-offset-4 hover:underline ${disabledLinkClass}`}
-              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
-            >
-              See all friends
-            </Link>
+            {/* derecha: acciones (si no hay sesión, CTAs a /login) */}
+            {!isSelf && authed !== null && (
+              <div className="flex items-center gap-2 shrink-0 relative">
+                {authed ? (
+                  <FollowButton profileId={userId} />
+                ) : (
+                  <Link
+                    href="/login"
+                    className="px-5 py-1.5 rounded-full border border-[#1F48AF] text-[#1F48AF] text-sm hover:bg-[#1F48AF] hover:text-white transition"
+                  >
+                    Follow
+                  </Link>
+                )}
+
+                {authed ? (
+                  <AddFriendButton profileId={userId} />
+                ) : (
+                  <Link
+                    href="/login"
+                    className="px-5 py-1.5 rounded-full bg-[#1F48AF] text-white text-sm hover:opacity-90 transition"
+                  >
+                    Add Friend
+                  </Link>
+                )}
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={toggleMenu}
+                    aria-label={menuOpen ? 'Close menu' : 'More options'}
+                    className="h-8 w-8 rounded-full bg-black/10 hover:bg-black/20 text-black flex items-center justify-center"
+                  >
+                    {menuOpen ? '×' : '⋯'}
+                  </button>
+
+                  {menuOpen && (
+                    <div
+                      className="absolute right-0 mt-2 min-w-[130px] rounded-md bg-black/80 text-white text-xs shadow-sm backdrop-blur-sm overflow-hidden z-20"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    >
+                      <button
+                        type="button"
+                        onClick={onReportUser}
+                        className="block w-full text-left px-3 py-2 hover:bg-white/10"
+                      >
+                        Report user
+                      </button>
+                      {authed && (
+                        <button
+                          type="button"
+                          onClick={onBlock}
+                          className="block w-full text-left px-3 py-2 hover:bg-white/10"
+                        >
+                          Block
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
