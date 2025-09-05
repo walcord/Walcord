@@ -5,11 +5,22 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
+          {/* Viewport: pantalla fija, sin zoom y con notch safe-area */}
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+          />
+
           {/* Favicons / PWA */}
           <link rel="icon" href="/favicon.png" sizes="32x32" type="image/png" />
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           <link rel="manifest" href="/site.webmanifest" />
           <meta name="theme-color" content="#1F4CED" />
+
+          {/* iOS: experiencia web-app más limpia */}
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+          <meta name="format-detection" content="telephone=no" />
 
           {/* SEO básico por defecto */}
           <meta
