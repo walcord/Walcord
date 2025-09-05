@@ -1747,7 +1747,7 @@ export const Feed: React.FC = () => {
     <div className="min-h-screen bg-white">
       {/* Banner azul MÁS GRANDE sin logo */}
       <header
-className="w-full h-36 bg-[#1F48AF] flex items-end justify-end px-4 sm:px-6 pb-4">
+className="w-full h-24 bg-[#1F48AF] flex items-end justify-end px-4 sm:px-6 pb-4">
         <Link
           href="/profile"
           aria-label="Go to Profile"
