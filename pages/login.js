@@ -15,7 +15,8 @@ export default function Login() {
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
     setError('');
   };
 
@@ -57,8 +58,17 @@ export default function Login() {
       return;
     }
 
-    // 🔐 Login exitoso → redirigir directamente
-    router.push('/feed');
+    // Verificar sesión y redirigir
+    if (data && data.session) {
+      router.push('/feed');
+    } else {
+      const { data: sData, error: sErr } = await supabase.auth.getSession();
+      if (sErr || !sData || !sData.session) {
+        setError('Login succeeded but session is missing. Please try again.');
+        return;
+      }
+      router.push('/feed');
+    }
   };
 
   return (
