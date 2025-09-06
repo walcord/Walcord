@@ -1,38 +1,30 @@
 'use client';
 
-import { supabase } from '../lib/supabaseClient';
-import { useRouter } from 'next/router';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
 export default function LogoutButton() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const supabase = useSupabaseClient();
 
-  const onLogout = async () => {
-    if (loading) return;
-    const ok = window.confirm('Are you sure you want to log out?');
-    if (!ok) return;
-
-    setLoading(true);
+  const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
-      router.replace('/welcome');
-    } catch (e) {
-      console.error(e);
-      alert('There was an error logging out. Please try again.');
+      await supabase.auth.signOut();   // cierra sesión en Supabase
     } finally {
-      setLoading(false);
+      // redirige a tu pantalla de bienvenida
+      router.replace('/index');      // ajusta la ruta si tu welcome es otra
+      router.refresh();                // asegura rehidratación sin sesión
     }
   };
 
   return (
     <button
-      onClick={onLogout}
-      disabled={loading}
-      className="px-3 h-8 rounded-full border border-white/40 bg-[#1F48AF] text-white text-[12px] leading-8 hover:opacity-90 transition
-                 font-light tracking-wide"
+      onClick={handleLogout}
+      className="inline-flex items-center gap-2 rounded-full bg-white/90 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition"
+      aria-label="Log out"
+      title="Log out"
     >
-      {loading ? 'Logging out…' : 'Log out'}
+      Log out
     </button>
   );
 }

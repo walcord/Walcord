@@ -10,9 +10,9 @@ import { ARTIST_COLOR_PALETTE } from "../lib/artist.Colors";
 import NowTouringRibbon from "../components/wall/NowTouringRibbon";
 
 /* ===========================================================================
-   Walcord — Favourite Artists (MOBILE-FIRST, banner igual que ConcertsPage)
-   - Header 80px + logo 56px, seguido de NowTouringRibbon.
-   - AVATARES SIEMPRE CIRCULARES (sin deformaciones)
+   Walcord — Favourite Artists
+   - Banner azul con flecha minimalista (20x20) pegada abajo.
+   - Avatares siempre circulares (sin deformaciones).
    =========================================================================== */
 
 const currentYear = new Date().getFullYear();
@@ -27,7 +27,6 @@ export default function FavouriteArtists() {
   const me = useUser();
   const qs = useSearchParams();
 
-  // PERFIL OBJETIVO
   const [targetId, setTargetId] = useState<string | null>(null);
   const [targetUsername, setTargetUsername] = useState<string | null>(null);
   const readonly = !!(targetId && me?.id && targetId !== me.id);
@@ -120,21 +119,26 @@ export default function FavouriteArtists() {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner exacto como ConcertsPage: 80px + logo 56px */}
-      <header className="w-full h-20 bg-[#1F48AF] flex items-center px-4 sm:px-6">
-        <Link href="/profile" aria-label="Back to profile" className="mr-3">
-          <span className="hidden sm:inline text-white/80 text-xs px-2 py-1 rounded-full border border-white/40">
-            Back
-          </span>
-        </Link>
-        <Image
-          src="/logotipo.png"
-          alt="Walcord"
-          width={56}
-          height={56}
-          priority
-          className="select-none"
-        />
+      {/* Banner azul con flecha pegada abajo */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
       </header>
 
       {/* Título */}
@@ -176,7 +180,7 @@ export default function FavouriteArtists() {
               href={`/artist/${artist.id}`}
               className="w-[92%] max-w-xl bg-white shadow-sm rounded-2xl px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-4 sm:gap-6 justify-between border border-neutral-200 hover:bg-neutral-50 transition"
             >
-              {/* LADO IZQUIERDO: avatar + datos */}
+              {/* LADO IZQUIERDO */}
               <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                 <div
                   className="relative aspect-square w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden shrink-0 border border-black/5"
@@ -206,7 +210,7 @@ export default function FavouriteArtists() {
                 </div>
               </div>
 
-              {/* LADO DERECHO: estado favorito / botón */}
+              {/* LADO DERECHO */}
               {isFavourite(artist.id) ? (
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <span className="inline-flex items-center justify-center h-10 min-w-[120px] sm:min-w-[140px] px-3 rounded-full text-xs sm:text-sm text-white font-light bg-[#1F48AF]">
@@ -244,7 +248,7 @@ export default function FavouriteArtists() {
         </div>
       )}
 
-      {/* Favoritos (GRID 2 columnas en móvil) */}
+      {/* Favoritos */}
       {favourites.length > 0 ? (
         <div className="w-full px-4 sm:px-6 pb-24">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">

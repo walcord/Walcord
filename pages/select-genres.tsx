@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -34,21 +34,10 @@ export default function GenresPage() {
   const [selected, setSelected] = useState<string[]>([]);
 
   // ======== PALETA WALCORD + COLOR DETERMINÍSTICO =========
-  // Paleta intensa pero sobria (no se guarda en BD; sólo visual)
   const WALCORD_COLORS = useMemo(
     () => [
-      '#1F48AF', // Walcord blue
-      '#0F2A6B',
-      '#112B3C',
-      '#2B3A67',
-      '#3B4A99',
-      '#264653',
-      '#2A9D8F',
-      '#4B5563',
-      '#111827',
-      '#0B132B',
-      '#1D3557',
-      '#4C566A'
+      '#1F48AF', '#0F2A6B', '#112B3C', '#2B3A67', '#3B4A99', '#264653',
+      '#2A9D8F', '#4B5563', '#111827', '#0B132B', '#1D3557', '#4C566A'
     ],
     []
   );
@@ -112,10 +101,27 @@ export default function GenresPage() {
 
   return (
     <div className="bg-white min-h-screen text-black font-sans">
-      {/* Banner */}
-      <div className="w-full h-[100px] sm:h-[80px] bg-[#1F48AF] flex items-center justify-start px-4 sm:px-12">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} className="w-[62px] h-[62px]" />
-      </div>
+      {/* Banner azul con flecha minimalista pegada abajo */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-12 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       {/* Título */}
       <div className="max-w-6xl mx-auto px-6 pt-10">
@@ -156,7 +162,7 @@ export default function GenresPage() {
         </div>
       )}
 
-      {/* Selector (solo si es tu perfil y puedes añadir) */}
+      {/* Selector */}
       {!readonly && selected.length < 2 && (
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-12">
           {filteredGenres.map((genre) => (

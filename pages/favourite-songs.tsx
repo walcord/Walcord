@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -66,7 +66,6 @@ export default function FavouriteSongsPage() {
         const chunk = data || [];
         all.push(...chunk);
 
-        // si el bloque viene incompleto, ya no hay más filas
         if (chunk.length < PAGE_SIZE) break;
 
         from += PAGE_SIZE;
@@ -138,9 +137,27 @@ export default function FavouriteSongsPage() {
 
   return (
     <div className="bg-white min-h-screen text-black font-sans">
-      <div className="w-full h-[100px] sm:h-[80px] bg-[#1F48AF] flex items-center justify-start px-4 sm:px-12">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} className="w-[62px] h-[62px]" />
-      </div>
+      {/* Banner azul con flecha minimalista pegada abajo */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-12 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       <div className="max-w-6xl mx-auto px-6 pt-10">
         <h1 className="text-4xl font-light text-center tracking-tight mb-1" style={{ fontFamily: 'Times New Roman, serif' }}>

@@ -6,7 +6,7 @@ import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 
 /**
  * Walcord — Recommendations v6
- * - Header: SOLO logo (80px alto).
+ * - Header: flecha minimalista pegada abajo (h-24), sin logo.
  * - Tabs: estilo editorial (más grandes).
  * - Composer: Record / Artist / Track + comentario (≤280).
  * - Feed: elegante + social con Like y Comment (iconos CSS).
@@ -449,9 +449,26 @@ export default function RecommendationsPage() {
   // ───────────────────────────────── Render
   return (
     <main className="min-h-screen bg-white text-black">
-      {/* Header: SOLO logo (80px) */}
-      <header className="w-full h-20 bg-[#1F48AF] flex items-center px-4 sm:px-6">
-        <Image src="/logotipo.png" alt="Walcord" width={56} height={56} priority />
+      {/* Header: flecha minimalista (h-24) pegada abajo, sin logo */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
       </header>
 
       {/* Tabs */}
