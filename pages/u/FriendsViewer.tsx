@@ -73,10 +73,27 @@ export default function FriendsViewer({ viewerId }: { viewerId: string }) {
 
   return (
     <main className="min-h-screen bg-white">
-      {/* Banner */}
-      <div className="w-full h-20 flex items-center justify-between px-12 bg-[#1F48AF]">
-        <Image src="/logotipo.png" width={56} height={56} alt="Walcord" priority />
-      </div>
+      {/* Banner actualizado: h-24, sin logo, flecha pegada abajo */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       {/* Título */}
       <div className="mx-auto max-w-6xl px-6 md:px-8 mt-8">

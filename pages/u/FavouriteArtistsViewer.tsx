@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -18,10 +17,6 @@ function getArtistColor(artistId: string) {
 
 type Props = { viewerId?: string };
 
-/**
- * Viewer de artistas favoritos (solo lectura).
- * Soporta `viewerId` por props o resolución vía ?username=…
- */
 export default function FavouriteArtistsViewer({ viewerId }: Props) {
   const searchParams = useSearchParams();
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(viewerId ?? null);
@@ -67,9 +62,28 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
   if (loading) {
     return (
       <main className="min-h-screen bg-white text-black font-[Roboto]">
-        <div className="w-full h-20 flex items-center px-4 sm:px-12 bg-[#1F48AF]">
-          <Image src="/logotipo.png" alt="Walcord Logo" width={56} height={56} />
-        </div>
+        {/* Banner actualizado */}
+        <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+          <button
+            onClick={() => history.back()}
+            aria-label="Go back"
+            className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </header>
+
         <div className="w-full flex justify-center mt-10">
           <p className="text-sm text-neutral-600">Loading…</p>
         </div>
@@ -79,9 +93,27 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      <div className="w-full h-20 flex items-center px-4 sm:px-12 bg-[#1F48AF]">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={56} height={56} />
-      </div>
+      {/* Banner actualizado */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       <div className="w-full flex flex-col items-center mt-8 mb-6">
         <h1
@@ -97,7 +129,6 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
         <p className="text-center text-neutral-600 text-sm mb-24">No artists yet.</p>
       ) : (
         <div className="w-full px-4 sm:px-6 pb-24">
-          {/* GRID 2 columnas en móvil */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
             {favourites.map((fav) => {
               const artist = artists.find((a) => a.id === fav.artist_id);
@@ -111,7 +142,6 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
                 >
                   <div className="w-full h-36 sm:h-40 flex items-center justify-center" style={{ backgroundColor: color }}>
                     {artist.image_url ? (
-                      // círculo perfecto y cover consistente
                       <img src={artist.image_url} alt={artist.name} className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover" />
                     ) : (
                       <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white/40" />

@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -17,10 +16,6 @@ type RecordRow = {
 
 type Props = { viewerId?: string };
 
-/**
- * Viewer de discos favoritos (solo lectura).
- * Soporta `viewerId` por props o resolución vía ?username=…
- */
 export default function FavouriteRecordsViewer({ viewerId }: Props) {
   const searchParams = useSearchParams();
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(viewerId ?? null);
@@ -70,9 +65,28 @@ export default function FavouriteRecordsViewer({ viewerId }: Props) {
   if (loading) {
     return (
       <main className="min-h-screen bg-white text-black font-[Roboto]">
-        <div className="w-full h-20 flex items-center px-4 sm:px-12 bg-[#1F48AF]">
-          <Image src="/logotipo.png" alt="Walcord Logo" width={56} height={56} />
-        </div>
+        {/* Banner actualizado */}
+        <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+          <button
+            onClick={() => history.back()}
+            aria-label="Go back"
+            className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </header>
+
         <p className="text-center text-gray-500 text-sm mt-10">Loading records…</p>
       </main>
     );
@@ -80,9 +94,27 @@ export default function FavouriteRecordsViewer({ viewerId }: Props) {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      <div className="w-full h-20 flex items-center px-4 sm:px-12 bg-[#1F48AF]">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={56} height={56} />
-      </div>
+      {/* Banner actualizado */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       <div className="w-full flex flex-col items-center mt-8 mb-6">
         <h1
@@ -98,7 +130,6 @@ export default function FavouriteRecordsViewer({ viewerId }: Props) {
         <p className="text-center text-neutral-600 text-sm mb-24">No records yet.</p>
       ) : (
         <div className="w-full px-4 sm:px-6 mb-24">
-          {/* GRID 2 columnas en móvil */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
             {records.map((record) => (
               <div key={record.id} className="flex flex-col items-center text-center">
@@ -107,14 +138,22 @@ export default function FavouriteRecordsViewer({ viewerId }: Props) {
                   className="w-36 h-36 sm:w-40 sm:h-40 rounded-xl shadow-md flex items-center justify-center transition-transform duration-200 hover:scale-[1.03]"
                   style={{ backgroundColor: record.vibe_color || '#000000' }}
                 >
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-[6px]" style={{ backgroundColor: record.cover_color || '#FFFFFF' }} />
+                  <div
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-[6px]"
+                    style={{ backgroundColor: record.cover_color || '#FFFFFF' }}
+                  />
                 </Link>
 
-                <p className="mt-2 text-[13px] sm:text-sm font-normal leading-tight line-clamp-2" style={{ fontFamily: 'Times New Roman, serif', opacity: 0.9 }}>
+                <p
+                  className="mt-2 text-[13px] sm:text-sm font-normal leading-tight line-clamp-2"
+                  style={{ fontFamily: 'Times New Roman, serif', opacity: 0.9 }}
+                >
                   {record.title}
                 </p>
                 <p className="text-[11px] sm:text-xs text-gray-600 font-light">{record.artist_name}</p>
-                {record.release_year ? <p className="text-[11px] sm:text-xs text-gray-500 font-light">{record.release_year}</p> : null}
+                {record.release_year ? (
+                  <p className="text-[11px] sm:text-xs text-gray-500 font-light">{record.release_year}</p>
+                ) : null}
               </div>
             ))}
           </div>
