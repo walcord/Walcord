@@ -28,25 +28,11 @@ export default function Home() {
 
       {/* Subtítulo */}
       <p
-        className="text-lg md:text-xl mb-4 text-white/90"
+        className="text-lg md:text-xl mb-8 text-white/90"
         style={{ fontFamily: 'Times New Roman' }}
       >
         Music defines us, we define music.
       </p>
-
-      {/* Disclaimer App Store */}
-      <a
-        href="https://apps.apple.com/app/walcord/id6751656616"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mb-8"
-      >
-        <img
-          src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
-          alt="Download on the App Store"
-          className="h-12"
-        />
-      </a>
 
       {/* Botones */}
       <div className="flex gap-4">
