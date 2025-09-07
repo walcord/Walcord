@@ -287,12 +287,27 @@ export default function RecordProfile() {
 
   return (
     <main className="min-h-screen bg-white text-black">
-      {/* Header */}
-      <div className="w-full h-20 flex items-center px-12 bg-[#1F48AF]">
-        <Link href="/profile">
-          <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
-        </Link>
-      </div>
+      {/* Banner azul con flecha minimalista pegada abajo (h-24, sin logo) */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       {/* Layout: mobile -> Record (1) / Tracklist (2) / Photos (3) */}
       {/* Desktop -> Tracklist | Photos | Record */}

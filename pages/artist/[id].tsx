@@ -39,9 +39,9 @@ export default function ArtistProfile() {
 
       if (data) {
         // orden seguro cuando release_year pueda ser null
-        data.records = (data.records || []).sort(
+        (data as any).records = (data as any).records?.sort(
           (a: any, b: any) => (b.release_year ?? 0) - (a.release_year ?? 0)
-        );
+        ) || [];
         setArtist(data);
       }
       setLoading(false);
@@ -98,19 +98,26 @@ export default function ArtistProfile() {
 
   return (
     <main className="min-h-screen bg-white text-black">
-      {/* BANNER EXACTO COMO EN CONCERTS (sin ribbon de new concert) */}
-      <header className="w-full h-20 bg-[#1F48AF] flex items-center px-4 sm:px-6">
-        <Link href="/profile" aria-label="Back to profile" className="mr-3 hidden sm:inline">
-          <span className="text-white/85 text-xs px-2 py-1 rounded-full border border-white/40">Back</span>
-        </Link>
-        <Image
-          src="/logotipo.png"
-          alt="Walcord"
-          width={56}
-          height={56}
-          priority
-          className="select-none"
-        />
+      {/* Banner azul con flecha minimalista pegada abajo (h-24, sin logo) */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
       </header>
 
       {/* CONTENIDO */}

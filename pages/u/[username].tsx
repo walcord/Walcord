@@ -98,16 +98,27 @@ export default function ExternalProfilePage() {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner */}
-      <div className="w-full h-20 flex items-center justify-between px-12 bg-[#1F48AF]">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
-        <Link href="/feed" aria-label="Back to The Wall" className="inline-flex items-center gap-2 rounded-full bg-white/95 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition-all">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M19 12H5m6 7l-7-7 7-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      {/* Banner azul con flecha minimalista pegada abajo (h-24, sin logo) */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => history.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
           </svg>
-          <span className="hidden sm:inline">The Wall</span>
-        </Link>
-      </div>
+        </button>
+      </header>
 
       {/* Título */}
       <div className="w-full px-10 sm:px-12 mt-6 mb-8 relative">
