@@ -2,13 +2,16 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // ✅ Ignorar ESLint y TypeScript en "next build" (solo para desbloquear deploy)
+  // (opcional) desbloquear build sin ESLint/TS
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
 
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+      // ✅ URLs antiguas (object/public)
+      { protocol: 'https', hostname: '**.supabase.co', pathname: '/storage/v1/object/public/**' },
+      // ✅ URLs nuevas (render/image/public) — las que te están rompiendo ahora
+      { protocol: 'https', hostname: '**.supabase.co', pathname: '/storage/v1/render/image/public/**' },
     ],
   },
 };

@@ -365,9 +365,13 @@ const Lightbox: React.FC<{
         exit={{ opacity: 0 }}
       >
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-white/90 text-sm border border-white/30 rounded-full px-3 py-1"
-        >
+  onClick={onClose}
+  className="absolute right-4 text-white/90 text-sm border border-white/30 rounded-full px-3.5 py-2"
+  style={{
+    top: "auto",
+    bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)"
+  }}
+>
           Close
         </button>
         <button
@@ -1314,11 +1318,11 @@ export const Feed: React.FC = () => {
       square?: boolean;
     }> = ({ src, idx, badge, square }) => (
       <button
-        onClick={() => openAt(idx)}
-        className={[
-          "relative overflow-hidden rounded-xl sm:rounded-2xl",
-          square ? "aspect-square" : "aspect-[4/3]",
-        ].join(" ")}
+  onClick={() => openAt(idx)}
+  className={[
+    "relative overflow-hidden rounded-xl sm:rounded-2xl w-full block",
+    square ? "aspect-square" : "aspect-[4/3]",
+  ].join(" ")}
       >
         <img
           src={src}
