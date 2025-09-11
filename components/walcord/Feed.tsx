@@ -2,15 +2,16 @@
 
 /* ==========================================================================================
    Walcord — The Wall (Feed)
-   Hot-fix v3.3.1:
-   - Banner idéntico a Concerts (h-20 + logo 56px) con botón “Profile” a la derecha.
-   - Orden de botones: Memories · Concerts · Content · Recommendations · Pending.
+   Hot-fix v3.3.3:
+   - Feed dividido en 3: Following · Friends · For You (likes).
+   - Subtabs con SEGMENTED CONTROL (estilo distinto a los Pills superiores).
+   - Click en avatar/nombre → perfil del usuario.
+   - Buscador de usuarios: dropdown en desktop, SHEET deslizable en móvil.
    - 🔇 Sin “temblores” de posts (sin animaciones verticales en las cards).
    - ✅ FIX fotos 1× con normalizeUrls().
    ========================================================================================== */
 
 import React, { useEffect, useRef, useState, useDeferredValue } from "react";
-// import Image from "next/image"; // CHANGED: eliminado porque ya no se usa
 import Link from "next/link";
 import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -365,13 +366,13 @@ const Lightbox: React.FC<{
         exit={{ opacity: 0 }}
       >
         <button
-  onClick={onClose}
-  className="absolute right-4 text-white/90 text-sm border border-white/30 rounded-full px-3.5 py-2"
-  style={{
-    top: "auto",
-    bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)"
-  }}
->
+          onClick={onClose}
+          className="absolute right-4 text-white/90 text-sm border border-white/30 rounded-full px-3.5 py-2"
+          style={{
+            top: "auto",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+          }}
+        >
           Close
         </button>
         <button
@@ -407,110 +408,68 @@ const Lightbox: React.FC<{
 };
 
 /* ===============================
-   Buscador de usuarios (con Follow/Add Friend)
+   Buscador de usuarios (dropdown desktop + sheet móvil)
    =============================== */
 const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
   const supabase = useSupabaseClient();
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<
     Array<{ id: string; username: string; full_name: string | null; avatar_url: string | null }>
   >([]);
-  const [open, setOpen] = useState(false);
 
-  // Estado social
+  // estado UI
+  const [openDesktop, setOpenDesktop] = useState(false);
+  const [openSheet, setOpenSheet] = useState(false); // móvil
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const [anchor, setAnchor] =
+    useState<{ left: number; top: number; width: number } | null>(null);
+
+  // social
   const [following, setFollowing] = useState<Record<string, boolean>>({});
   type FriendState = "none" | "outgoing" | "incoming" | "friends";
   const [friendship, setFriendship] = useState<Record<string, FriendState>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
-  // Helpers sociales
+  // helpers sociales
   const refreshSocial = async (userIds: string[]) => {
     if (!meId || userIds.length === 0) return;
-
-    // Following
-    const { data: fRows } = await supabase
-      .from("follows")
-      .select("following_id")
-      .eq("follower_id", meId)
-      .in("following_id", userIds);
-
+    const [{ data: fRows }, { data: outRows }, { data: inRows }, { data: accA }, { data: accB }] =
+      await Promise.all([
+        supabase.from("follows").select("following_id").eq("follower_id", meId).in("following_id", userIds),
+        supabase.from("friendships").select("receiver_id,status").eq("requester_id", meId).in("receiver_id", userIds),
+        supabase.from("friendships").select("requester_id,status").eq("receiver_id", meId).in("requester_id", userIds),
+        supabase.from("friendships").select("requester_id,receiver_id,status").eq("requester_id", meId).eq("status", "accepted").in("receiver_id", userIds),
+        supabase.from("friendships").select("requester_id,receiver_id,status").eq("receiver_id", meId).eq("status", "accepted").in("requester_id", userIds),
+      ]);
     const fMap: Record<string, boolean> = {};
     (fRows || []).forEach((r: any) => (fMap[r.following_id] = true));
-
-    // Friendships (outgoing e incoming)
-    const [{ data: outRows }, { data: inRows }, { data: accA }, { data: accB }] = await Promise.all([
-      supabase
-        .from("friendships")
-        .select("receiver_id,status")
-        .eq("requester_id", meId)
-        .in("receiver_id", userIds),
-      supabase
-        .from("friendships")
-        .select("requester_id,status")
-        .eq("receiver_id", meId)
-        .in("requester_id", userIds),
-      supabase
-        .from("friendships")
-        .select("requester_id,receiver_id,status")
-        .eq("requester_id", meId)
-        .eq("status", "accepted")
-        .in("receiver_id", userIds),
-      supabase
-        .from("friendships")
-        .select("requester_id,receiver_id,status")
-        .eq("receiver_id", meId)
-        .eq("status", "accepted")
-        .in("requester_id", userIds),
-    ]);
-
-    const fs: Record<string, FriendState> = {};
     const accepted = new Set<string>();
     (accA || []).forEach((r: any) => accepted.add(r.receiver_id));
     (accB || []).forEach((r: any) => accepted.add(r.requester_id));
-
+    const fs: Record<string, FriendState> = {};
     userIds.forEach((id) => {
-      if (accepted.has(id)) {
-        fs[id] = "friends";
-        return;
-      }
-      const out = (outRows || []).find((r: any) => r.receiver_id === id);
-      const inc = (inRows || []).find((r: any) => r.requester_id === id);
-      if (out) fs[id] = "outgoing";
-      else if (inc) fs[id] = "incoming";
+      if (accepted.has(id)) fs[id] = "friends";
+      else if ((outRows || []).find((r: any) => r.receiver_id === id)) fs[id] = "outgoing";
+      else if ((inRows || []).find((r: any) => r.requester_id === id)) fs[id] = "incoming";
       else fs[id] = "none";
     });
-
-    setFollowing((prev) => ({ ...prev, ...fMap }));
-    setFriendship((prev) => ({ ...prev, ...fs }));
+    setFollowing((p) => ({ ...p, ...fMap }));
+    setFriendship((p) => ({ ...p, ...fs }));
   };
 
   const toggleFollow = async (targetId: string) => {
     if (!meId || meId === targetId) return;
     const isFollowing = !!following[targetId];
-
     setBusy((p) => ({ ...p, [targetId]: true }));
     setFollowing((p) => ({ ...p, [targetId]: !isFollowing }));
-
     try {
       if (isFollowing) {
-        await supabase
-          .from("follows")
-          .delete()
-          .eq("follower_id", meId)
-          .eq("following_id", targetId);
+        await supabase.from("follows").delete().eq("follower_id", meId).eq("following_id", targetId);
       } else {
-        await supabase.from("follows").insert({
-          follower_id: meId,
-          following_id: targetId,
-          created_at: new Date().toISOString(),
-        });
+        await supabase.from("follows").insert({ follower_id: meId, following_id: targetId, created_at: new Date().toISOString() });
       }
-    } catch (e) {
-      // revert
-      setFollowing((p) => ({ ...p, [targetId]: isFollowing }));
-      console.error("toggleFollow error", e);
     } finally {
       setBusy((p) => ({ ...p, [targetId]: false }));
     }
@@ -519,20 +478,12 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
   const sendFriendRequest = async (targetId: string) => {
     if (!meId || meId === targetId) return;
     if (friendship[targetId] === "outgoing" || friendship[targetId] === "friends") return;
-
     setBusy((p) => ({ ...p, [targetId]: true }));
     setFriendship((p) => ({ ...p, [targetId]: "outgoing" }));
     try {
-      await supabase.from("friendships").insert({
-        requester_id: meId,
-        receiver_id: targetId,
-        status: "pending",
-        created_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      // revert
+      await supabase.from("friendships").insert({ requester_id: meId, receiver_id: targetId, status: "pending", created_at: new Date().toISOString() });
+    } catch {
       setFriendship((p) => ({ ...p, [targetId]: "none" }));
-      console.error("sendFriendRequest error", e);
     } finally {
       setBusy((p) => ({ ...p, [targetId]: false }));
     }
@@ -541,22 +492,16 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
   const acceptFriendRequest = async (targetId: string) => {
     if (!meId) return;
     if (friendship[targetId] !== "incoming") return;
-
     setBusy((p) => ({ ...p, [targetId]: true }));
     try {
-      const { error } = await supabase
-        .from("friendships")
-        .update({ status: "accepted" })
-        .eq("requester_id", targetId)
-        .eq("receiver_id", meId);
+      const { error } = await supabase.from("friendships").update({ status: "accepted" }).eq("requester_id", targetId).eq("receiver_id", meId);
       if (!error) setFriendship((p) => ({ ...p, [targetId]: "friends" }));
-    } catch (e) {
-      console.error("acceptFriendRequest error", e);
     } finally {
       setBusy((p) => ({ ...p, [targetId]: false }));
     }
   };
 
+  // búsqueda
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(async () => {
@@ -569,7 +514,7 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
         }
         return;
       }
-      setSearchLoading(true);
+      setLoading(true);
       try {
         const or = `full_name.ilike.%${q}%,username.ilike.%${q}%`;
         const { data: raw } = await supabase
@@ -578,7 +523,7 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
           .or(or)
           .neq("id", meId || "")
           .order("username", { ascending: true })
-          .limit(15);
+          .limit(20);
 
         if (!cancelled) {
           const mapped =
@@ -589,167 +534,194 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
               avatar_url: r.avatar_url,
             })) ?? [];
           setResults(mapped);
-          // cargar estado social
-          const ids = mapped.map((m) => m.id);
-          await refreshSocial(ids);
+          await refreshSocial(mapped.map((m) => m.id));
         }
       } finally {
-        if (!cancelled) setSearchLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }, 220);
-
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
   }, [deferred, meId, supabase]);
 
-  // posicion fijo anclado
-  const anchorRef = useRef<HTMLDivElement | null>(null);
-  const [anchor, setAnchor] =
-    useState<{ left: number; top: number; width: number } | null>(null);
+  // posicion dropdown desktop
   useEffect(() => {
     const el = anchorRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    setAnchor({ left: rect.left, top: rect.bottom + 8, width: rect.width });
-    const onResize = () => {
+    const set = () => {
       const r = el.getBoundingClientRect();
       setAnchor({ left: r.left, top: r.bottom + 8, width: r.width });
     };
-    window.addEventListener("resize", onResize);
-    window.addEventListener("scroll", onResize, true);
+    set();
+    window.addEventListener("resize", set);
+    window.addEventListener("scroll", set, true);
     return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("scroll", onResize, true);
+      window.removeEventListener("resize", set);
+      window.removeEventListener("scroll", set, true);
     };
   }, []);
 
+  const ResultsList = (props: { onNavigate?: () => void }) => (
+    <ul className="divide-y divide-neutral-100 max-h-[70vh] overflow-auto">
+      {results.map((p) => {
+        const fState = friendship[p.id] || "none";
+        const isFollowing = !!following[p.id];
+        const isBusy = !!busy[p.id];
+        return (
+          <li key={p.id} className="p-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors">
+            <Link href={`/profile/${p.username}`} className="flex items-center gap-3 flex-1 min-w-0" onClick={props.onNavigate}>
+              <Avatar size={32} src={p.avatar_url} alt={p.full_name || p.username} />
+              <div className="min-w-0">
+                <div className="text-sm line-clamp-1">{p.full_name || "—"}</div>
+                <div className="text-xs text-neutral-500">@{p.username}</div>
+              </div>
+            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  toggleFollow(p.id);
+                }}
+                disabled={isBusy}
+                className={[
+                  "px-3 py-1.5 rounded-full text-[12px] border transition-colors",
+                  isFollowing ? "bg-[#1F48AF] text-white border-[#1F48AF]" : "bg-white text-black border-neutral-200 hover:border-[#1F48AF]/40",
+                ].join(" ")}
+                aria-pressed={isFollowing ? "true" : "false"}
+              >
+                {isFollowing ? "Following" : "Follow"}
+              </button>
+
+              {fState === "incoming" ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    acceptFriendRequest(p.id);
+                  }}
+                  disabled={isBusy}
+                  className="px-3 py-1.5 rounded-full text-[12px] border bg-[#1F48AF] text-white border-[#1F48AF] disabled:opacity-60"
+                >
+                  Accept
+                </button>
+              ) : fState === "outgoing" ? (
+                <button disabled className="px-3 py-1.5 rounded-full text-[12px] border bg-neutral-100 text-neutral-600 border-neutral-200">
+                  Requested
+                </button>
+              ) : fState === "friends" ? (
+                <button disabled className="px-3 py-1.5 rounded-full text-[12px] border bg-neutral-100 text-neutral-600 border-neutral-200">
+                  Friends
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    sendFriendRequest(p.id);
+                  }}
+                  disabled={isBusy}
+                  className="px-3 py-1.5 rounded-full text-[12px] border bg-white text-black border-neutral-200 hover:border-[#1F48AF]/40 disabled:opacity-60"
+                >
+                  Add friend
+                </button>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
   return (
     <div className="relative w-full md:w-[460px]" ref={anchorRef}>
-      <input
-        value={query}
-        onFocus={() => setOpen(true)}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search users and open their profile"
-        className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] transition-all text-sm"
-      />
-      {open && !!query && anchor && (
+      {/* Input — desktop y móvil */}
+      <div className="flex items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setOpenDesktop(true)}
+          placeholder="Search users and open their profile"
+          className="hidden sm:block w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] transition-all text-sm"
+        />
+        <button
+          onClick={() => setOpenSheet(true)}
+          className="sm:hidden w-full rounded-full border border-neutral-200 px-4 py-2 text-left text-sm bg-white"
+        >
+          Search users and open their profile
+        </button>
+      </div>
+
+      {/* Dropdown desktop */}
+      {openDesktop && !!query && anchor && (
         <div
-          className="fixed z-40 rounded-2xl border border-neutral-200 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] overflow-hidden"
+          className="hidden sm:block fixed z-40 rounded-2xl border border-neutral-200 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] overflow-hidden"
           style={{ left: anchor.left, top: anchor.top, width: anchor.width }}
           role="listbox"
         >
-          {searchLoading ? (
+          {loading ? (
             <div className="p-4 text-sm text-neutral-500">
               {query.trim().length < 2 ? "Type at least 2 characters…" : "Searching…"}
             </div>
           ) : results.length === 0 ? (
             <div className="p-4 text-sm text-neutral-500">No users found</div>
           ) : (
-            <ul className="divide-y divide-neutral-100 max-h-[420px] overflow-auto">
-              {results.map((p) => {
-                const fState = friendship[p.id] || "none";
-                const isFollowing = !!following[p.id];
-                const isBusy = !!busy[p.id];
-
-                return (
-                  <li
-                    key={p.id}
-                    className="p-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors"
-                  >
-                    <Link
-                      href={`/profile/${p.username}`}
-                      className="flex items-center gap-3 flex-1 min-w-0"
-                      onClick={() => setOpen(false)}
-                    >
-                      <Avatar size={32} src={p.avatar_url} alt={p.full_name || p.username} />
-                      <div className="min-w-0">
-                        <div className="text-sm line-clamp-1">{p.full_name || "—"}</div>
-                        <div className="text-xs text-neutral-500">@{p.username}</div>
-                      </div>
-                    </Link>
-
-                    {/* Botones de acción */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          toggleFollow(p.id);
-                        }}
-                        disabled={isBusy}
-                        className={[
-                          "px-3 py-1.5 rounded-full text-[12px] border transition-colors",
-                          isFollowing
-                            ? "bg-[#1F48AF] text-white border-[#1F48AF]"
-                            : "bg-white text-black border-neutral-200 hover:border-[#1F48AF]/40",
-                        ].join(" ")}
-                        aria-pressed={isFollowing ? "true" : "false"}
-                        aria-label={isFollowing ? "Unfollow" : "Follow"}
-                      >
-                        {isFollowing ? "Following" : "Follow"}
-                      </button>
-
-                      {fState === "incoming" ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            acceptFriendRequest(p.id);
-                          }}
-                          disabled={isBusy}
-                          className="px-3 py-1.5 rounded-full text-[12px] border bg-[#1F48AF] text-white border-[#1F48AF] disabled:opacity-60"
-                          aria-label="Accept friend request"
-                        >
-                          Accept
-                        </button>
-                      ) : fState === "outgoing" ? (
-                        <button
-                          disabled
-                          className="px-3 py-1.5 rounded-full text-[12px] border bg-neutral-100 text-neutral-600 border-neutral-200"
-                          aria-label="Friend request sent"
-                        >
-                          Requested
-                        </button>
-                      ) : fState === "friends" ? (
-                        <button
-                          disabled
-                          className="px-3 py-1.5 rounded-full text-[12px] border bg-neutral-100 text-neutral-600 border-neutral-200"
-                          aria-label="Already friends"
-                        >
-                          Friends
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            sendFriendRequest(p.id);
-                          }}
-                          disabled={isBusy}
-                          className="px-3 py-1.5 rounded-full text-[12px] border bg-white text-black border-neutral-200 hover:border-[#1F48AF]/40 disabled:opacity-60"
-                          aria-label="Add friend"
-                        >
-                          Add friend
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <ResultsList onNavigate={() => setOpenDesktop(false)} />
           )}
           <div className="p-2 text-right">
-            <button
-              onClick={() => setOpen(false)}
-              className="text-xs text-neutral-500 hover:text-neutral-700"
-            >
+            <button onClick={() => setOpenDesktop(false)} className="text-xs text-neutral-500 hover:text-neutral-700">
               close
             </button>
           </div>
         </div>
       )}
+
+      {/* SHEET móvil */}
+      <AnimatePresence>
+        {openSheet && (
+          <>
+            <motion.div
+              className="sm:hidden fixed inset-0 z-40 bg-black/40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOpenSheet(false)}
+            />
+            <motion.div
+              className="sm:hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-[0_-10px_30px_rgba(0,0,0,0.2)]"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              style={{ height: "70vh" }}
+            >
+              <div className="pt-3 pb-2">
+                <div className="mx-auto h-1.5 w-12 rounded-full bg-neutral-300" />
+              </div>
+              <div className="px-4 pb-3">
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search users…"
+                  className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] transition-all text-sm"
+                />
+              </div>
+              <div className="px-1 pb-[env(safe-area-inset-bottom)]">
+                {loading ? (
+                  <div className="p-4 text-sm text-neutral-500">{query.trim().length < 2 ? "Type at least 2 characters…" : "Searching…"}</div>
+                ) : results.length === 0 ? (
+                  <div className="p-4 text-sm text-neutral-500">No users found</div>
+                ) : (
+                  <ResultsList onNavigate={() => setOpenSheet(false)} />
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -765,6 +737,11 @@ export const Feed: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     "memories" | "content" | "recommendations" | "pending" | "concerts"
   >("memories");
+
+  // Sub-scope del feed (NUEVO)
+  const [feedScope, setFeedScope] = useState<"following" | "friends" | "foryou">(
+    "following"
+  );
 
   // Base
   const [loading, setLoading] = useState(true);
@@ -849,12 +826,12 @@ export const Feed: React.FC = () => {
   /* ---------------- loaders ---------------- */
   const loadPending = async () => {
     if (!user) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("v_pending_items_expanded")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    if (!error) setPending((data || []) as PendingRow[]);
+    setPending((data || []) as PendingRow[]);
   };
 
   const loadAll = async () => {
@@ -867,64 +844,95 @@ export const Feed: React.FC = () => {
     }
   };
 
-  /* ---------------- Memories ---------------- */
-
-  // *** NUEVO HELPER (visibilidad estricta por seguidos / amistades / yo) ***
-  const getVisibleUserIds = async (): Promise<string[]> => {
+  /* --------- IDs sociales para filtros --------- */
+  const getFollowingIds = async (): Promise<string[]> => {
     if (!user?.id) return [];
-    const [followsRes, frA, frB] = await Promise.all([
-      supabase.from("follows").select("following_id").eq("follower_id", user.id),
-      supabase.from("friendships").select("receiver_id").eq("requester_id", user.id).eq("status", "accepted"),
-      supabase.from("friendships").select("requester_id").eq("receiver_id", user.id).eq("status", "accepted"),
+    const { data } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", user.id);
+    return (data || []).map((r: any) => r.following_id);
+  };
+  const getFriendIds = async (): Promise<string[]> => {
+    if (!user?.id) return [];
+    const [frA, frB] = await Promise.all([
+      supabase
+        .from("friendships")
+        .select("receiver_id")
+        .eq("requester_id", user.id)
+        .eq("status", "accepted"),
+      supabase
+        .from("friendships")
+        .select("requester_id")
+        .eq("receiver_id", user.id)
+        .eq("status", "accepted"),
     ]);
     const ids = new Set<string>();
-    ids.add(user.id);
-    (followsRes.data || []).forEach((r: any) => ids.add(r.following_id));
     (frA.data || []).forEach((r: any) => ids.add(r.receiver_id));
     (frB.data || []).forEach((r: any) => ids.add(r.requester_id));
     return Array.from(ids);
   };
 
+  /* ---------------- Memories ---------------- */
   const fetchMemories = async (reset = false) => {
     if (!user) return;
     setMemoriesLoading(true);
     try {
-      const visible = await getVisibleUserIds();
-      if (visible.length === 0) {
+      // seleccionar visibilidad según scope
+      let authorIds: string[] | null = null;
+      if (feedScope === "following") authorIds = await getFollowingIds();
+      if (feedScope === "friends") authorIds = await getFriendIds();
+      if (authorIds && authorIds.length === 0) {
         setMemories([]);
         setMemoriesPage(0);
+        setMemoriesLoading(false);
         return;
       }
 
       const from = reset ? 0 : memoriesPage * pageSize;
       const to = from + pageSize - 1;
 
-      const { data, error } = await supabase
+      let q = supabase
         .from("v_memories_posts")
         .select(
           "viewer_id, post_id, author_id, created_at, caption, image_urls, username, avatar_url, record_id, record_title, artist_name, record_vibe_color, record_cover_color"
         )
         .eq("viewer_id", user.id)
-        .in("author_id", visible) // <<<<<< FILTRO DURO: solo seguidos / amistades / yo
         .order("created_at", { ascending: false })
         .range(from, to);
 
+      if (authorIds) q = q.in("author_id", authorIds);
+
+      const { data, error } = await q;
       if (error) throw error;
 
-      const normalized: MemoryPost[] = (data || []).map((p: any) => ({
-        id: p.post_id,
-        user_id: p.author_id,
-        created_at: p.created_at,
-        text: p.caption ?? null,
-        image_urls: normalizeUrls(p.image_urls),
-        username: p.username ?? "user",
-        avatar_url: p.avatar_url ?? null,
-        record_id: p.record_id ?? null,
-        record_title: p.record_title ?? null,
-        record_artist_name: p.artist_name ?? null,
-        record_vibe_color: p.record_vibe_color ?? null,
-        record_cover_color: p.record_cover_color ?? null,
-      }));
+      let normalized: MemoryPost[] =
+        (data || []).map((p: any) => ({
+          id: p.post_id,
+          user_id: p.author_id,
+          created_at: p.created_at,
+          text: p.caption ?? null,
+          image_urls: normalizeUrls(p.image_urls),
+          username: p.username ?? "user",
+          avatar_url: p.avatar_url ?? null,
+          record_id: p.record_id ?? null,
+          record_title: p.record_title ?? null,
+          record_artist_name: p.artist_name ?? null,
+          record_vibe_color: p.record_vibe_color ?? null,
+          record_cover_color: p.record_cover_color ?? null,
+        })) ?? [];
+
+      // For You: ordenar por likes globales
+      if (feedScope === "foryou" && normalized.length) {
+        const ids = normalized.map((n) => n.id);
+        const { data: countsRes } = await supabase
+          .from("v_posts_counts")
+          .select("post_id, like_count")
+          .in("post_id", ids);
+        const likeMap: Record<string, number> = {};
+        (countsRes || []).forEach((r: any) => (likeMap[r.post_id] = r.like_count ?? 0));
+        normalized = normalized.sort((a, b) => (likeMap[b.id] || 0) - (likeMap[a.id] || 0));
+      }
 
       setMemories((prev) => (reset ? normalized : [...prev, ...normalized]));
       if (reset) setMemoriesPage(1);
@@ -961,7 +969,7 @@ export const Feed: React.FC = () => {
         setLikedByMe((prev) => (reset ? nextLiked : { ...prev, ...nextLiked }));
       }
 
-      // nombres (full_name)
+      // nombres
       const authors = Array.from(new Set(normalized.map((n) => n.user_id))).filter(
         Boolean
       );
@@ -1080,7 +1088,7 @@ export const Feed: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Carga inmediata + retry corto tras refresh
+  // Carga inmediata + recarga al cambiar scope
   useEffect(() => {
     if (!user) return;
     fetchMemories(true);
@@ -1089,7 +1097,7 @@ export const Feed: React.FC = () => {
     }, 900);
     return () => clearTimeout(retry);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, feedScope]);
 
   useEffect(() => {
     if (activeTab === "content" && content.length === 0 && !contentLoading)
@@ -1130,7 +1138,7 @@ export const Feed: React.FC = () => {
       }
       await refreshCounts(postId);
     } catch (e) {
-      // revertir si falla
+      // revert
       setLikedByMe((p) => ({ ...p, [postId]: liked }));
       setCounts((p) => ({
         ...p,
@@ -1150,7 +1158,6 @@ export const Feed: React.FC = () => {
     const from = page * 10;
     const to = from + 9;
 
-    // Leemos de post_comments (columna `comment`) y unimos perfiles
     const { data, error } = await supabase
       .from("post_comments")
       .select(
@@ -1195,7 +1202,7 @@ export const Feed: React.FC = () => {
 
   const CommentBox: React.FC<{ postId: string }> = ({ postId }) => {
     const [text, setText] = useState("");
-       const [sending, setSending] = useState(false);
+    const [sending, setSending] = useState(false);
     const onSend = async () => {
       if (!user || !text.trim()) return;
       setSending(true);
@@ -1290,9 +1297,7 @@ export const Feed: React.FC = () => {
     index: number;
   } | null>(null);
 
-  // ================= FIX: PhotoGrid re-normaliza y limpia =================
   const PhotoGrid: React.FC<{ urls: string[] | null | undefined }> = ({ urls }) => {
-    // Vuelva a normalizar cualquier cosa que venga (array/objeto/texto/JSON)
     const flattened = normalizeUrls(urls as any) || [];
 
     const clean = (s: string) =>
@@ -1318,11 +1323,11 @@ export const Feed: React.FC = () => {
       square?: boolean;
     }> = ({ src, idx, badge, square }) => (
       <button
-  onClick={() => openAt(idx)}
-  className={[
-    "relative overflow-hidden rounded-xl sm:rounded-2xl w-full block",
-    square ? "aspect-square" : "aspect-[4/3]",
-  ].join(" ")}
+        onClick={() => openAt(idx)}
+        className={[
+          "relative overflow-hidden rounded-xl sm:rounded-2xl w-full block",
+          square ? "aspect-square" : "aspect-[4/3]",
+        ].join(" ")}
       >
         <img
           src={src}
@@ -1377,6 +1382,40 @@ export const Feed: React.FC = () => {
     );
   };
 
+  /* ===============================
+     SEGMENTED TABS (Following · Friends · For You)
+     Diferente estética a los Pills superiores.
+     =============================== */
+  const ScopeTabs: React.FC<{
+    value: "following" | "friends" | "foryou";
+    onChange: (v: "following" | "friends" | "foryou") => void;
+  }> = ({ value, onChange }) => {
+    const Btn: React.FC<{ val: "following" | "friends" | "foryou"; label: string; desc: string }> = ({ val, label, desc }) => {
+      const active = value === val;
+      return (
+        <button
+          onClick={() => onChange(val)}
+          aria-pressed={active}
+          className={[
+            "group relative rounded-xl px-3 py-2 text-left transition-all",
+            active ? "bg-[#1F48AF] text-white shadow-sm" : "text-neutral-800 hover:bg-neutral-100"
+          ].join(" ")}
+        >
+          <div className="text-[13px] font-semibold tracking-tight">{label}</div>
+          <div className={["text-[11px]", active ? "text-white/90" : "text-neutral-500"].join(" ")}>{desc}</div>
+        </button>
+      );
+    };
+
+    return (
+      <div className="w-full max-w-[520px] rounded-2xl border border-neutral-200 bg-neutral-50 p-1 grid grid-cols-3 gap-1">
+        <Btn val="following" label="Following" desc="Gente a la que sigues" />
+        <Btn val="friends" label="Friends" desc="Solo amistades" />
+        <Btn val="foryou" label="For You" desc="Destacado" />
+      </div>
+    );
+  };
+
   /* ---------------- Secciones de UI ---------------- */
   const Memories = () =>
     memoriesLoading && memories.length === 0 ? (
@@ -1385,7 +1424,7 @@ export const Feed: React.FC = () => {
       </div>
     ) : memories.length === 0 ? (
       <div className="mx-auto max-w-2xl sm:max-w-3xl px-3 sm:px-4 py-10 text-center text-neutral-600">
-        Follow friends to start seeing Memories.
+        {feedScope === "foryou" ? "No posts yet." : "Follow friends to start seeing Memories."}
       </div>
     ) : (
       <div className="mx-auto max-w-2xl sm:max-w-3xl px-3 sm:px-4">
@@ -1393,19 +1432,21 @@ export const Feed: React.FC = () => {
           {memories.map((p) => {
             const vibe = softHashColor(p.username);
             const displayName = names[p.user_id]?.full_name || "—";
+            const username = names[p.user_id]?.username || p.username;
+            const profileHref = `/profile/${username}`;
             const visibleComments = openComments[p.id]
               ? commentsCache[p.id]?.length ?? 0
               : counts[p.id]?.comments ?? 0;
 
             return (
-              // 🔇 Sin motion en la card para evitar “temblores”
               <article
                 key={p.id}
                 className="rounded-2xl sm:rounded-3xl border border-neutral-200 bg-white overflow-hidden"
                 style={{ boxShadow: V.shadow }}
               >
-                {/* Header */}
-                <div
+                {/* Header — clickable to profile */}
+                <Link
+                  href={profileHref}
                   className="flex items-center gap-3 sm:gap-3 px-3 sm:px-4 py-3"
                   style={{ background: `linear-gradient(0deg, #fff, ${vibe})` }}
                 >
@@ -1418,7 +1459,7 @@ export const Feed: React.FC = () => {
                       {fmtDate(p.created_at)}
                     </div>
                   </div>
-                </div>
+                </Link>
 
                 {/* Record */}
                 <div className="px-3 sm:px-4 pt-3 sm:pt-4">
@@ -1750,8 +1791,7 @@ export const Feed: React.FC = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Banner azul MÁS GRANDE sin logo */}
-      <header
-className="w-full h-24 bg-[#1F48AF] flex items-end justify-end px-4 sm:px-6 pb-4">
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end justify-end px-4 sm:px-6 pb-4">
         <Link
           href="/profile"
           aria-label="Go to Profile"
@@ -1781,7 +1821,6 @@ className="w-full h-24 bg-[#1F48AF] flex items-end justify-end px-4 sm:px-6 pb-4
             >
               Memories
             </Pill>
-            {/* Concerts inmediatamente después de Memories */}
             <Pill href="/u/concerts" ariaControls="concerts">
               Concerts
             </Pill>
@@ -1799,6 +1838,13 @@ className="w-full h-24 bg-[#1F48AF] flex items-end justify-end px-4 sm:px-6 pb-4
           {/* Search */}
           <UserSearch meId={meId} />
         </div>
+
+        {/* Subtabs del feed — ahora con estilo diferenciado */}
+        {activeTab === "memories" && (
+          <div className="mt-3">
+            <ScopeTabs value={feedScope} onChange={setFeedScope} />
+          </div>
+        )}
       </div>
 
       {/* Contenido dinámico */}
