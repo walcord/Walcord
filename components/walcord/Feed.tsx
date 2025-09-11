@@ -484,7 +484,7 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
   const sendFriendRequest = async (targetId: string) => {
     if (!meId || meId === targetId) return;
     if (friendship[targetId] === "outgoing" || friendship[targetId] === "friends") return;
-    setBusy((p) => ({ ...p, [targetId]: "outgoing", }));
+setBusy(p => ({ ...p, [targetId]: true }));
     try {
       await supabase.from("friendships").insert({ requester_id: meId, receiver_id: targetId, status: "pending", created_at: new Date().toISOString() });
     } catch {
@@ -1840,7 +1840,7 @@ export const Feed: React.FC = () => {
             </Pill>
 
             <Pill href="/u/recommendations" ariaControls="recommendations">
-              Recommendationsc
+              Recommendations
             </Pill>
             <Pill href="/u/pending" ariaControls="pending">
               Collection
