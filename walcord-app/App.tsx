@@ -2,11 +2,10 @@
 import type { AppProps } from 'next/app'
 import '../styles/globals.css'
 
-// ✅ Session provider (persistencia) usando tu cliente único
 import { SessionContextProvider } from '@supabase/auth-helpers-react'
-import supabase from '../lib/supabaseClient'
+import Supabase, { supabase } from '../lib/supabaseClient' // ambas formas por compatibilidad
+import AuthProvider from '../components/AuthProvider'
 
-// ——— Opcional: si quieres mantener la franja azul y botones solo en modo app ———
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 
@@ -72,11 +71,13 @@ export default function MyApp({ Component, pageProps }: AppProps) {
     else html.classList.remove('is-app')
   }, [])
 
-  // ✅ AQUÍ es donde persistimos la sesión en toda la web
   return (
-    <SessionContextProvider supabaseClient={supabase}>
-      {isApp && <AppButtons pathname={router.pathname} />}
-      <Component {...pageProps} />
+    // ✅ usa SIEMPRE el cliente estable (cualquiera de los dos es el mismo)
+    <SessionContextProvider supabaseClient={Supabase ?? supabase} initialSession={pageProps?.initialSession}>
+      <AuthProvider>
+        {isApp && <AppButtons pathname={router.pathname} />}
+        <Component {...pageProps} />
+      </AuthProvider>
     </SessionContextProvider>
   )
 }

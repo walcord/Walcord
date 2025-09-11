@@ -78,6 +78,26 @@ export default function RecordProfile() {
   // modal amigos
   const [openFriends, setOpenFriends] = useState(false)
 
+  // ✅ Modal de login contextual (solo si no hay sesión)
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [loginTitle, setLoginTitle] = useState<string>("Sign in to continue")
+  const requireAuth = (title: string) => {
+    if (!userId) {
+      setLoginTitle(title)
+      setLoginOpen(true)
+      return false
+    }
+    return true
+  }
+
+  useEffect(() => {
+    const syncUser = async () => {
+      const u = (await supabase.auth.getUser()).data.user
+      setUserId(u?.id || null)
+    }
+    syncUser()
+  }, [])
+
   useEffect(() => {
     if (!recordId) return
 
@@ -113,15 +133,14 @@ export default function RecordProfile() {
         .eq("record_id", recordId)
 
       // USUARIO
-      const user = (await supabase.auth.getUser()).data.user
-      setUserId(user?.id || null)
+      const u = (await supabase.auth.getUser()).data.user
 
-      if (user?.id && artistData) {
+      if (u?.id && artistData) {
         // ¿El artista es favorito del usuario?
         const { data: favArtist } = await supabase
           .from("favourite_artists")
           .select("*")
-          .eq("user_id", user.id)
+          .eq("user_id", u.id)
           .eq("artist_id", artistData.id)
         if (favArtist?.length > 0) setIsFromFavouriteArtist(true)
 
@@ -129,7 +148,7 @@ export default function RecordProfile() {
         const { data: favTracks } = await supabase
           .from("favourite_tracks")
           .select("track_id")
-          .eq("user_id", user.id)
+          .eq("user_id", u.id)
           .eq("record_id", recordId)
         setFavouriteTrackIds(favTracks?.map((t) => t.track_id) || [])
 
@@ -137,14 +156,14 @@ export default function RecordProfile() {
         const { data: userRate } = await supabase
           .from("ratings")
           .select("rate")
-          .eq("user_id", user.id)
+          .eq("user_id", u.id)
           .eq("record_id", recordId)
           .maybeSingle()
         if (userRate) setUserRating(userRate.rate)
       }
 
       // Amigos sin incluir al usuario actual
-      const friendsWithoutMe = (friendsData || []).filter((f: any) => f.user_id !== user?.id)
+      const friendsWithoutMe = (friendsData || []).filter((f: any) => f.user_id !== u?.id)
 
       setRecord({ ...recordData, artist: artistData })
       setTracks(tracksData || [])
@@ -158,24 +177,22 @@ export default function RecordProfile() {
 
   // Carga/estado de Pending (nuevo)
   useEffect(() => {
-    if (!recordId) return
+    if (!recordId || !userId) return
     ;(async () => {
-      const u = (await supabase.auth.getUser()).data.user
-      if (!u?.id) return
       const { data, error } = await supabase
         .from("pending_items")
         .select("id")
-        .eq("user_id", u.id)
+        .eq("user_id", userId)
         .eq("type", "record")
         .eq("record_id", recordId)
         .maybeSingle()
       if (!error && data?.id) setPendingId(data.id)
     })()
-  }, [recordId])
+  }, [recordId, userId])
 
   const togglePending = async () => {
-    const u = (await supabase.auth.getUser()).data.user
-    if (!u?.id || !recordId) return
+    if (!requireAuth("Sign in to add this record to Pending")) return
+    if (!recordId || !userId) return
     setPendingLoading(true)
     try {
       if (pendingId) {
@@ -186,7 +203,7 @@ export default function RecordProfile() {
         const { data, error } = await supabase
           .from("pending_items")
           .upsert(
-            { user_id: u.id, type: "record", artist_id: null, record_id: recordId },
+            { user_id: userId, type: "record", artist_id: null, record_id: recordId },
             { onConflict: "user_id,type,artist_id,record_id" }
           )
           .select("id")
@@ -201,6 +218,7 @@ export default function RecordProfile() {
 
   // Cambiar / quitar rating
   const handleRate = async (rate: number) => {
+    if (!requireAuth("Sign in to rate this record")) return
     if (!userId || !recordId) return
 
     // Si repite la misma nota, borramos su rating
@@ -208,7 +226,7 @@ export default function RecordProfile() {
       await supabase.from("ratings").delete().eq("user_id", userId).eq("record_id", recordId)
       setUserRating(null)
     } else {
-      // Eliminamos cualquier rating previo de este usuario para este disco y luego insertamos
+      // Eliminamos cualquier rating previo y luego insertamos
       await supabase.from("ratings").delete().eq("user_id", userId).eq("record_id", recordId)
       await supabase.from("ratings").insert({ user_id: userId, record_id: recordId, rate })
       setUserRating(rate)
@@ -224,6 +242,7 @@ export default function RecordProfile() {
 
   // Toggle favourite track
   const toggleFavourite = async (trackId: string) => {
+    if (!requireAuth("Sign in to add favourites")) return
     if (!userId || !recordId) return
     const isFav = favouriteTrackIds.includes(trackId)
 
@@ -333,22 +352,20 @@ export default function RecordProfile() {
             by {record.artist?.name}
           </p>
 
-          {/* Botón Add to Pending (AZUL) */}
-          {userId && (
-            <button
-              onClick={togglePending}
-              disabled={pendingLoading}
-              className={[
-                "mb-4 rounded-full px-3 py-1.5 text-xs border transition",
-                pendingId
-                  ? "bg-[#1F48AF] text-white border-[#1F48AF]"
-                  : "bg-white text-[#1F48AF] border-[#1F48AF] hover:bg-[#1F48AF] hover:text-white",
-              ].join(" ")}
-              title={pendingId ? "Remove from Pending" : "Add to Pending"}
-            >
-              {pendingLoading ? "Saving…" : pendingId ? "In Pending" : "Add to Pending"}
-            </button>
-          )}
+          {/* Botón Add to Pending (AZUL) → SIEMPRE visible (anónimo abrirá login) */}
+          <button
+            onClick={togglePending}
+            disabled={pendingLoading}
+            className={[
+              "mb-4 rounded-full px-3 py-1.5 text-xs border transition",
+              pendingId
+                ? "bg-[#1F48AF] text-white border-[#1F48AF]"
+                : "bg-white text-[#1F48AF] border-[#1F48AF] hover:bg-[#1F48AF] hover:text-white",
+            ].join(" ")}
+            title={pendingId ? "Remove from Pending" : "Add to Pending"}
+          >
+            {pendingLoading ? "Saving…" : pendingId ? "In Pending" : "Add to Pending"}
+          </button>
 
           {/* Description */}
           {record.description && (
@@ -379,7 +396,7 @@ export default function RecordProfile() {
             </div>
           )}
 
-          {/* Rate buttons (toggle to remove) */}
+          {/* Rate buttons (toggle to remove) → visible para todos; anónimo abrirá login */}
           <div className="grid grid-cols-5 gap-2 mb-8">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
               <Tooltip key={n} message={userRating === n ? `Tap again to remove (${n})` : `Rate ${n}`}>
@@ -425,7 +442,7 @@ export default function RecordProfile() {
           {/* (Opcional) marca si el artista es favorito del usuario */}
           {isFromFavouriteArtist && (
             <div className="flex items-center gap-1">
-              <p className="text-xs font-light text-gray-500">Record from one of your Favourites</p>
+              <p className="text-xs text-gray-500">Record from one of your Favourites</p>
             </div>
           )}
         </div>
@@ -455,6 +472,29 @@ export default function RecordProfile() {
             ))}
           </ul>
         )}
+      </Modal>
+
+      {/* ✅ Modal de Login (solo cuando el usuario no ha iniciado sesión) */}
+      <Modal open={loginOpen} onClose={() => setLoginOpen(false)} title={loginTitle}>
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 font-light" style={{ fontFamily: "Roboto" }}>
+            Create an account or sign in to interact with Walcord.
+          </p>
+          <Link
+            href="/login"
+            className="block text-center rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm"
+            style={{ fontFamily: "Roboto" }}
+          >
+            Sign in
+          </Link>
+          <button
+            onClick={() => setLoginOpen(false)}
+            className="w-full text-center text-sm text-gray-500 underline"
+            style={{ fontFamily: "Roboto" }}
+          >
+            Continue browsing
+          </button>
+        </div>
       </Modal>
     </main>
   )
