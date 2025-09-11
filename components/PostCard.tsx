@@ -99,15 +99,28 @@ export default function PostCard({ post }: Props) {
     if (!ok) return
     try {
       setDeleting(true)
-      const { error } = await supabase.from('posts').delete().eq('id', post.id)
-      if (error) {
-        alert('Could not delete this post.')
-      } else {
-        setMenuOpen(false)
-        alert('Post deleted.')
-        // refresco simple del feed
-        window.location.reload()
+      // 🔒 Server-side: borra post + dependencias + archivos de Storage (si aplica)
+      const { data: { session } } = await supabase.auth.getSession()
+      const resp = await fetch('/api/delete-post', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
+        body: JSON.stringify({ postId: post.id })
+      })
+      const json = await resp.json()
+      if (!resp.ok) {
+        console.error('delete-post error:', json)
+        alert(json?.error || 'Could not delete this post.')
+        return
       }
+      setMenuOpen(false)
+      // refresco simple del feed
+      window.location.reload()
+    } catch (err) {
+      console.error(err)
+      alert('Could not delete this post.')
     } finally {
       setDeleting(false)
     }

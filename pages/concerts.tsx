@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useUser } from '@supabase/auth-helpers-react'
 import { supabase } from '../lib/supabaseClient'
 import ConcertAttendees from '../components/ConcertAttendees'
+import { useRouter } from 'next/router'
 
 interface Concert {
   id: string
@@ -31,8 +32,8 @@ type ConcertMeta = {
 
 export default function ConcertsPage() {
   const user = useUser()
+  const router = useRouter()
 
-  // ===== icono corazón para likes (no Walcord People) =====
   const HeartIcon = ({ filled }: { filled?: boolean }) => (
     <svg width="22" height="22" viewBox="0 0 24 24" className={filled ? 'fill-[#1F48AF]' : 'fill-none'}>
       <path
@@ -104,12 +105,16 @@ export default function ConcertsPage() {
         .then(({ data }) => {
           if (data) setResults([...new Set(data.map((d) => d.artist_name))])
         })
-    } else if (step === 'tour' && query.length > 0 && selectedArtist) {
+    // ⬇️ Tour: cargar TODAS las giras del artista aunque no se escriba nada; si se escribe, filtrar
+    } else if (step === 'tour' && selectedArtist) {
       supabase.from('concerts').select('tour')
         .eq('artist_name', selectedArtist)
-        .ilike('tour', `%${query}%`)
         .then(({ data }) => {
-          if (data) setResults([...new Set(data.map((d) => d.tour))])
+          if (!data) { setResults([]); return }
+          let tours = [...new Set(data.map((d: any) => d.tour as string))]
+          const q = query.toLowerCase().trim()
+          if (q) tours = tours.filter(t => (t || '').toLowerCase().includes(q))
+          setResults(tours)
         })
     } else if (step === 'concert' && selectedArtist && selectedTour) {
       supabase.from('concerts').select('*')
@@ -338,9 +343,18 @@ export default function ConcertsPage() {
    * =========================== */
   return (
     <div className="bg-white min-h-screen text-black font-sans">
-      <div className="w-full h-[100px] sm:h-[80px] bg-[#1F48AF] flex items-center px-6 sm:px-12">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
-      </div>
+      {/* Banner EXACTO como el de referencia */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       <div className="max-w-6xl mx-auto px-6 pt-10">
         <h1 className="text-4xl font-light text-center tracking-tight mb-4" style={{ fontFamily: 'Times New Roman, serif' }}>
@@ -451,7 +465,10 @@ export default function ConcertsPage() {
                         <ConcertComments concertId={concert.id} />
 
                         <div className="flex items-center gap-3">
-                          <ConcertAttendees concertId={concert.id} />
+                          {/* 🔹 Solo reducir el BOTÓN (no el popover) */}
+                          <div className="[&>button]:px-4 [&>button]:py-1.5 [&>button]:text-sm [&>button_svg]:w-4 [&>button_svg]:h-4">
+                            <ConcertAttendees concertId={concert.id} />
+                          </div>
                           <button onClick={() => handleDeleteConcert(concert.id)} className="text-gray-400 hover:text-red-500 text-xl" aria-label="Delete concert">
                             &times;
                           </button>

@@ -144,16 +144,20 @@ export default function ProfilePage() {
     }
     const ordered = {};
     const seen = new Set();
-    for (const label of eraOrder) {
+
+    // 👉 Recorremos las eras de más reciente a más vieja
+    [...eraOrder].reverse().forEach((label) => {
       if (g[label]) {
         ordered[label] = g[label];
         seen.add(label);
       }
-    }
+    });
+
     Object.keys(g)
       .filter((k) => !seen.has(k))
       .sort()
       .forEach((k) => (ordered[k] = g[k]));
+
     return ordered;
   }, [posts, eraOrder]);
 
@@ -183,13 +187,14 @@ export default function ProfilePage() {
     }
   };
 
-  // ===== Logout (confirmación) =====
+  // ===== Logout (acción) =====
   const handleLogout = async () => {
     const ok = window.confirm('Are you sure you want to log out?');
     if (!ok) return;
     try {
       await supabase.auth.signOut();
-      router.replace('/welcome');
+      // 🔄 Redirigir a la home real (index.js → Welcome to Walcord)
+      window.location.href = 'https://walcord.com/';
     } catch (e) {
       console.error(e);
       alert('There was an error logging out. Please try again.');
@@ -209,7 +214,6 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-white text-black font-[Roboto]">
       {/* Banner unificado */}
       <div className="w-full h-24 flex items-end justify-between px-6 bg-[#1F48AF] pb-3 pt-[env(safe-area-inset-top)]">
-        {/* Botones a la derecha */}
         <div className="flex items-center gap-2 ml-auto">
           <a
             href="/feed"
@@ -292,7 +296,7 @@ export default function ProfilePage() {
         </aside>
       </div>
 
-      {/* ===== Footer minimal (abajo del todo) ===== */}
+      {/* ===== Footer ===== */}
       <div className="px-10 sm:px-12 mt-12 mb-10">
         <div className="border-t border-gray-200 pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-gray-500">
@@ -316,7 +320,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ===== Modal confirmación (minimalista) ===== */}
+      {/* ===== Modal confirmación ===== */}
       {deleteOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"

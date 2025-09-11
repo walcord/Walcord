@@ -57,7 +57,7 @@ export default function ExternalProfilePage() {
       const normalized = (data || []).map((p: any) => ({
         ...p,
         likes_count: p?.post_likes?.[0]?.count ?? 0,
-        comments_count: p?.post_comments?.[0]?.count ?? 0,
+        comments_count: p?.post_comments?.[0]?.[ 'count'] ?? 0,
       }))
       setPosts(normalized)
       setPostsLoading(false)
@@ -87,7 +87,10 @@ export default function ExternalProfilePage() {
     }
     const ordered: EraMap = {}
     const seen = new Set<string>()
-    for (const label of eraOrder) if (g[label]) { ordered[label] = g[label]; seen.add(label) }
+    // 🔁 ORDEN CORREGIDO: de más reciente a más viejo
+    for (const label of [...eraOrder].reverse()) {
+      if (g[label]) { ordered[label] = g[label]; seen.add(label) }
+    }
     Object.keys(g).filter((k) => !seen.has(k)).sort().forEach((k) => (ordered[k] = g[k]))
     return ordered
   }, [posts, eraOrder])

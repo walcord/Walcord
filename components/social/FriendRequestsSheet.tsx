@@ -128,68 +128,90 @@ export default function FriendRequestsSheet({ ownerProfileId, badgeCount = 0 }: 
 
       {open && (
         <div className="fixed inset-0 z-[1000] bg-black/40" onClick={() => setOpen(false)}>
-          <aside
-            className="absolute right-0 top-0 h-full w-full max-w-[440px] bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+          {/* Contenedor responsive: en móviles muestra una caja centrada; en desktop actúa como sheet a la derecha */}
+          <div
+            className="absolute inset-0 flex items-start justify-center p-4 md:items-stretch md:justify-end"
+            onClick={() => setOpen(false)}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <div className="flex items-center gap-2">
-                <WalcordPeopleIcon />
-                <span className="text-sm">Friendship Requests</span>
-              </div>
-              <button className="text-sm text-neutral-600 hover:text-black" onClick={() => setOpen(false)}>
-                Close
-              </button>
-            </div>
-
-            <div className="p-4 flex flex-col gap-3">
-              {loading ? (
-                <>
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-16 rounded-2xl bg-neutral-100 animate-pulse" />
-                  ))}
-                </>
-              ) : rows.length === 0 ? (
-                <div className="text-sm text-neutral-600">No pending requests.</div>
-              ) : (
-                rows.map((r) => (
-                  <div key={r.id} className="rounded-2xl border border-neutral-200 p-3 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-neutral-100 border">
-                      {r.from_profile?.avatar_url && (
-                        <img src={r.from_profile.avatar_url} alt={r.from_profile.username} className="w-full h-full object-cover" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm truncate">{r.from_profile?.full_name || '—'}</div>
-                      <div className="text-xs text-neutral-500 truncate">@{r.from_profile?.username}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => accept(r.id)}
-                        disabled={actioningId === r.id}
-                        className="text-xs rounded-full bg-[#1F48AF] text-white px-3 py-1.5 disabled:opacity-60"
-                      >
-                        {actioningId === r.id ? 'Accepting…' : 'Accept'}
-                      </button>
-                      <button
-                        onClick={() => decline(r.id)}
-                        disabled={actioningId === r.id}
-                        className="text-xs rounded-full border border-neutral-300 px-3 py-1.5 hover:border-[#1F48AF] disabled:opacity-60"
-                      >
-                        {actioningId === r.id ? 'Declining…' : 'Decline'}
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-
-              {errorMsg && (
-                <div className="text-xs text-red-600 mt-1">
-                  {errorMsg}
+            <aside
+              className="w-full md:max-w-[440px] max-w-[560px] bg-white shadow-xl md:rounded-none rounded-2xl overflow-hidden md:h-full md:mt-0 mt-6
+                         md:max-h-full max-h-[80vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header fijo; espacio seguro para notch */}
+              <div
+                className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b bg-white"
+                style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <WalcordPeopleIcon />
+                  <span className="text-sm" style={{ fontFamily: 'Times New Roman, serif' }}>
+                    Friendship Requests
+                  </span>
                 </div>
-              )}
-            </div>
-          </aside>
+                <button
+                  className="text-sm text-neutral-600 hover:text-black"
+                  onClick={() => setOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Contenido scrollable dentro de la caja */}
+              <div className="p-4 flex flex-col gap-3 overflow-y-auto md:h-[calc(100%-52px)]"
+                   style={{ WebkitOverflowScrolling: 'touch' }}>
+                {loading ? (
+                  <>
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="h-16 rounded-2xl bg-neutral-100 animate-pulse" />
+                    ))}
+                  </>
+                ) : rows.length === 0 ? (
+                  <div className="text-sm text-neutral-600">No pending requests.</div>
+                ) : (
+                  rows.map((r) => (
+                    <div key={r.id} className="rounded-2xl border border-neutral-200 p-3 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-neutral-100 border">
+                        {r.from_profile?.avatar_url && (
+                          <img
+                            src={r.from_profile.avatar_url}
+                            alt={r.from_profile.username}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm truncate">{r.from_profile?.full_name || '—'}</div>
+                        <div className="text-xs text-neutral-500 truncate">@{r.from_profile?.username}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => accept(r.id)}
+                          disabled={actioningId === r.id}
+                          className="text-xs rounded-full bg-[#1F48AF] text-white px-3 py-1.5 disabled:opacity-60"
+                        >
+                          {actioningId === r.id ? 'Accepting…' : 'Accept'}
+                        </button>
+                        <button
+                          onClick={() => decline(r.id)}
+                          disabled={actioningId === r.id}
+                          className="text-xs rounded-full border border-neutral-300 px-3 py-1.5 hover:border-[#1F48AF] disabled:opacity-60"
+                        >
+                          {actioningId === r.id ? 'Declining…' : 'Decline'}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {errorMsg && (
+                  <div className="text-xs text-red-600 mt-1">
+                    {errorMsg}
+                  </div>
+                )}
+              </div>
+            </aside>
+          </div>
         </div>
       )}
     </>

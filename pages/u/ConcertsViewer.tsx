@@ -285,9 +285,18 @@ export default function ConcertsViewer() {
   /* ========== RENDER ========== */
   return (
     <div className="bg-white min-h-screen text-black font-sans">
-      <div className="w-full h-[100px] sm:h-[80px] bg-[#1F48AF] flex items-center px-6 sm:px-12">
-        <Image src="/logotipo.png" alt="Walcord Logo" width={62} height={62} />
-      </div>
+      {/* Banner EXACTO al de referencia */}
+      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </header>
 
       <div className="max-w-6xl mx-auto px-6 pt-10">
         <h1 className="text-4xl font-light text-center tracking-tight mb-4" style={{ fontFamily: 'Times New Roman, serif' }}>
@@ -380,7 +389,10 @@ export default function ConcertsViewer() {
 
                         <ConcertComments concertId={concert.id} />
 
-                        <ConcertAttendees concertId={concert.id} />
+                        {/* 🔹 Solo reducir el botón de Attendees */}
+                        <div className="[&>button]:px-4 [&>button]:py-1.5 [&>button]:text-sm [&>button_svg]:w-4 [&>button_svg]:h-4">
+                          <ConcertAttendees concertId={concert.id} />
+                        </div>
                       </div>
                     </div>
                   </div>
