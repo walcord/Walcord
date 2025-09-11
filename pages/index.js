@@ -41,14 +41,14 @@ export default function Home() {
           className="bg-white px-5 py-2 rounded-md text-sm font-light hover:bg-white/90 active:scale-95 transition-all duration-300"
           style={{ color: '#1F48AF', fontFamily: 'Roboto, sans-serif' }}
         >
-          Come Together
+          Create Account
         </button>
         <button
           onClick={() => router.push('/login')}
           className="bg-white px-5 py-2 rounded-md text-sm font-light hover:bg-white/90 active:scale-95 transition-all duration-300"
           style={{ color: '#1F48AF', fontFamily: 'Roboto, sans-serif' }}
         >
-          Hello, it’s me
+          Enter Account
         </button>
       </div>
     </div>

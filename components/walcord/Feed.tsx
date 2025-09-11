@@ -2,11 +2,12 @@
 
 /* ==========================================================================================
    Walcord — The Wall (Feed)
-   Hot-fix v3.3.3:
+   Hot-fix v3.3.4:
    - Feed dividido en 3: Following · Friends · For You (likes).
    - Subtabs con SEGMENTED CONTROL (estilo distinto a los Pills superiores).
    - Click en avatar/nombre → perfil del usuario.
    - Buscador de usuarios: dropdown en desktop, SHEET deslizable en móvil.
+   - Botón “Content” deshabilitado (gris) con aviso “Coming Soon…”.
    - 🔇 Sin “temblores” de posts (sin animaciones verticales en las cards).
    - ✅ FIX fotos 1× con normalizeUrls().
    ========================================================================================== */
@@ -94,14 +95,16 @@ const Pill = ({
   onClick,
   href,
   ariaControls,
+  disabled,
 }: {
   active?: boolean;
   children?: React.ReactNode;
   onClick?: () => void;
   href?: string;
   ariaControls?: string;
+  disabled?: boolean;
 }) =>
-  href ? (
+  href && !disabled ? (
     <Link
       href={href}
       aria-controls={ariaControls}
@@ -118,9 +121,12 @@ const Pill = ({
     <button
       onClick={onClick}
       aria-controls={ariaControls}
+      disabled={disabled}
       className={[
         "px-4 md:px-5 py-2 rounded-full border transition-all text-sm select-none",
-        active
+        disabled
+          ? "bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed"
+          : active
           ? "bg-[#1F48AF] text-white border-[#1F48AF] shadow-sm"
           : "bg-white text-black border-neutral-200 hover:border-[#1F48AF]/40",
       ].join(" ")}
@@ -478,8 +484,7 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
   const sendFriendRequest = async (targetId: string) => {
     if (!meId || meId === targetId) return;
     if (friendship[targetId] === "outgoing" || friendship[targetId] === "friends") return;
-    setBusy((p) => ({ ...p, [targetId]: true }));
-    setFriendship((p) => ({ ...p, [targetId]: "outgoing" }));
+    setBusy((p) => ({ ...p, [targetId]: "outgoing", }));
     try {
       await supabase.from("friendships").insert({ requester_id: meId, receiver_id: targetId, status: "pending", created_at: new Date().toISOString() });
     } catch {
@@ -1411,7 +1416,7 @@ export const Feed: React.FC = () => {
       <div className="w-full max-w-[520px] rounded-2xl border border-neutral-200 bg-neutral-50 p-1 grid grid-cols-3 gap-1">
         <Btn val="following" label="Following" desc="Gente a la que sigues" />
         <Btn val="friends" label="Friends" desc="Solo amistades" />
-        <Btn val="foryou" label="For You" desc="Destacado" />
+        <Btn val="foryou" label="For You" desc="Top Content" />
       </div>
     );
   };
@@ -1824,14 +1829,21 @@ export const Feed: React.FC = () => {
             <Pill href="/u/concerts" ariaControls="concerts">
               Concerts
             </Pill>
-            <Pill href="/u/content" ariaControls="content">
+
+            {/* Content: DESHABILITADO (gris) + aviso */}
+            <Pill
+              disabled
+              onClick={() => alert("Content — Coming Soon…")}
+              ariaControls="content"
+            >
               Content
             </Pill>
+
             <Pill href="/u/recommendations" ariaControls="recommendations">
-              Recommendations
+              Recommendationsc
             </Pill>
             <Pill href="/u/pending" ariaControls="pending">
-              Pending
+              Collection
             </Pill>
           </div>
 
