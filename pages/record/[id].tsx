@@ -64,7 +64,7 @@ export default function RecordProfile() {
   const [record, setRecord] = useState<any>(null)
   const [tracks, setTracks] = useState<any[]>([])
   const [friends, setFriends] = useState<any[]>([])
-  const [photos, setPhotos] = useState<any[]>([])
+  // (photos removed)
   const [averageRate, setAverageRate] = useState<number | null>(null)
   const [userRating, setUserRating] = useState<number | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -105,37 +105,6 @@ export default function RecordProfile() {
         ratingsData && ratingsData.length > 0
           ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
           : null
-
-      // 📸 FOTOS DESDE POSTS (usa image_urls TEXT con JSON o CSV)
-      const { data: postsData } = await supabase
-        .from("posts")
-        .select("id, image_urls, created_at, record_id")
-        .eq("record_id", recordId)
-        .order("created_at", { ascending: false })
-
-      const flattenedPhotos =
-        (postsData || []).flatMap((p: any) => {
-          let arr: string[] = []
-
-          if (typeof p.image_urls === "string" && p.image_urls.trim() !== "") {
-            // 1) Intenta parsear JSON ["url1","url2"]
-            try {
-              const parsed = JSON.parse(p.image_urls)
-              if (Array.isArray(parsed)) arr = parsed.filter(Boolean)
-            } catch {
-              // 2) Fallback CSV "url1,url2"
-              arr = p.image_urls.split(",").map((s: string) => s.trim()).filter(Boolean)
-            }
-          } else if (Array.isArray(p.image_urls)) {
-            arr = p.image_urls.filter(Boolean)
-          }
-
-          return arr.map((u: string, idx: number) => ({
-            id: `${p.id}-${idx}`,
-            image_url: u,
-            created_at: p.created_at,
-          }))
-        })
 
       // AMIGOS (quien tiene este record en favoritos)
       const { data: friendsData } = await supabase
@@ -181,7 +150,7 @@ export default function RecordProfile() {
       setTracks(tracksData || [])
       setFriends(friendsWithoutMe || [])
       setAverageRate(avg)
-      setPhotos(flattenedPhotos || [])
+      // setPhotos removed
     }
 
     fetchAll()
@@ -309,11 +278,10 @@ export default function RecordProfile() {
         </button>
       </header>
 
-      {/* Layout: mobile -> Record (1) / Tracklist (2) / Photos (3) */}
-      {/* Desktop -> Tracklist | Photos | Record */}
-      <div className="px-6 md:px-24 pt-14 pb-24 flex flex-col lg:flex-row gap-20">
+      {/* Layout sin fotos: mobile -> Record (1) + Tracklist (2) con poca distancia */}
+      <div className="px-6 md:px-24 pt-10 pb-16 flex flex-col lg:flex-row gap-8 lg:gap-20">
         {/* TRACKLIST */}
-        <div className="order-2 lg:order-1 w-full lg:w-1/3">
+        <div className="order-2 lg:order-1 w-full lg:w-1/2">
           <ul className="space-y-5">
             {tracks.map((t: any, i: number) => {
               const isFav = favouriteTrackIds.includes(t.id)
@@ -350,29 +318,8 @@ export default function RecordProfile() {
           </ul>
         </div>
 
-        {/* FOTOS (mosaico estilo Pinterest) */}
-        <div className="order-3 lg:order-2 w-full lg:w-1/3">
-          <div className="columns-2 sm:columns-3 gap-4 [&_img]:mb-4">
-            {photos.map((p: any) => (
-              <Image
-                key={p.id}
-                src={p.image_url || "/placeholder.png"}
-                alt="record photo"
-                width={800}
-                height={800}
-                className="w-full rounded-xl shadow-sm object-cover"
-              />
-            ))}
-            {photos.length === 0 && (
-              <p className="text-sm text-gray-400 font-light text-center" style={{ fontFamily: "Roboto" }}>
-                No photos yet for this record.
-              </p>
-            )}
-          </div>
-        </div>
-
         {/* RECORD INFO */}
-        <div className="order-1 lg:order-3 w-full lg:w-1/3 flex flex-col items-center text-center">
+        <div className="order-1 lg:order-3 w-full lg:w-1/2 flex flex-col items-center text-center">
           {/* Cover */}
           <div className="w-64 h-64 mb-6 flex items-center justify-center" style={{ backgroundColor: record.vibe_color }}>
             <div className="w-16 h-16 rounded-sm shadow-md" style={{ backgroundColor: record.cover_color }} />
