@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/router';
 import { useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 
 export default function Login() {
@@ -133,6 +134,17 @@ export default function Login() {
             Hello, it’s me
           </button>
         </form>
+
+        {/* Rótulo para crear cuenta */}
+        <p
+          className="mt-6 text-sm text-center text-gray-600"
+          style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+        >
+          Don’t have an account?{' '}
+          <Link href="/signup" className="text-[#1F48AF] hover:underline">
+            Create it
+          </Link>
+        </p>
       </div>
     </div>
   );
