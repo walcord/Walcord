@@ -1,131 +1,182 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/router'
-import { supabase } from '../../lib/supabaseClient'
-import PostCard from '../../components/PostCard'
-import PublicUserHeader from '../../components/profile/PublicUserHeader'
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
+import { supabase } from '../../lib/supabaseClient';
+import PublicUserHeader from '../../components/profile/PublicUserHeader';
+import PostCard from '../../components/PostCard';
 
-type EraMap = Record<string, any[]>
+type CardRow = {
+  id: string;                // concert_id
+  user_id: string;
+  artist_id: string | null;
+  artist_name: string | null;
+  country_code: string | null;
+  country_name: string | null;
+  city: string | null;
+  event_date: string | null; // ISO
+  cover_url: string | null;
+};
 
 export default function ExternalProfilePage() {
-  const router = useRouter()
-  const { username } = router.query as { username?: string }
+  const router = useRouter();
+  const { username } = router.query as { username?: string };
 
-  const [targetUserId, setTargetUserId] = useState<string | null>(null)
-  const [profileLoading, setProfileLoading] = useState(true)
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  const [postsLoading, setPostsLoading] = useState(true)
-  const [posts, setPosts] = useState<any[]>([])
-  const [eraOrder] = useState([
-    'From my childhood','From my teenage years','From my twenties','From my thirties','From my forties',
-    'From my fifties','From my sixties','From my seventies','From my eighties','From my nineties',
-  ])
+  const [concertsLoading, setConcertsLoading] = useState(true);
+  const [concerts, setConcerts] = useState<CardRow[]>([]);
 
-  // username → id
+  /* ===== username → user_id ===== */
   useEffect(() => {
-    if (!username) return
-    const run = async () => {
-      const { data, error } = await supabase.from('profiles').select('id').eq('username', username).single()
-      if (error || !data?.id) return router.replace('/feed')
-      setTargetUserId(data.id)
-      setProfileLoading(false)
-    }
-    run()
-  }, [username, router])
+    if (!username) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+      if (error || !data?.id) { router.replace('/feed'); return; }
+      setTargetUserId(data.id);
+      setProfileLoading(false);
+    })();
+  }, [username, router]);
 
-  // posts
+  /* ===== cargar CONCERTS del usuario (DESC por fecha) ===== */
   useEffect(() => {
-    if (!targetUserId) return
+    if (!targetUserId) return;
 
-    const fetchPosts = async () => {
-      setPostsLoading(true)
+    const fetchConcerts = async () => {
+      setConcertsLoading(true);
+
+      // 1) Intento con view optimizada
+      const { data: byView } = await supabase
+        .from('v_concert_cards')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .order('event_date', { ascending: false });
+
+      if (byView && byView.length > 0) {
+        setConcerts(
+          (byView as any[]).map(r => ({
+            id: r.concert_id,
+            user_id: r.user_id,
+            artist_id: r.artist_id,
+            artist_name: r.artist_name,
+            country_code: r.country_code,
+            country_name: r.country_name ?? null,
+            city: r.city ?? null,
+            event_date: r.event_date,
+            cover_url: r.cover_url ?? null,
+          }))
+        );
+        setConcertsLoading(false);
+        return;
+      }
+
+      // 2) Fallback directo a tablas
       const { data } = await supabase
-        .from('posts')
+        .from('concerts')
         .select(`
-          *,
-          record:records(id, title, cover_url, artist_name),
-          author:profiles(username, avatar_url),
-          post_likes(count),
-          post_comments(count)
+          id, user_id, artist_id, country_code, city, event_date,
+          artists(name),
+          countries(name),
+          concert_media(url, created_at)
         `)
         .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false })
+        .order('event_date', { ascending: false });
 
-      const normalized = (data || []).map((p: any) => ({
-        ...p,
-        likes_count: p?.post_likes?.[0]?.count ?? 0,
-        comments_count: p?.post_comments?.[0]?.[ 'count'] ?? 0,
-      }))
-      setPosts(normalized)
-      setPostsLoading(false)
-    }
+      const normalized: CardRow[] = (data || []).map((c: any) => {
+        const latest =
+          (c.concert_media || []).sort(
+            (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0]?.url ?? null;
+        return {
+          id: c.id,
+          user_id: c.user_id,
+          artist_id: c.artist_id,
+          artist_name: c.artists?.name ?? null,
+          country_code: c.country_code ?? null,
+          country_name: c.countries?.name ?? null,
+          city: c.city ?? null,
+          event_date: c.event_date ?? null,
+          cover_url: latest,
+        };
+      });
 
-    void fetchPosts() // ✅ evita devolver promesas en useEffect
+      setConcerts(normalized);
+      setConcertsLoading(false);
+    };
+
+    void fetchConcerts();
 
     const ch = supabase
-      .channel('external-profile-posts')
+      .channel('external-profile-concerts')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'posts', filter: `user_id=eq.${targetUserId}` },
-        () => { void fetchPosts() }
+        { event: 'INSERT', schema: 'public', table: 'concerts', filter: `user_id=eq.${targetUserId}` },
+        () => void fetchConcerts()
       )
-      .subscribe()
+      .subscribe();
 
-    return () => {
-      supabase.removeChannel(ch)
-    }
-  }, [targetUserId])
+    return () => { supabase.removeChannel(ch); };
+  }, [targetUserId]);
 
-  const groupedByEra: EraMap = useMemo(() => {
-    const g: EraMap = {}
-    for (const p of posts) {
-      const key = p.era || 'From my twenties'
-      g[key] = g[key] ? [...g[key], p] : [p]
+  /* ===== agrupar por año (años DESC; dentro fecha DESC) ===== */
+  const groupsOrdered = useMemo(() => {
+    const map = new Map<string, CardRow[]>();
+    for (const c of concerts) {
+      const year = c.event_date ? new Date(c.event_date).getFullYear() : null;
+      const key = year && year >= 1950 && year <= 2050 ? String(year) : 'Unknown';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
     }
-    const ordered: EraMap = {}
-    const seen = new Set<string>()
-    // 🔁 ORDEN CORREGIDO: de más reciente a más viejo
-    for (const label of [...eraOrder].reverse()) {
-      if (g[label]) { ordered[label] = g[label]; seen.add(label) }
+    for (const [, arr] of map) {
+      arr.sort(
+        (a, b) =>
+          new Date(b.event_date || 0).getTime() - new Date(a.event_date || 0).getTime()
+      );
     }
-    Object.keys(g).filter((k) => !seen.has(k)).sort().forEach((k) => (ordered[k] = g[k]))
-    return ordered
-  }, [posts, eraOrder])
+    const years = Array.from(map.keys())
+      .filter(k => k !== 'Unknown')
+      .map(Number)
+      .sort((a, b) => b - a)
+      .map(String);
+
+    const ordered = years.map(y => ({ yearLabel: y, items: map.get(y)! }));
+    if (map.has('Unknown')) ordered.push({ yearLabel: 'Unknown', items: map.get('Unknown')! });
+    return ordered;
+  }, [concerts]);
 
   if (profileLoading || !targetUserId) {
-    return <div className="min-h-screen flex items-center justify-center text-black bg-white"><p>Loading profile…</p></div>
+    return (
+      <div className="min-h-screen flex items-center justify-center text-black bg-white">
+        <p>Loading profile…</p>
+      </div>
+    );
   }
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner azul con flecha minimalista pegada abajo (h-24, sin logo) */}
+      {/* Banner azul */}
       <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
         <button
           onClick={() => history.back()}
           aria-label="Go back"
           className="p-2 rounded-full hover:bg-[#1A3A95] transition"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
       </header>
 
-      {/* Título */}
+      {/* Título CORRECTO */}
       <div className="w-full px-10 sm:px-12 mt-6 mb-8 relative">
-        <h1 className="text-[clamp(1.8rem,4.5vw,2.375rem)] font-normal" style={{ fontFamily: 'Times New Roman, serif' }}>Profile</h1>
+        <h1 className="text-[clamp(1.8rem,4.5vw,2.375rem)] font-normal" style={{ fontFamily: 'Times New Roman, serif' }}>
+          Profile
+        </h1>
         <hr className="mt-2 border-t border-black/50" />
       </div>
 
@@ -136,22 +187,37 @@ export default function ExternalProfilePage() {
         </div>
 
         <aside className="m-0 p-0">
-          <h2 className="text-[clamp(1.1rem,2vw,1.5rem)] font-light mb-1">Memories</h2>
+          {/* Encabezado de sección (como en el perfil propio) */}
+          <h2 className="text-[clamp(1.1rem,2vw,1.5rem)] font-light mb-1">Concerts</h2>
 
-          {postsLoading ? (
-            <div className="mt-4 text-sm text-neutral-600">Loading posts…</div>
-          ) : Object.keys(groupedByEra).length === 0 ? (
-            <div className="mt-4 text-sm text-neutral-600">No memories yet.</div>
+          {concertsLoading ? (
+            <div className="mt-4 text-sm text-neutral-600">Loading concerts…</div>
+          ) : groupsOrdered.length === 0 ? (
+            <div className="mt-4 text-sm text-neutral-600">No concerts yet.</div>
           ) : (
-            Object.keys(groupedByEra).map((era) => (
-              <section key={era} className="mt-7">
+            groupsOrdered.map(({ yearLabel, items }) => (
+              <section key={yearLabel} className="mt-7">
                 <div className="flex items-center">
-                  <div className="text-[0.78rem] tracking-[0.14em] uppercase text-neutral-500">{era}</div>
+                  <div className="text-[0.78rem] tracking-[0.14em] uppercase text-neutral-500">{yearLabel}</div>
                   <div className="h-px flex-1 ml-6 bg-black/10" />
                 </div>
+
                 <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-7">
-                  {groupedByEra[era].map((p) => (
-                    <PostCard key={p.id} post={p} />
+                  {items.map((c) => (
+                    <PostCard
+                      key={c.id}
+                      post={{
+                        id: c.id,
+                        user_id: c.user_id,
+                        artist_id: c.artist_id,
+                        artist_name: c.artist_name,
+                        country_code: c.country_code,
+                        country_name: c.country_name,
+                        city: c.city,
+                        event_date: c.event_date,
+                        cover_url: c.cover_url,
+                      }}
+                    />
                   ))}
                 </div>
               </section>
@@ -160,8 +226,10 @@ export default function ExternalProfilePage() {
         </aside>
       </div>
     </main>
-  )
+  );
 }
 
 // --- SSR para evitar getStaticPaths/getStaticProps ---
-export async function getServerSideProps() { return { props: {} }; }
+export async function getServerSideProps() {
+  return { props: {} };
+}

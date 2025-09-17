@@ -2,7 +2,6 @@ import { useRouter } from "next/router"
 import { useEffect, useState } from "react"
 import { supabase } from "../../lib/supabaseClient"
 import Image from "next/image"
-import WalcordStar from "../../components/icons/WalcordStar"
 import WalcordCircle from "../../components/icons/WalcordCircle"
 import WalcordPeopleIcon from "../../components/icons/WalcordPeopleIcon"
 import Link from "next/link"
@@ -58,22 +57,14 @@ const Modal = ({
 export default function RecordProfile() {
   const router = useRouter()
   const { id } = router.query
-  // Normalizamos SIEMPRE el id de la ruta a string
   const recordId = Array.isArray(id) ? id[0] : (id as string | undefined)
 
   const [record, setRecord] = useState<any>(null)
-  const [tracks, setTracks] = useState<any[]>([])
   const [friends, setFriends] = useState<any[]>([])
-  // (photos removed)
   const [averageRate, setAverageRate] = useState<number | null>(null)
   const [userRating, setUserRating] = useState<number | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
-  const [favouriteTrackIds, setFavouriteTrackIds] = useState<string[]>([])
   const [isFromFavouriteArtist, setIsFromFavouriteArtist] = useState<boolean>(false)
-
-  // pending (nuevo)
-  const [pendingId, setPendingId] = useState<string | null>(null)
-  const [pendingLoading, setPendingLoading] = useState(false)
 
   // modal amigos
   const [openFriends, setOpenFriends] = useState(false)
@@ -113,12 +104,6 @@ export default function RecordProfile() {
         .eq("name", recordData.artist_name)
         .single()
 
-      // TRACKS
-      const { data: tracksData } = await supabase
-        .from("tracks")
-        .select("id, track")
-        .eq("record", recordData.title)
-
       // RATINGS (media)
       const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId)
       const avg =
@@ -144,14 +129,6 @@ export default function RecordProfile() {
           .eq("artist_id", artistData.id)
         if (favArtist?.length > 0) setIsFromFavouriteArtist(true)
 
-        // Canciones favoritas del usuario en este record
-        const { data: favTracks } = await supabase
-          .from("favourite_tracks")
-          .select("track_id")
-          .eq("user_id", u.id)
-          .eq("record_id", recordId)
-        setFavouriteTrackIds(favTracks?.map((t) => t.track_id) || [])
-
         // Rating del usuario
         const { data: userRate } = await supabase
           .from("ratings")
@@ -166,55 +143,12 @@ export default function RecordProfile() {
       const friendsWithoutMe = (friendsData || []).filter((f: any) => f.user_id !== u?.id)
 
       setRecord({ ...recordData, artist: artistData })
-      setTracks(tracksData || [])
       setFriends(friendsWithoutMe || [])
       setAverageRate(avg)
-      // setPhotos removed
     }
 
     fetchAll()
   }, [recordId])
-
-  // Carga/estado de Pending (nuevo)
-  useEffect(() => {
-    if (!recordId || !userId) return
-    ;(async () => {
-      const { data, error } = await supabase
-        .from("pending_items")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("type", "record")
-        .eq("record_id", recordId)
-        .maybeSingle()
-      if (!error && data?.id) setPendingId(data.id)
-    })()
-  }, [recordId, userId])
-
-  const togglePending = async () => {
-    if (!requireAuth("Sign in to add this record to Pending")) return
-    if (!recordId || !userId) return
-    setPendingLoading(true)
-    try {
-      if (pendingId) {
-        const { error } = await supabase.from("pending_items").delete().eq("id", pendingId)
-        if (error) throw error
-        setPendingId(null)
-      } else {
-        const { data, error } = await supabase
-          .from("pending_items")
-          .upsert(
-            { user_id: userId, type: "record", artist_id: null, record_id: recordId },
-            { onConflict: "user_id,type,artist_id,record_id" }
-          )
-          .select("id")
-          .single()
-        if (error) throw error
-        setPendingId(data.id)
-      }
-    } finally {
-      setPendingLoading(false)
-    }
-  }
 
   // Cambiar / quitar rating
   const handleRate = async (rate: number) => {
@@ -238,31 +172,6 @@ export default function RecordProfile() {
         ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
         : null
     setAverageRate(avg)
-  }
-
-  // Toggle favourite track
-  const toggleFavourite = async (trackId: string) => {
-    if (!requireAuth("Sign in to add favourites")) return
-    if (!userId || !recordId) return
-    const isFav = favouriteTrackIds.includes(trackId)
-
-    if (isFav) {
-      await supabase
-        .from("favourite_tracks")
-        .delete()
-        .eq("user_id", userId)
-        .eq("track_id", trackId)
-        .eq("record_id", recordId)
-      setFavouriteTrackIds(favouriteTrackIds.filter((tid) => tid !== trackId))
-    } else {
-      await supabase.from("favourite_tracks").upsert({
-        user_id: userId,
-        track_id: trackId,
-        record_id: recordId,
-        is_top: false,
-      })
-      setFavouriteTrackIds([...favouriteTrackIds, trackId])
-    }
   }
 
   if (!record) {
@@ -297,50 +206,14 @@ export default function RecordProfile() {
         </button>
       </header>
 
-      {/* Layout sin fotos: mobile -> Record (1) + Tracklist (2) con poca distancia */}
-      <div className="px-6 md:px-24 pt-10 pb-16 flex flex-col lg:flex-row gap-8 lg:gap-20">
-        {/* TRACKLIST */}
-        <div className="order-2 lg:order-1 w-full lg:w-1/2">
-          <ul className="space-y-5">
-            {tracks.map((t: any, i: number) => {
-              const isFav = favouriteTrackIds.includes(t.id)
-              return (
-                <li
-                  key={i}
-                  className="flex justify-between items-center text-[clamp(2rem,3vw,2rem)] font-light"
-                  style={{ fontFamily: "Times New Roman, serif" }}
-                >
-                  <div className="flex items-center gap-2 min-w-0 w-full">
-                    <Tooltip message={isFav ? "Remove from favourites" : "Add to favourites"}>
-                      <button
-                        onClick={() => toggleFavourite(t.id)}
-                        className="transition-transform duration-200 hover:scale-110 active:scale-90 flex-shrink-0"
-                      >
-                        <WalcordStar
-                          filled={isFav}
-                          size={20}
-                          className={`w-5 h-5 ${isFav ? "text-[#1F48AF]" : "text-gray-400"}`}
-                        />
-                      </button>
-                    </Tooltip>
-
-                    {/* Título con ellipsis, sin salto */}
-                    <div className="max-w-[80%] md:max-w-[85%] lg:max-w-[86%] overflow-hidden">
-                      <span className="block truncate" title={t.track}>
-                        {t.track}
-                      </span>
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-
-        {/* RECORD INFO */}
-        <div className="order-1 lg:order-3 w-full lg:w-1/2 flex flex-col items-center text-center">
-          {/* Cover */}
-          <div className="w-64 h-64 mb-6 flex items-center justify-center" style={{ backgroundColor: record.vibe_color }}>
+      {/* ===== Layout centrado del disco ===== */}
+      <div className="px-6 md:px-24 pt-10 pb-16">
+        <div className="mx-auto w-full max-w-[680px] flex flex-col items-center text-center">
+          {/* Cover centrada */}
+          <div
+            className="w-64 h-64 mb-6 flex items-center justify-center rounded-xl"
+            style={{ backgroundColor: record.vibe_color }}
+          >
             <div className="w-16 h-16 rounded-sm shadow-md" style={{ backgroundColor: record.cover_color }} />
           </div>
 
@@ -352,25 +225,10 @@ export default function RecordProfile() {
             by {record.artist?.name}
           </p>
 
-          {/* Botón Add to Pending (AZUL) → SIEMPRE visible (anónimo abrirá login) */}
-          <button
-            onClick={togglePending}
-            disabled={pendingLoading}
-            className={[
-              "mb-4 rounded-full px-3 py-1.5 text-xs border transition",
-              pendingId
-                ? "bg-[#1F48AF] text-white border-[#1F48AF]"
-                : "bg-white text-[#1F48AF] border-[#1F48AF] hover:bg-[#1F48AF] hover:text-white",
-            ].join(" ")}
-            title={pendingId ? "Remove from Pending" : "Add to Pending"}
-          >
-            {pendingLoading ? "Saving…" : pendingId ? "In Pending" : "Add to Pending"}
-          </button>
-
           {/* Description */}
           {record.description && (
             <p
-              className="text-sm text-gray-700 font-light leading-relaxed mb-4 max-w-xs"
+              className="text-sm text-gray-700 font-light leading-relaxed mb-4 max-w-md"
               style={{ fontFamily: "Roboto" }}
             >
               {record.description}
@@ -396,7 +254,7 @@ export default function RecordProfile() {
             </div>
           )}
 
-          {/* Rate buttons (toggle to remove) → visible para todos; anónimo abrirá login */}
+          {/* Rate buttons (toggle to remove) */}
           <div className="grid grid-cols-5 gap-2 mb-8">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
               <Tooltip key={n} message={userRating === n ? `Tap again to remove (${n})` : `Rate ${n}`}>
@@ -441,7 +299,7 @@ export default function RecordProfile() {
 
           {/* (Opcional) marca si el artista es favorito del usuario */}
           {isFromFavouriteArtist && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 mb-2">
               <p className="text-xs text-gray-500">Record from one of your Favourites</p>
             </div>
           )}
