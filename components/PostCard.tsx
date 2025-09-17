@@ -1,16 +1,20 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import type { PostWithCounts } from '../lib/posts'
 import { supabase } from '../lib/supabaseClient'
 
-type Props = { post: PostWithCounts }
+type Props = { post: any }
 
 export default function PostCard({ post }: Props) {
-  const [vibe, setVibe] = useState<string | null>(post.record?.vibe_color ?? null)
-  const [cover, setCover] = useState<string | null>(post.record?.cover_color ?? null)
+  const isConcert =
+    !!post?.artist_id || !!post?.country_code || !!post?.event_date || !!post?.cover_url
 
-  // --- minimal report/delete state ---
+  const [bgUrl, setBgUrl] = useState<string | null>(post?.cover_url ?? post?.image_urls?.[0] ?? null)
+  const [vibe, setVibe] = useState<string | null>(post?.record?.vibe_color ?? null)
+  const [cover, setCover] = useState<string | null>(post?.record?.cover_color ?? null)
+  const [artistName, setArtistName] = useState<string | null>(post?.artist_name ?? null)
+  const [countryName, setCountryName] = useState<string | null>(post?.country_name ?? null)
+
   const [menuOpen, setMenuOpen] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [reported, setReported] = useState(false)
@@ -18,189 +22,162 @@ export default function PostCard({ post }: Props) {
   const [isOwner, setIsOwner] = useState(false)
 
   useEffect(() => {
+    let alive = true
+    async function hydrateConcert() {
+      if (!isConcert) return
+      const concertId = post?.id
+
+      if (!bgUrl && concertId) {
+        const { data: m } = await supabase
+          .from('concert_media')
+          .select('url, media_type')
+          .eq('concert_id', concertId)
+          .order('created_at', { ascending: true })
+          .limit(1)
+        if (alive && m?.length) setBgUrl(m[0].url)
+      }
+
+      if (!artistName && post?.artist_id) {
+        const { data: a } = await supabase.from('artists').select('name').eq('id', post.artist_id).single()
+        if (alive && a?.name) setArtistName(a.name)
+      }
+
+      if (!countryName && post?.country_code) {
+        const { data: c } = await supabase.from('countries').select('name').eq('code', post.country_code).single()
+        if (alive && c?.name) setCountryName(c.name)
+      }
+
+      if ((!vibe || !cover) && (post?.artist_id || artistName)) {
+        let rc = (await supabase
+          .from('records')
+          .select('vibe_color, cover_color')
+          .eq('artist_id', post.artist_id || '00000000-0000-0000-0000-000000000000')
+          .not('vibe_color', 'is', null)
+          .limit(1)).data
+
+        if ((!rc || !rc.length) && (artistName || post?.artist_name)) {
+          const like = artistName || post?.artist_name
+          rc = (await supabase
+            .from('records')
+            .select('vibe_color, cover_color')
+            .ilike('artist_name', `%${like}%`)
+            .not('vibe_color', 'is', null)
+            .limit(1)).data
+        }
+
+        if (alive && rc?.length) {
+          if (!vibe && rc[0].vibe_color) setVibe(rc[0].vibe_color)
+          if (!cover && rc[0].cover_color) setCover(rc[0].cover_color)
+        }
+      }
+    }
+    hydrateConcert()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConcert, post?.id, post?.artist_id, artistName, countryName, bgUrl])
+
+  // Compat: posts antiguos (por record_id)
+  useEffect(() => {
     let active = true
-    async function ensureColors() {
+    ;(async () => {
       if (vibe && cover) return
-      if (!post.record_id) return
-      const { data, error } = await supabase
-        .from('records')
-        .select('vibe_color, cover_color')
-        .eq('id', post.record_id)
-        .single()
+      if (!post?.record_id) return
+      const { data } = await supabase.from('records').select('vibe_color, cover_color').eq('id', post.record_id).single()
       if (!active) return
-      if (!error && data) {
+      if (data) {
         if (!vibe && data.vibe_color) setVibe(data.vibe_color)
         if (!cover && data.cover_color) setCover(data.cover_color)
       }
-    }
-    ensureColors()
+    })()
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.record_id])
+  }, [post?.record_id])
 
-  // detectar si el post es del usuario actual (intenta varias claves comunes)
   useEffect(() => {
-    (async () => {
+    ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      const ownerId =
-        (post as any).user_id ??
-        (post as any).author_id ??
-        (post as any).profile_id ??
-        null
+      const ownerId = (post as any).user_id ?? (post as any).author_id ?? (post as any).profile_id ?? null
       if (user && ownerId && user.id === ownerId) setIsOwner(true)
     })()
   }, [post])
 
-  const bg = post.image_urls?.[0] || null
   const href = `/post/${post.id}`
-
-  const vibeSafe = useMemo(() => vibe || '#222222', [vibe])
+  const vibeSafe = useMemo(() => vibe || '#0E1A3A', [vibe])
   const coverSafe = useMemo(() => cover || '#FFFFFF', [cover])
 
-  // --- actions (paran navegación del Link) ---
-  function toggleMenu(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    setMenuOpen((s) => !s)
-  }
+  function toggleMenu(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setMenuOpen(s => !s) }
 
   async function handleReport(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault(); e.stopPropagation()
     if (reported || reporting) return
-    const ok = window.confirm('Report this post?')
-    if (!ok) return
+    const ok = window.confirm('Report this post?'); if (!ok) return
     try {
       setReporting(true)
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        alert('Please sign in to report.')
-        return
-      }
-      await supabase.from('reports').insert({
-        user_id: user.id,
-        post_id: post.id,
-        reason: 'inappropriate'
-      })
-      setReported(true)
-      setMenuOpen(false)
-    } catch {
-      alert('Could not send report. Please try again.')
-    } finally {
-      setReporting(false)
-    }
+      if (!user) { alert('Please sign in to report.'); return }
+      await supabase.from('reports').insert({ user_id: user.id, post_id: post.id, reason: 'inappropriate' })
+      setReported(true); setMenuOpen(false)
+    } catch { alert('Could not send report. Please try again.') } finally { setReporting(false) }
   }
 
   async function handleDelete(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault(); e.stopPropagation()
     if (!isOwner || deleting) return
-    const ok = window.confirm('Delete this post? This cannot be undone.')
-    if (!ok) return
+    const ok = window.confirm('Delete this post? This cannot be undone.'); if (!ok) return
     try {
       setDeleting(true)
-      // 🔒 Server-side: borra post + dependencias + archivos de Storage (si aplica)
       const { data: { session } } = await supabase.auth.getSession()
       const resp = await fetch('/api/delete-post', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
-        },
+        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
         body: JSON.stringify({ postId: post.id })
       })
       const json = await resp.json()
-      if (!resp.ok) {
-        console.error('delete-post error:', json)
-        alert(json?.error || 'Could not delete this post.')
-        return
-      }
-      setMenuOpen(false)
-      // refresco simple del feed
-      window.location.reload()
-    } catch (err) {
-      console.error(err)
-      alert('Could not delete this post.')
-    } finally {
-      setDeleting(false)
-    }
+      if (!resp.ok) { console.error('delete-post error:', json); alert(json?.error || 'Could not delete this post.'); return }
+      setMenuOpen(false); window.location.reload()
+    } catch (err) { console.error(err); alert('Could not delete this post.') } finally { setDeleting(false) }
   }
 
   return (
     <Link href={href} aria-label={`Open post ${post.id}`}>
-      <article
-        className="
-          relative aspect-square overflow-hidden rounded-2xl
-          bg-neutral-100 shadow-sm hover:shadow transition-all
-          hover:scale-[1.01] cursor-pointer
-          w-full
-        "
-      >
-        {/* Botón minimal (⋯) */}
-        <button
-          type="button"
-          onClick={toggleMenu}
-          aria-label={menuOpen ? 'Close menu' : 'More options'}
-          className="
-            absolute z-20 top-2 right-2 h-8 w-8
-            flex items-center justify-center
-            rounded-full bg-black/30 hover:bg-black/40
-            text-white text-base backdrop-blur-sm
-          "
-        >
+      <article className="group relative aspect-square overflow-hidden rounded-2xl bg-neutral-100 shadow-sm hover:shadow transition-all hover:scale-[1.01] cursor-pointer w-full">
+        {/* ⋯ */}
+        <button type="button" onClick={toggleMenu} aria-label={menuOpen ? 'Close menu' : 'More options'}
+          className="absolute z-20 top-2 right-2 h-8 w-8 flex items-center justify-center rounded-full bg-black/30 hover:bg-black/40 text-white text-base backdrop-blur-sm">
           {menuOpen ? '×' : '⋯'}
         </button>
 
-        {/* Mini-menú minimalista */}
         {menuOpen && (
-          <div
-            className="
-              absolute z-20 top-10 right-2
-              rounded-md bg-black/70 text-white text-xs
-              backdrop-blur-sm shadow-sm overflow-hidden
-            "
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          >
-            <button
-              type="button"
-              onClick={handleReport}
-              className="block w-full px-3 py-2 text-left hover:bg-white/10"
-              aria-label="Report post"
-            >
+          <div className="absolute z-20 top-10 right-2 rounded-md bg-black/70 text-white text-xs backdrop-blur-sm shadow-sm overflow-hidden"
+               onClick={(e)=>{e.preventDefault();e.stopPropagation();}}>
+            <button type="button" onClick={handleReport} className="block w-full px-3 py-2 text-left hover:bg-white/10">
               {reported ? 'Reported ✓' : (reporting ? 'Reporting…' : 'Report')}
             </button>
             {isOwner && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="block w-full px-3 py-2 text-left hover:bg-white/10"
-                aria-label="Delete post"
-              >
+              <button type="button" onClick={handleDelete} className="block w-full px-3 py-2 text-left hover:bg-white/10">
                 {deleting ? 'Deleting…' : 'Delete'}
               </button>
             )}
           </div>
         )}
 
-        {/* Fondo (foto) */}
-        {bg && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={bg} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        )}
-        {/* Velo sutil para contraste */}
+        {bgUrl && <img src={bgUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-black/10" />
 
-        {/* COVER del disco */}
-        <div
-          className="absolute bottom-2 right-2 md:bottom-3 md:right-3 rounded-xl shadow-md"
-          style={{ width: '80px', height: '80px', backgroundColor: vibeSafe }}
-          title={post.record?.title || 'record'}
-        >
-          <div
-            className="absolute rounded-[6px]"
-            style={{ inset: '26%', backgroundColor: coverSafe }}
-          />
+        {/* Bloque colores (de un disco del artista) */}
+        <div className="absolute bottom-2 right-2 md:bottom-3 md:right-3 rounded-xl shadow-md"
+             style={{ width: '80px', height: '80px', backgroundColor: vibeSafe }}>
+          <div className="absolute rounded-[6px]" style={{ inset: '26%', backgroundColor: coverSafe }} />
         </div>
+
+        {/* Overlay Artist / Country */}
+        {(artistName || countryName) && (
+          <div className="pointer-events-none absolute left-2 bottom-2 md:left-3 md:bottom-3 rounded-lg bg-black/55 text-white px-2.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+               style={{ fontFamily: 'Roboto, Arial, sans-serif' }}>
+            {artistName && <div className="text-[0.82rem] leading-[1.1]">{artistName}</div>}
+            {countryName && <div className="mt-0.5 text-[0.7rem] opacity-90">{countryName}</div>}
+          </div>
+        )}
       </article>
     </Link>
   )

@@ -1,29 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
-import { useRouter } from "next/router";
-import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
-
-/** Símbolo anterior (like) */
-function WalcordLike({ filled }: { filled: boolean }) {
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 24 24"
-      fill={filled ? "#1F48AF" : "none"}
-      stroke="#1F48AF"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ transition: "all 0.3s ease" }}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="4" fill={filled ? "#fff" : "none"} />
-    </svg>
-  );
-}
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
+import Image from 'next/image';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
 /** Flecha sutil (back) */
 function ArrowLeftMini() {
@@ -34,300 +14,229 @@ function ArrowLeftMini() {
   );
 }
 
+/** Tipos */
+type Concert = {
+  id: string;
+  user_id: string | null;
+  artist_id: string | null;
+  country_code: string | null;
+  city: string | null;
+  event_date: string | null; // date
+  tour_name: string | null;
+  caption: string | null;
+  created_at: string | null;
+};
+
+type MediaItem = {
+  id: string;
+  url: string;
+  type: 'image' | 'video';
+};
+
 export default function PostDetail() {
   const router = useRouter();
   const { id } = router.query;
   const supabase = useSupabaseClient();
-  const user = useUser();
 
-  const [post, setPost] = useState<any>(null);
-  const [likes, setLikes] = useState<any[]>([]);
-  const [isLiked, setIsLiked] = useState(false);
-  const [comments, setComments] = useState<any[]>([]);
-  const [newComment, setNewComment] = useState("");
+  const [concert, setConcert] = useState<Concert | null>(null);
+  const [artistName, setArtistName] = useState<string>('');
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
     (async () => {
-      await Promise.all([fetchPost(), fetchLikes(), fetchComments()]);
+      setLoading(true);
+      await fetchConcert(String(id));
+      await fetchMedia(String(id));
+      setLoading(false);
     })();
   }, [id]);
 
-  async function fetchPost() {
+  async function fetchConcert(concertId: string) {
+    // 1) Concert data
     const { data, error } = await supabase
-      .from("posts")
-      .select(
-        `
-        id, user_id, record_id, era, caption, image_urls, created_at,
-        profiles:profiles!posts_user_id_fkey ( username, avatar_url ),
-        records:records!posts_record_id_fkey ( title, artist_name, vibe_color, cover_color )
-      `
-      )
-      .eq("id", id)
+      .from('concerts')
+      .select('*')
+      .eq('id', concertId)
       .single();
-    if (!error) setPost(data);
-  }
 
-  async function fetchLikes() {
-    const { data } = await supabase
-      .from("post_likes")
-      .select(
-        `
-        user_id,
-        profiles:profiles!post_likes_user_id_fkey ( username, avatar_url )
-      `
-      )
-      .eq("post_id", id);
+    if (!error && data) {
+      setConcert(data as Concert);
 
-    const list = data || [];
-    setLikes(list);
-    if (user?.id) setIsLiked(list.some((l: any) => l.user_id === user.id));
-  }
-
-  async function fetchComments() {
-    const { data } = await supabase
-      .from("post_comments")
-      .select(
-        `
-        id, comment, created_at, user_id,
-        profiles:profiles!post_comments_user_id_fkey ( username, avatar_url )
-      `
-      )
-      .eq("post_id", id)
-      .order("created_at", { ascending: true });
-
-    setComments(data || []);
-  }
-
-  async function toggleLike() {
-    if (!user) return;
-    if (isLiked) {
-      await supabase.from("post_likes").delete().match({ post_id: id, user_id: user.id });
-    } else {
-      await supabase.from("post_likes").insert({ post_id: id, user_id: user.id });
+      // 2) Artist name (si hay FK)
+      if (data.artist_id) {
+        const { data: art } = await supabase
+          .from('artists')
+          .select('name')
+          .eq('id', data.artist_id)
+          .single();
+        setArtistName(art?.name || '');
+      } else {
+        setArtistName('');
+      }
     }
-    await fetchLikes();
   }
 
-  async function submitComment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!user || !newComment.trim()) return;
-    await supabase.from("post_comments").insert({
-      post_id: id,
-      user_id: user.id,
-      comment: newComment.trim(),
+  async function fetchMedia(concertId: string) {
+    // Intentamos distintas convenciones de columnas por compatibilidad
+    const { data, error } = await supabase
+      .from('concert_media')
+      .select('id, url, media_url, type, media_type, path')
+      .eq('concert_id', concertId)
+      .order('id', { ascending: true });
+
+    if (error || !data) {
+      setMedia([]);
+      return;
+    }
+
+    const items: MediaItem[] = (data as any[]).map((row) => {
+      const rawUrl: string = row.url || row.media_url || row.path || '';
+      let t: 'image' | 'video' = 'image';
+      const ext = rawUrl.split('?')[0].split('.').pop()?.toLowerCase() || '';
+      if (row.type === 'video' || row.media_type === 'video' || ['mp4', 'mov', 'webm', 'm4v'].includes(ext)) {
+        t = 'video';
+      }
+      return { id: String(row.id), url: rawUrl, type: t };
     });
-    setNewComment("");
-    await fetchComments();
+
+    setMedia(items);
   }
 
-  /** Normaliza era para evitar "From From ..." */
-  const cleanEra = useMemo(() => {
-    const s = (post?.era || "").trim();
-    return s.replace(/^\s*from\s+/i, "");
-  }, [post?.era]);
-
-  const images: string[] = useMemo(() => {
-    if (!post?.image_urls) return [];
+  const formattedDate = useMemo(() => {
+    if (!concert?.event_date) return '';
     try {
-      const j = JSON.parse(post.image_urls);
-      if (Array.isArray(j)) return j;
-    } catch {}
-    return String(post.image_urls)
-      .split(",")
-      .map((u: string) => u.trim())
-      .filter(Boolean);
-  }, [post?.image_urls]);
+      const d = new Date(concert.event_date);
+      return d.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    } catch {
+      return String(concert.event_date);
+    }
+  }, [concert?.event_date]);
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Banner superior */}
-      <header className="relative w-full bg-[#1F48AF]">
-        <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-6 py-6">
-          {/* Flecha sutil (sin texto) */}
+      {/* ===== Encabezado (azul) ===== */}
+      <header className="sticky top-0 z-10 w-full bg-[#1F48AF]">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-4 sm:px-6 sm:py-6">
           <button
             onClick={() => router.back()}
             aria-label="Back"
-            className="mr-2 grid h-8 w-8 place-items-center rounded-full bg-white/10 hover:bg-white/15 transition"
+            className="mr-1 grid h-9 w-9 place-items-center rounded-full bg-white/10 hover:bg-white/15 transition"
           >
             <ArrowLeftMini />
           </button>
 
-          {/* COVER: cuadrado grande (vibe_color) + pequeño (cover_color) */}
-          <div
-            className="relative flex items-center justify-center overflow-hidden rounded-md"
-            style={{
-              width: 56,
-              height: 56,
-              backgroundColor: post?.records?.vibe_color || "#1F48AF",
-            }}
-          >
-            <div
-              className="rounded"
-              style={{
-                width: 26,
-                height: 26,
-                backgroundColor: post?.records?.cover_color || "#ffffff",
-              }}
-            />
-          </div>
-
-          <div className="leading-tight">
+          <div className="min-w-0">
             <h1
-              className="text-xl text-white"
+              className="truncate text-lg text-white sm:text-xl"
               style={{ fontFamily: '"Times New Roman", Times, serif' }}
             >
-              {post?.records?.title ?? "Untitled record"}
+              {artistName || 'Concert'}
             </h1>
             <p
-              className="text-sm text-white/80"
-              style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}
+              className="truncate text-xs text-white/80 sm:text-sm"
+              style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
             >
-              {post?.records?.artist_name}
+              {concert?.tour_name ? `${concert.tour_name} — ` : ''}
+              {[concert?.city, concert?.country_code].filter(Boolean).join(', ')}
+              {formattedDate ? ` · ${formattedDate}` : ''}
             </p>
           </div>
         </div>
       </header>
 
-      {/* Contenido */}
-      <main className="mx-auto w-full max-w-6xl px-6 py-8">
+      {/* ===== Contenido ===== */}
+      <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-6 sm:px-6 sm:pt-8">
         {/* Caption */}
-        {post?.caption && (
+        {!!concert?.caption && (
           <p
-            className="mb-6 text-[20px] leading-7 text-black/90"
-            style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}
+            className="mb-5 text-[17px] leading-7 text-black/90 sm:mb-6 sm:text-[20px]"
+            style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
           >
-            {post.caption}
+            {concert.caption}
           </p>
         )}
 
-        {/* Grid editorial */}
-        {images.length > 0 && (
-          <section className="mb-8">
-            <div className="columns-1 gap-6 sm:columns-2 lg:columns-3">
-              {images.map((url, i) => (
-                <div
-                  key={i}
-                  className="group mb-6 break-inside-avoid overflow-hidden rounded-2xl"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt={`photo-${i}`}
-                    className="w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02] group-hover:blur-[1px] group-hover:opacity-95"
-                  />
+        {/* Media grid – mobile first (1 col), luego 2 y 3 */}
+        {loading ? (
+          <div className="text-sm text-black/60">Loading…</div>
+        ) : media.length > 0 ? (
+          <section>
+            <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 [column-fill:_balance]">
+              {media.map((m) => (
+                <div key={m.id} className="group mb-4 break-inside-avoid overflow-hidden rounded-2xl">
+                  {m.type === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.url}
+                      alt="concert-media"
+                      className="w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02] group-hover:opacity-95"
+                    />
+                  ) : (
+                    <div className="relative">
+                      <video
+                        src={m.url}
+                        controls
+                        playsInline
+                        // iOS inline:
+                        // @ts-ignore
+                        webkit-playsinline="true"
+                        preload="metadata"
+                        className="h-auto w-full rounded-2xl"
+                        style={{ display: 'block' }}
+                        controlsList="nodownload noplaybackrate"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </section>
+        ) : (
+          <p className="text-sm text-black/60">No media yet.</p>
         )}
 
-        {/* Interacciones */}
-        <section className="mb-10 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <button
-              aria-label="Like"
-              onClick={toggleLike}
-              className="rounded-xl transition active:scale-95"
-              title={isLiked ? "Unlike" : "Like"}
-            >
-              <WalcordLike filled={isLiked} />
-            </button>
-
-            {/* Avatares de likes */}
-            <div className="flex -space-x-2">
-              {likes.slice(0, 8).map((l) => (
-                <div
-                  key={l.user_id}
-                  className="h-8 w-8 overflow-hidden rounded-full ring-2 ring-white"
-                  title={l.profiles?.username}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={l.profiles?.avatar_url || "/default-avatar.png"}
-                    alt={l.profiles?.username || "user"}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              ))}
-              {likes.length > 8 && (
-                <div
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-xs"
-                >
-                  +{likes.length - 8}
-                </div>
-              )}
+        {/* Pie de datos (solo lectura) */}
+        <section className="mt-8 rounded-2xl border border-black/10 bg-black/[0.02] p-4 sm:p-5">
+          <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-black/50" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
+                Artist
+              </dt>
+              <dd className="text-black/90" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                {artistName || '—'}
+              </dd>
             </div>
-          </div>
-
-          {/* Era — NUNCA “From From …” */}
-          {cleanEra && (
-            <div
-              className="text-sm text-black/50"
-              style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}
-            >
-              From {cleanEra}
+            <div>
+              <dt className="text-black/50" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
+                Tour
+              </dt>
+              <dd className="text-black/90" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                {concert?.tour_name || '—'}
+              </dd>
             </div>
-          )}
-        </section>
-
-        {/* Comentarios */}
-        <section>
-          <h2
-            className="mb-4 text-lg text-black/90"
-            style={{ fontFamily: '"Times New Roman", Times, serif' }}
-          >
-            Comments
-          </h2>
-
-          <div className="space-y-5">
-            {comments.map((c) => (
-              <div key={c.id} className="flex items-start gap-3">
-                <div className="h-8 w-8 overflow-hidden rounded-full bg-black/5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={c.profiles?.avatar_url || "/default-avatar.png"}
-                    alt={c.profiles?.username || "user"}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <div>
-                  <p
-                    className="text-[13px] leading-4 text-black/60"
-                    style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}
-                  >
-                    <span className="text-black/80">{c.profiles?.username}</span>
-                  </p>
-                  <p
-                    className="mt-1 text-[15px] text-black/90"
-                    style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}
-                  >
-                    {c.comment}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Añadir comentario */}
-          {user && (
-            <form onSubmit={submitComment} className="mt-6 flex items-center gap-3">
-              <input
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Write a comment…"
-                className="w-full rounded-xl border border-black/10 px-4 py-3 outline-none transition focus:border-[#1F48AF]/60"
-                style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}
-              />
-              <button
-                type="submit"
-                className="rounded-xl bg-[#1F48AF] px-5 py-3 text-white transition hover:opacity-90 active:scale-95"
-                style={{ fontFamily: "Roboto, system-ui, sans-serif", fontWeight: 300 }}
-              >
-                Send
-              </button>
-            </form>
-          )}
+            <div>
+              <dt className="text-black/50" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
+                City / Country
+              </dt>
+              <dd className="text-black/90" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                {[concert?.city, concert?.country_code].filter(Boolean).join(', ') || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-black/50" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
+                Date
+              </dt>
+              <dd className="text-black/90" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                {formattedDate || '—'}
+              </dd>
+            </div>
+          </dl>
         </section>
       </main>
     </div>
