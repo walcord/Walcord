@@ -441,7 +441,9 @@ const UserSearch: React.FC<{ meId: string | null }> = ({ meId }) => {
       if (isFollowing) {
         await supabase.from("follows").delete().eq("follower_id", meId).eq("following_id", targetId);
       } else {
-        await supabase.from("follows").insert({ follower_id: meId, following_id: targetId, created_at: new Date().toISOString() });
+        await supabase
+          .from("follows")
+          .insert({ follower_id: meId, following_id: targetId, created_at: new Date().toISOString() });
       }
     } finally {
       setBusy((p) => ({ ...p, [targetId]: false }));
@@ -795,7 +797,7 @@ const NowTouringRibbon: React.FC = () => {
       if (mounted) setItems(built);
     })();
 
-    return () => {
+  return () => {
       mounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1062,7 +1064,7 @@ const ConcertFeed: React.FC<{
         q = q.order("last_photo_at", { ascending: false });
       }
 
-      q = q.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      q = q.range(page * 8, page * 8 + 8 - 1);
 
       if (ids && ids.length > 0) q = q.in("user_id", ids);
       if (tourFilter) q = q.eq("artist_name", tourFilter.artist_name).eq("tour", tourFilter.tour);
@@ -1093,7 +1095,7 @@ const ConcertFeed: React.FC<{
       if (!rows.length) {
         const built = await fallbackBuild();
         if (fetchTokenRef.current !== myToken) return;
-        rows = built.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+        rows = built.slice(page * 8, page * 8 + 8);
         if (!rows.length) setDone(true);
       }
 
@@ -1150,7 +1152,7 @@ const ConcertFeed: React.FC<{
         }
       >
         {list.map((p) => (
-          <div key={p.post_id} className={smallCards ? "w-full" : "mx-auto max-w-2xl w-full"}>
+          <div key={p.post_id} className={smallCards ? "w-full" : "mx-auto max-w-[560px] w-full px-3"}>
             {smallCards ? (
               <MiniConcertCard image_urls={p.image_urls} />
             ) : (
@@ -1659,9 +1661,9 @@ export default function FeedPage() {
         </Link>
       </header>
 
-      {/* Hero / Tabs / Search */}
-      <div className="mx-auto max-w-6xl px-4 md:px-6 pt-6 sm:pt-8 pb-4">
-        <h1 className="text-[clamp(1.6rem,5vw,2.4rem)] font-normal tracking-tight" style={{ fontFamily: "Times New Roman, serif" }}>
+      {/* Hero / Tabs / Search — CENTRADO Y ESTRECHO */}
+      <div className="mx-auto max-w-[560px] px-3 md:px-4 pt-6 sm:pt-8 pb-4">
+        <h1 className="text-[clamp(1.6rem,5vw,2.2rem)] font-normal tracking-tight" style={{ fontFamily: "Times New Roman, serif" }}>
           The Wall
         </h1>
         <div className="mt-2 h-px w-full bg-black/10" />
@@ -1675,7 +1677,7 @@ export default function FeedPage() {
               Friends
             </Pill>
           </div>
-          <UserSearch meId={meId} />
+          <UserSearch meId={user?.id ?? null} />
         </div>
 
         {/* Subtabs solo para Memories legacy (si lo mantienes) */}
@@ -1686,30 +1688,28 @@ export default function FeedPage() {
         )}
       </div>
 
-      {/* Cuerpo */}
+      {/* Cuerpo — CENTRADO Y ESTRECHO */}
       <main className="pb-16">
-        {/* FRAGMENTO 1: Friends → Touring ribbon + feed de conciertos seguidos/amigos */}
         {activeTab === "friends" ? (
-          <div className="mx-auto max-w-6xl px-4 md:px-6">
+          <div className="mx-auto max-w-[560px] px-3 md:px-4">
             <NowTouringRibbon />
             <div className="mt-6">
               <ConcertFeed mode="friends" />
             </div>
           </div>
         ) : (
-          /* FRAGMENTO 2: General → mosaico For You (pinterest) + memories debajo (opcional) */
-          <div className="mx-auto max-w-6xl px-4 md:px-6">
+          <div className="mx-auto max-w-[560px] px-3 md:px-4">
             <div className="mb-6">
               <ConcertFeed mode="for-you" smallCards />
             </div>
 
-            {/* Memories legacy para usuarios que ya lo usan (puedes ocultarlo si no lo necesitas) */}
+            {/* Memories legacy (opcional) */}
             {memoriesLoading && memories.length === 0 ? (
-              <div className="mx-auto max-w-2xl sm:max-w-3xl px-3 sm:px-4 py-10 text-center text-neutral-500">
+              <div className="mx-auto max-w-[560px] px-3 py-10 text-center text-neutral-500">
                 Loading…
               </div>
             ) : memories.length === 0 ? null : (
-              <div className="mx-auto max-w-2xl sm:max-w-3xl px-3 sm:px-4">
+              <div className="mx-auto max-w-[560px] px-3">
                 <div className="flex flex-col gap-6 sm:gap-8 py-5 sm:py-6">
                   {memories.map((p) => {
                     const vibe = softHashColor(p.username);

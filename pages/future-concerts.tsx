@@ -113,34 +113,37 @@ export default function FutureConcertsPage() {
 
   return (
     <div className="bg-white min-h-screen text-black">
-      {/* ===== Banner AZUL (idéntico al de GenresPage): h-24, flecha 20px, pegado abajo, sin título ===== */}
-      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-12 pb-2">
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      {/* ===== Banner AZUL (fijo) — con márgenes laterales por debajo ===== */}
+      <header className="w-full h-20 bg-[#1F48AF] flex items-end px-4 pb-2">
+        <div className="mx-auto w-full max-w-[520px]">
+          <button
+            onClick={() => history.back()}
+            aria-label="Go back"
+            className="p-2 rounded-full hover:bg-[#1A3A95] transition"
           >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
       </header>
 
-      {/* ===== Barra de creación (ultra-compacta, minimal) ===== */}
-      <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-4">
-        <section className="sticky top-[96px] z-10 bg-white/90 backdrop-blur px-2 py-2 rounded-xl border border-neutral-200">
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-center">
+      {/* ===== CONTENEDOR CENTRAL ESTRECHO (NO ROZA BORDES) ===== */}
+      <main className="mx-auto w-full max-w-[520px] px-4 py-4">
+        {/* ===== Barra de creación (compacta) pegada al contenido, con sticky suave ===== */}
+        <section className="sticky top-2 z-10 bg-white/95 backdrop-blur rounded-2xl border border-neutral-200 px-3 py-3">
+          <div className="grid grid-cols-2 gap-2 items-center">
             {/* ARTIST (buscable) */}
-            <div className="col-span-2 sm:col-span-2 relative">
+            <div className="col-span-2 relative">
               {artistName ? (
                 <div className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2">
                   <span className="truncate" style={{ fontFamily: '"Times New Roman", Times, serif' }}>{artistName}</span>
@@ -178,14 +181,14 @@ export default function FutureConcertsPage() {
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="City"
-              className="col-span-1 sm:col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
+              className="col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
             />
 
             {/* COUNTRY */}
             <select
               value={countryCode}
               onChange={(e) => setCountryCode(e.target.value)}
-              className="col-span-1 sm:col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] appearance-none"
+              className="col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] appearance-none"
             >
               <option value="">Country</option>
               {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
@@ -196,14 +199,14 @@ export default function FutureConcertsPage() {
               type="date"
               value={dateStr}
               onChange={(e) => setDateStr(e.target.value)}
-              className="col-span-1 sm:col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
+              className="col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
             />
 
             {/* ADD */}
             <button
               onClick={addItem}
               disabled={!canAdd}
-              className="col-span-1 sm:col-span-1 rounded-lg px-3 py-2 text-sm text-white bg-[#1F48AF] enabled:hover:opacity-90 disabled:opacity-40 transition"
+              className="col-span-1 rounded-lg px-3 py-2 text-sm text-white bg-[#1F48AF] enabled:hover:opacity-90 disabled:opacity-40 transition"
               style={{ fontFamily: '"Times New Roman", Times, serif' }}
             >
               Add
@@ -211,7 +214,7 @@ export default function FutureConcertsPage() {
           </div>
         </section>
 
-        {/* ===== Lista compacta ===== */}
+        {/* ===== Lista compacta (con márgenes laterales del contenedor) ===== */}
         <section className="mt-4">
           {loading ? (
             <p className="text-sm text-neutral-600">Loading…</p>
@@ -222,9 +225,9 @@ export default function FutureConcertsPage() {
           ) : (
             <div className="grid grid-cols-1 gap-2">
               {items.map(it => (
-                <div key={it.id} className="rounded-xl border border-neutral-200 px-3 py-2 flex items-center justify-between">
-                  <div>
-                    <div className="text-[15px]" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                <div key={it.id} className="rounded-2xl border border-neutral-200 px-3 py-2 flex items-center justify-between bg-white">
+                  <div className="min-w-0">
+                    <div className="text-[15px] leading-tight line-clamp-1" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
                       {it.artist}
                     </div>
                     <div className="text-[12px] text-neutral-700">
@@ -234,7 +237,7 @@ export default function FutureConcertsPage() {
                   </div>
                   <button
                     onClick={() => removeItem(it.id)}
-                    className="text-[12px] rounded-full px-3 py-1 border border-neutral-300 hover:bg-neutral-100 transition"
+                    className="text-[12px] rounded-full px-3 py-1 border border-neutral-300 hover:bg-neutral-100 transition shrink-0"
                   >
                     Delete
                   </button>

@@ -202,8 +202,8 @@ export default function ConcertViewer() {
         </div>
       </header>
 
-      {/* ===== CONTENIDO ===== */}
-      <main className="mx-auto w-full max-w-6xl px-4 sm:px-6 pb-16 pt-5 sm:pt-7">
+      {/* ===== CONTENIDO (centrado y estrecho para app) ===== */}
+      <main className="mx-auto w-full max-w-[520px] px-3 sm:px-4 pb-16 pt-5 sm:pt-7">
         {!!concert?.caption && (
           <p className="mb-5 text-[16px] sm:text-[18px] leading-7 text-black/90" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
             {concert.caption}
@@ -214,7 +214,7 @@ export default function ConcertViewer() {
           <p className="text-sm text-black/60">Loading…</p>
         ) : media.length > 0 ? (
           <section>
-            <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+            <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3">
               {media.map((m) => (
                 <div key={m.id} className="rounded-2xl overflow-hidden flex justify-center items-center bg-black/5">
                   {m.type === 'image' ? (
@@ -222,7 +222,7 @@ export default function ConcertViewer() {
                     <img
                       src={m.url}
                       alt="concert-media"
-                      className="object-contain max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] rounded-2xl"
+                      className="object-contain max-w-[160px] sm:max-w-[220px] max-h-[160px] sm:max-h-[220px] rounded-2xl"
                       loading="lazy"
                     />
                   ) : (
@@ -233,7 +233,7 @@ export default function ConcertViewer() {
                       // @ts-ignore iOS inline
                       webkit-playsinline="true"
                       preload="metadata"
-                      className="object-contain max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] rounded-2xl"
+                      className="object-contain max-w-[160px] sm:max-w-[220px] max-h-[160px] sm:max-h-[220px] rounded-2xl"
                       controlsList="nodownload noplaybackrate"
                     />
                   )}
