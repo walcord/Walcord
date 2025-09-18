@@ -16,16 +16,12 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // exigir aceptación de términos
   const [agreed, setAgreed] = useState(false);
 
   const origin = useMemo(() => {
-    // Redirección segura para el email de confirmación
     if (typeof window !== 'undefined' && window.location?.origin) {
       return window.location.origin;
     }
-    // Si no hay window (SSR), usa variable pública si la tienes configurada
     return process.env.NEXT_PUBLIC_SITE_URL || 'https://walcord.com';
   }, []);
 
@@ -35,22 +31,16 @@ export default function Signup() {
     setSuccessMessage('');
   };
 
-  const isValidEmail = (email) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isValidPassword = (password) => password.length >= 6;
-
   const normalize = (s) => (s || '').trim();
 
   const mapSupabaseError = (message) => {
     if (!message) return 'Something went wrong. Please try again.';
     const msg = String(message).toLowerCase();
-
     if (msg.includes('user already registered')) return 'This email is already registered.';
     if (msg.includes('rate limit')) return 'Too many attempts. Please wait a moment and try again.';
-    if (msg.includes('database error saving new user')) {
-      return 'Database error saving new user. Please try again in a minute. If it persists, review your profiles table constraints and RLS policies.';
-    }
+    if (msg.includes('database error saving new user')) return 'Database error saving new user. Please try again.';
     if (msg.includes('invalid email')) return 'Please enter a valid email address.';
     if (msg.includes('password')) return 'Password must be at least 6 characters long.';
     return message;
@@ -77,7 +67,6 @@ export default function Signup() {
       setError('Password must be at least 6 characters long.');
       return;
     }
-
     if (!agreed) {
       setError('Please accept the Terms of Use.');
       return;
@@ -85,11 +74,12 @@ export default function Signup() {
 
     setLoading(true);
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      // 1) Intentar signUp. Si confirmación está DESACTIVADA, devuelve session.
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${origin}/login`,
+          // sin emailRedirectTo → permite sesión inmediata si la confirmación está desactivada
           data: { full_name: name },
         },
       });
@@ -100,6 +90,25 @@ export default function Signup() {
         return;
       }
 
+      // 2) Si ya hay sesión, entrar directo
+      if (data?.session) {
+        router.replace('/feed');
+        return;
+      }
+
+      // 3) Fallback universal: si NO hay sesión (p. ej., confirmación activada),
+      // intentar loguear inmediatamente con email+password.
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (!signInError && signInData?.session) {
+        router.replace('/feed');
+        return;
+      }
+
+      // 4) Si tampoco dejó iniciar sesión, mostramos mensaje estándar.
       setSuccessMessage('Account created. Please check your email to confirm.');
       setForm({ name: '', email: '', password: '' });
     } catch (err) {
@@ -163,25 +172,9 @@ export default function Signup() {
             />
           </div>
 
-          {error && (
-            <p
-              className="text-sm mt-2 text-center text-red-600"
-              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
-            >
-              {error}
-            </p>
-          )}
+          {error && <p className="text-sm mt-2 text-center text-red-600">{error}</p>}
+          {successMessage && <p className="text-sm mt-2 text-center text-green-700">{successMessage}</p>}
 
-          {successMessage && (
-            <p
-              className="text-sm mt-2 text-center text-green-700"
-              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
-            >
-              {successMessage}
-            </p>
-          )}
-
-          {/* Checkbox de términos */}
           <label className="flex gap-3 items-start -mt-1">
             <input
               type="checkbox"
@@ -191,8 +184,8 @@ export default function Signup() {
               aria-label="Agree to Terms of Use"
               className="mt-1"
             />
-            <span className="text-[13px]" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
-              I agree to the <a href="/terms" className="underline text-[#1F48AF]">Terms of Use</a>. Objectionable content is not allowed. Reports are reviewed.
+            <span className="text-[13px]" style={{ fontFamily: 'Roboto, sans-serif' }}>
+              I agree to the <a href="/terms" className="underline text-[#1F48AF]">Terms of Use</a>.
             </span>
           </label>
 
@@ -200,12 +193,7 @@ export default function Signup() {
             type="submit"
             disabled={loading || !agreed}
             className="mt-3 w-full py-2 text-white text-sm tracking-wide rounded-md transition-all duration-300 hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{
-              backgroundColor: '#1F48AF',
-              fontFamily: 'Roboto, sans-serif',
-              fontWeight: 300,
-              fontSize: '0.9rem',
-            }}
+            style={{ backgroundColor: '#1F48AF', fontFamily: 'Roboto, sans-serif' }}
           >
             {loading ? 'Creating account…' : 'Come Together'}
           </button>
