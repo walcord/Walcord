@@ -209,56 +209,31 @@ function NowTouringRibbon() {
   );
 }
 
-/* ===== MediaBlock mejorado ===== */
+/* ===== MediaBlock — 4 cuadrados + overlay ===== */
 function MediaBlock({ urls, postId }: { urls: string[]; postId: string }) {
-  const n = urls.length;
-  if (n <= 0) return null;
+  const total = urls.length;
+  if (total <= 0) return null;
 
-  // 1 foto → formato horizontal (recorte)
-  if (n === 1) {
-    return (
-      <Link href={`/post/${postId}`} className="block overflow-hidden rounded-2xl bg-neutral-100">
-        <div className="w-full aspect-video relative">
-          <img src={urls[0]} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        </div>
-      </Link>
-    );
-  }
-
-  // 2–5 fotos → grid
-  if (n <= 5) {
-    const take = urls.slice(0, n);
-    return (
-      <div className={`grid gap-2 ${n === 2 ? "grid-cols-2" : n === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-        {take.map((u, i) => (
-          <Link key={i} href={`/post/${postId}`} className="overflow-hidden rounded-2xl bg-neutral-100 block">
-            <div className="w-full aspect-[4/3] relative">
-              <img src={u} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            </div>
-          </Link>
-        ))}
-      </div>
-    );
-  }
-
-  // 6+ fotos → mostrar 6 y overlay "See more →"
-  const first = urls.slice(0, 6);
-  const remaining = n - 6;
+  // Mostrar siempre cuadrado y máximo 4
+  const take = urls.slice(0, 4);
+  const more = Math.max(0, total - take.length);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-      {first.map((u, i) => {
-        const isLast = i === 5;
+    <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+      {take.map((u, i) => {
+        const isLast = i === 3 && more > 0;
         return (
-          <Link key={i} href={`/post/${postId}`} className="relative overflow-hidden rounded-2xl bg-neutral-100 block">
-            <div className="w-full aspect-[4/3] relative">
-              <img src={u} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              {isLast && remaining > 0 && (
-                <div className="absolute inset-0 bg-black/45 text-white flex items-center justify-center text-sm md:text-base font-medium">
-                  See more →
-                </div>
-              )}
-            </div>
+          <Link
+            key={i}
+            href={`/post/${postId}`}
+            className="relative overflow-hidden rounded-2xl bg-neutral-100 block aspect-square"
+          >
+            <img src={u} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            {isLast && (
+              <div className="absolute inset-0 bg-black/45 text-white flex items-center justify-center text-base sm:text-lg font-medium">
+                +{Math.min(more, 99)}
+              </div>
+            )}
           </Link>
         );
       })}
@@ -610,7 +585,8 @@ export default function FeedPage() {
       </header>
 
       {/* título + tabs + user search */}
-      <div className="mx-auto max-w-4xl px-4 md:px-6 pt-6 sm:pt-8 pb-4">
+      {/* ⬇️ Estrecho en móvil, cómodo en desktop */}
+      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-4">
         <h1 className="text-[clamp(1.6rem,5vw,2.4rem)] font-normal tracking-tight" style={{ fontFamily: "Times New Roman, serif" }}>
           The Wall
         </h1>
@@ -632,7 +608,8 @@ export default function FeedPage() {
       </div>
 
       {/* contenido: posts */}
-      <main className="mx-auto max-w-4xl px-4 md:px-6 pb-16">
+      {/* ⬇️ Igual ancho que el header */}
+      <main className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pb-16">
         {tab === "friends" ? (
           <>
             <NowTouringRibbon />
