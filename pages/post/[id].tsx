@@ -202,30 +202,30 @@ export default function ConcertViewer() {
         </div>
       </header>
 
-      {/* ===== CONTENIDO (centrado y con márgenes amplios) ===== */}
-      <main className="mx-auto w-full max-w-[520px] px-5 sm:px-6 pb-16 pt-5 sm:pt-7">
+      {/* ===== CONTENIDO ===== */}
+      <main className="mx-auto w-full max-w-[520px] px-5 sm:px-6 pb-16 pt-5 sm:pt-7 overflow-x-hidden">
         {!!concert?.caption && (
           <p
-            className="mb-5 mt-4 text-center text-[16px] sm:text-[18px] leading-7 text-black/90 break-words [hyphens:auto]"
+            className="mb-5 mt-4 text-[15px] sm:text-[17px] leading-7 text-black/90 break-words [overflow-wrap:anywhere]"
             style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
           >
             {concert.caption}
           </p>
         )}
 
+        {/* Bloque media siempre con margen arriba */}
         {loading ? (
-          <p className="text-sm text-black/60 text-center">Loading…</p>
+          <p className="text-sm text-black/60">Loading…</p>
         ) : media.length > 0 ? (
-          <section>
-            <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3">
+          <section className="mt-5">
+            <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
               {media.map((m) => (
                 <div key={m.id} className="rounded-2xl overflow-hidden flex justify-center items-center bg-black/5">
                   {m.type === 'image' ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={m.url}
                       alt="concert-media"
-                      className="object-contain max-w-[160px] sm:max-w-[220px] max-h-[160px] sm:max-h-[220px] rounded-2xl"
+                      className="object-contain max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] rounded-2xl"
                       loading="lazy"
                     />
                   ) : (
@@ -236,7 +236,7 @@ export default function ConcertViewer() {
                       // @ts-ignore iOS inline
                       webkit-playsinline="true"
                       preload="metadata"
-                      className="object-contain max-w-[160px] sm:max-w-[220px] max-h-[160px] sm:max-h-[220px] rounded-2xl"
+                      className="object-contain max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] rounded-2xl"
                       controlsList="nodownload noplaybackrate"
                     />
                   )}
@@ -245,10 +245,10 @@ export default function ConcertViewer() {
             </div>
           </section>
         ) : (
-          <p className="text-sm text-black/60 text-center">No media.</p>
+          <p className="text-sm text-black/60 mt-5">No media.</p>
         )}
 
-        {/* ===== Social con márgenes propios ===== */}
+        {/* ===== Social ===== */}
         <section className="mt-6 mx-auto w-full max-w-[520px] px-5 sm:px-6">
           <div className="flex items-center gap-4">
             <button
@@ -269,7 +269,7 @@ export default function ConcertViewer() {
                 <div className="h-8 w-8 rounded-full bg-neutral-200 overflow-hidden shrink-0">
                   {c.avatar_url ? <img src={c.avatar_url} alt={c.username || ''} className="w-full h-full object-cover" /> : null}
                 </div>
-                <div className="min-w-0 break-words [hyphens:auto]">
+                <div className="min-w-0 break-words [overflow-wrap:anywhere]">
                   <div className="text-sm">
                     <span className="font-medium">{c.username || 'user'}</span> {c.comment}
                   </div>
@@ -285,7 +285,7 @@ export default function ConcertViewer() {
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Write a comment…"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [hyphens:auto]"
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [overflow-wrap:anywhere]"
               />
               <button onClick={handleSendComment} className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm">
                 Send
