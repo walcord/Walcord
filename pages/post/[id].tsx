@@ -32,16 +32,7 @@ type CommentRow = {
 /* ========= Flecha back ========= */
 function BackArrow() {
   return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="white"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M15 18l-6-6 6-6" />
     </svg>
   );
@@ -55,14 +46,7 @@ function VinylIcon({ active }: { active: boolean }) {
       <circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.9" />
       <circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.7" />
       <circle cx="24" cy="24" r="10" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.5" />
-      <circle
-        cx="24"
-        cy="24"
-        r="6"
-        fill={active ? 'currentColor' : 'transparent'}
-        stroke="currentColor"
-        strokeWidth="1"
-      />
+      <circle cx="24" cy="24" r="6" fill={active ? 'currentColor' : 'transparent'} stroke="currentColor" strokeWidth="1" />
       <circle cx="24" cy="24" r="1.5" fill={active ? 'white' : 'currentColor'} />
     </svg>
   );
@@ -203,24 +187,14 @@ export default function ConcertViewer() {
     <div className="min-h-screen bg-white">
       {/* ===== BANNER ===== */}
       <header className="w-full h-32 bg-[#1F48AF] pt-[env(safe-area-inset-top)] flex items-end px-4 sm:px-6 pb-2">
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-[#1A3A95] transition self-end"
-        >
+        <button onClick={() => history.back()} aria-label="Go back" className="p-2 rounded-full hover:bg-[#1A3A95] transition self-end">
           <BackArrow />
         </button>
         <div className="ml-3 min-w-0 pb-0.5">
-          <h1
-            className="truncate text-white text-[16px] sm:text-[18px]"
-            style={{ fontFamily: '"Times New Roman", Times, serif' }}
-          >
+          <h1 className="truncate text-white text-[16px] sm:text-[18px]" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
             {artistName || 'Concert'}
           </h1>
-          <p
-            className="truncate text-white/80 text-[12px]"
-            style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
-          >
+          <p className="truncate text-white/80 text-[12px]" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
             {concert?.tour_name ? `${concert.tour_name} — ` : ''}
             {[concert?.city, countryName || concert?.country_code].filter(Boolean).join(', ')}
             {dateLabel ? ` · ${dateLabel}` : ''}
@@ -228,11 +202,11 @@ export default function ConcertViewer() {
         </div>
       </header>
 
-      {/* ===== CONTENIDO ===== */}
-      <main className="mx-auto w-full max-w-[520px] px-4 sm:px-6 pb-16 pt-5 sm:pt-7">
+      {/* ===== CONTENIDO (centrado y con márgenes amplios) ===== */}
+      <main className="mx-auto w-full max-w-[520px] px-5 sm:px-6 pb-16 pt-5 sm:pt-7">
         {!!concert?.caption && (
           <p
-            className="mb-5 mt-4 text-[16px] sm:text-[18px] leading-7 text-black/90 break-words"
+            className="mb-5 mt-4 text-center text-[16px] sm:text-[18px] leading-7 text-black/90 break-words [hyphens:auto]"
             style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
           >
             {concert.caption}
@@ -240,16 +214,14 @@ export default function ConcertViewer() {
         )}
 
         {loading ? (
-          <p className="text-sm text-black/60">Loading…</p>
+          <p className="text-sm text-black/60 text-center">Loading…</p>
         ) : media.length > 0 ? (
           <section>
             <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3">
               {media.map((m) => (
-                <div
-                  key={m.id}
-                  className="rounded-2xl overflow-hidden flex justify-center items-center bg-black/5"
-                >
+                <div key={m.id} className="rounded-2xl overflow-hidden flex justify-center items-center bg-black/5">
                   {m.type === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={m.url}
                       alt="concert-media"
@@ -273,11 +245,11 @@ export default function ConcertViewer() {
             </div>
           </section>
         ) : (
-          <p className="text-sm text-black/60">No media.</p>
+          <p className="text-sm text-black/60 text-center">No media.</p>
         )}
 
-        {/* ===== Social ===== */}
-        <section className="mt-6">
+        {/* ===== Social con márgenes propios ===== */}
+        <section className="mt-6 mx-auto w-full max-w-[520px] px-5 sm:px-6">
           <div className="flex items-center gap-4">
             <button
               onClick={handleLike}
@@ -295,17 +267,13 @@ export default function ConcertViewer() {
             {comments.map((c) => (
               <div key={c.id} className="flex gap-3 items-start">
                 <div className="h-8 w-8 rounded-full bg-neutral-200 overflow-hidden shrink-0">
-                  {c.avatar_url ? (
-                    <img src={c.avatar_url} alt={c.username || ''} className="w-full h-full object-cover" />
-                  ) : null}
+                  {c.avatar_url ? <img src={c.avatar_url} alt={c.username || ''} className="w-full h-full object-cover" /> : null}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 break-words [hyphens:auto]">
                   <div className="text-sm">
                     <span className="font-medium">{c.username || 'user'}</span> {c.comment}
                   </div>
-                  <div className="text-xs text-neutral-500">
-                    {new Date(c.created_at).toLocaleString()}
-                  </div>
+                  <div className="text-xs text-neutral-500">{new Date(c.created_at).toLocaleString()}</div>
                 </div>
               </div>
             ))}
@@ -317,12 +285,9 @@ export default function ConcertViewer() {
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Write a comment…"
-                className="flex-1 rounded-xl border border-neutral-300 px-3 py-2 outline-none"
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [hyphens:auto]"
               />
-              <button
-                onClick={handleSendComment}
-                className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm"
-              >
+              <button onClick={handleSendComment} className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm">
                 Send
               </button>
             </div>
