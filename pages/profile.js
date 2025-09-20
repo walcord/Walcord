@@ -48,7 +48,7 @@ export default function ProfilePage() {
           .single();
 
         if (paletteData?.colors?.length) {
-          const colors = paletteData.colors.slice();
+          const colors = [...paletteData.colors];
           const shuffled = colors.sort(() => 0.5 - Math.random());
           await supabase
             .from('profiles')
@@ -65,13 +65,14 @@ export default function ProfilePage() {
     initProfile();
   }, [router]);
 
-  // ===== 2) Cargar CONCERTS (siempre DESC por fecha) =====
+  // ===== 2) Cargar CONCERTS (DESC por fecha completa) =====
   useEffect(() => {
     if (!userId) return;
 
     const fetchConcerts = async () => {
       setConcertsLoading(true);
 
+      // 2a) Intento por vista optimizada
       const { data: byView } = await supabase
         .from('v_concert_cards')
         .select('*')
@@ -96,6 +97,7 @@ export default function ProfilePage() {
         return;
       }
 
+      // 2b) Fallback por tablas
       const { data } = await supabase
         .from('concerts')
         .select(`
@@ -108,8 +110,9 @@ export default function ProfilePage() {
         .order('event_date', { ascending: false });
 
       const normalized = (data || []).map((c) => {
-        const firstMedia = (c.concert_media || [])
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.url ?? null;
+        const firstMedia =
+          (c.concert_media || [])
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.url ?? null;
 
         return {
           id: c.id,
@@ -131,7 +134,7 @@ export default function ProfilePage() {
     fetchConcerts();
   }, [userId]);
 
-  // ===== 3) Agrupar por año y ORDENAR (años DESC, dentro DESC por fecha) =====
+  // ===== 3) Agrupar por año y ORDENAR (años DESC; dentro, fecha completa DESC) =====
   const groupsOrdered = useMemo(() => {
     const map = new Map();
     for (const c of concerts) {
@@ -143,8 +146,7 @@ export default function ProfilePage() {
 
     for (const [, arr] of map) {
       arr.sort(
-        (a, b) =>
-          new Date(b.event_date || 0).getTime() - new Date(a.event_date || 0).getTime()
+        (a, b) => new Date(b.event_date || 0).getTime() - new Date(a.event_date || 0).getTime()
       );
     }
 
@@ -253,12 +255,13 @@ export default function ProfilePage() {
         </div>
 
         <aside className="m-0 p-0">
-          <h2 className="text-[clamp(1.1rem,2vw,1.5rem)] font-light mb-1">Concerts</h2>
+          {/* Cambiado a "Musical Memories" */}
+          <h2 className="text-[clamp(1.1rem,2vw,1.5rem)] font-light mb-1">Musical Memories</h2>
 
           {concertsLoading ? (
-            <div className="mt-4 text-sm text-neutral-600">Loading concerts…</div>
+            <div className="mt-4 text-sm text-neutral-600">Loading memories…</div>
           ) : groupsOrdered.length === 0 ? (
-            <div className="mt-4 text-sm text-neutral-600">No concerts yet.</div>
+            <div className="mt-4 text-sm text-neutral-600">No musical memories yet.</div>
           ) : (
             groupsOrdered.map(({ yearLabel, items }) => (
               <section key={yearLabel} className="mt-7">
@@ -290,7 +293,7 @@ export default function ProfilePage() {
         </aside>
       </div>
 
-      {/* ===== AÑADIDO: bloque inferior EXACTO como la imagen ===== */}
+      {/* Pie */}
       <footer className="px-10 sm:px-12 mt-16 pt-8 pb-28">
         <hr className="border-t border-black/10 mb-6" />
         <p className="text-[0.98rem] text-neutral-500 mb-2">
@@ -318,7 +321,7 @@ export default function ProfilePage() {
         </div>
       </footer>
 
-      {/* Modal Confirmación (no cambia nada del resto) */}
+      {/* Modal Confirmación */}
       {deleteOpen && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/50" />
