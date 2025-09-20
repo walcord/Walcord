@@ -22,6 +22,10 @@ type Row = {
   image_urls: string[] | null;
   like_count: number | null;
   comment_count: number | null;
+
+  // 👇 añadido para categoría
+  post_type?: "concert" | "experience" | null;
+  experience?: string | null; // 'ballet' | 'opera' | 'club' | ...
 };
 
 type Artist = { id: string; name: string; image_url?: string | null };
@@ -29,6 +33,8 @@ type Profile = { id: string; username: string | null; full_name: string | null; 
 
 const fmtDate = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+
+const cap = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 
 /* ===== Avatar ===== */
 const Avatar = ({ src, alt, size = 36 }: { src?: string | null; alt?: string; size?: number }) => (
@@ -150,10 +156,10 @@ function NowTouringRibbon() {
       (frA.data || []).forEach((r: any) => ids.add(r.receiver_id));
       (frB.data || []).forEach((r: any) => ids.add(r.requester_id));
 
-      // tomamos conciertos de esa gente
+      // tomamos conciertos/experiencias de esa gente
       const { data: concerts } = await supabase
         .from("concerts")
-        .select("id,user_id,artist_id,city,country_code,city,event_date,tour_name,caption,created_at")
+        .select("id,user_id,artist_id,city,country_code,city,event_date,tour_name,caption,created_at,post_type,experience")
         .in("user_id", Array.from(ids))
         .order("event_date", { ascending: false })
         .limit(60);
@@ -176,12 +182,12 @@ function NowTouringRibbon() {
 
       const built =
         concerts.map((c: any) => {
-          const artist_name = aById[c.artist_id] || "Concert";
+          const title = c.post_type === 'experience' && c.experience ? cap(c.experience) : (aById[c.artist_id] || "Concert");
           const place = [c.city, c.country_code].filter(Boolean).join(", ");
           const when = c.event_date ? ` (${new Date(c.event_date).getFullYear()})` : "";
           const tour = c.tour_name ? ` — ${c.tour_name}` : "";
           const who = uById[c.user_id] || "—";
-          return { text: `${who} went to ${artist_name}${tour}${place ? ` in ${place}` : ""}${when}`, href: `/post/${c.id}` };
+          return { text: `${who} went to ${title}${tour}${place ? ` in ${place}` : ""}${when}`, href: `/post/${c.id}` };
         }) ?? [];
 
       setRows(built.slice(0, 24));
@@ -285,8 +291,8 @@ function useComments(concertId: string | null) {
   return { items, load, send };
 }
 
-/* ===== PostCard ===== */
-function PostCard({ row }: { row: Row }) {
+/* ===== PostCard (del feed) ===== */
+function PostCardFeed({ row }: { row: Row }) {
   const supabase = useSupabaseClient();
   const me = useUser();
   const colors = useArtistColors(row.artist_id);
@@ -325,6 +331,11 @@ function PostCard({ row }: { row: Row }) {
   const cover = colors.cover || "#C9D6F5";
   const photos = (row.image_urls || []).filter(Boolean);
 
+  // 👇 Encabezado: si es experience → categoría; si no, artista o "Concert"
+  const headerLeft = row.post_type === 'experience' && row.experience
+    ? cap(row.experience)
+    : (row.artist_name || "Concert");
+
   return (
     <article className="rounded-3xl border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)] overflow-hidden">
       {/* header */}
@@ -351,7 +362,7 @@ function PostCard({ row }: { row: Row }) {
             className="text-[15px] leading-tight line-clamp-1"
             style={{ fontFamily: "Times New Roman, serif", fontWeight: 400 }}
           >
-            {row.artist_name || "Concert"}{row.tour ? ` — ${row.tour}` : ""}
+            {headerLeft}{row.tour ? ` — ${row.tour}` : ""}
           </div>
           <div className="text-[12px] text-neutral-500 leading-tight line-clamp-1">
             {row.city || ""}{row.country ? `, ${row.country}` : ""}{row.year ? ` · ${row.year}` : ""}
@@ -462,10 +473,10 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
       allowedUserIds = Array.from(ids);
     }
 
-    // 1) Concerts (página)
+    // 1) Concerts/Experiences (página)
     let cq = supabase
       .from("concerts")
-      .select("id,user_id,artist_id,city,country_code,event_date,tour_name,caption,created_at")
+      .select("id,user_id,artist_id,city,country_code,event_date,tour_name,caption,created_at,post_type,experience")
       .order(opts.scope === "for-you" ? "created_at" : "event_date", { ascending: false })
       .range(pageIndex * PAGE, pageIndex * PAGE + PAGE - 1);
 
@@ -506,7 +517,7 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
     const uName: Record<string, { username: string | null; avatar_url: string | null }> = {};
     (profs || []).forEach((p: any) => (uName[p.id] = { username: p.username, avatar_url: p.avatar_url }));
 
-    // 4) Likes y Comments (conteos) — sin .group()
+    // 4) Likes y Comments (conteos)
     const [{ data: likeRows }, { data: comRows }] = await Promise.all([
       supabase.from("concert_likes").select("concert_id").in("concert_id", concertIds),
       supabase.from("concert_comments").select("concert_id").in("concert_id", concertIds),
@@ -536,6 +547,8 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
       image_urls: (urlsByConcert[c.id] || []).slice(0, 12),
       like_count: likes[c.id] ?? 0,
       comment_count: comments[c.id] ?? 0,
+      post_type: c.post_type ?? null,
+      experience: c.experience ?? null,
     }));
 
     // Orden en "General": por likes desc, después fecha concierto desc
@@ -559,7 +572,7 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
         [...prev, ...data].forEach(r => map.set(r.concert_id, r));
         return Array.from(map.values());
       });
-      if (data.length < PAGE) setDone(true);
+      if (data.length < 10) setDone(true);
     })();
   }, [page, done]); // eslint-disable-line
 
@@ -585,7 +598,6 @@ export default function FeedPage() {
       </header>
 
       {/* título + tabs + user search */}
-      {/* ⬇️ Estrecho en móvil, cómodo en desktop */}
       <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-4">
         <h1 className="text-[clamp(1.6rem,5vw,2.4rem)] font-normal tracking-tight" style={{ fontFamily: "Times New Roman, serif" }}>
           The Wall
@@ -608,14 +620,13 @@ export default function FeedPage() {
       </div>
 
       {/* contenido: posts */}
-      {/* ⬇️ Igual ancho que el header */}
       <main className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pb-16">
         {tab === "friends" ? (
           <>
             <NowTouringRibbon />
             <div className="mt-6 flex flex-col gap-6">
               {friends.rows.map((r) => (
-                <PostCard key={r.concert_id} row={r} />
+                <PostCardFeed key={r.concert_id} row={r} />
               ))}
             </div>
             {!friends.done && (
@@ -628,7 +639,7 @@ export default function FeedPage() {
           <>
             <div className="flex flex-col gap-6">
               {general.rows.map((r) => (
-                <PostCard key={r.concert_id} row={r} />
+                <PostCardFeed key={r.concert_id} row={r} />
               ))}
             </div>
             {!general.done && (

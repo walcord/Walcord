@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabaseClient'
 
 type Props = { post: any }
 
+const cap = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
+
 export default function PostCard({ post }: Props) {
   const isConcert =
     !!post?.artist_id || !!post?.country_code || !!post?.event_date || !!post?.cover_url
@@ -138,6 +140,10 @@ export default function PostCard({ post }: Props) {
     } catch (err) { console.error(err); alert('Could not delete this post.') } finally { setDeleting(false) }
   }
 
+  // 👇 Encabezado: usar categoría cuando exista (post.experience || post.experience_type)
+  const experience = post?.experience || post?.experience_type || null
+  const headerLeft = experience ? cap(experience) : (artistName || 'Concert')
+
   return (
     <Link href={href} aria-label={`Open post ${post.id}`}>
       <article className="group relative aspect-square overflow-hidden rounded-2xl bg-neutral-100 shadow-sm hover:shadow transition-all hover:scale-[1.01] cursor-pointer w-full">
@@ -164,17 +170,17 @@ export default function PostCard({ post }: Props) {
         {bgUrl && <img src={bgUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-black/10" />
 
-        {/* Bloque colores (de un disco del artista) */}
+        {/* Bloque colores */}
         <div className="absolute bottom-2 right-2 md:bottom-3 md:right-3 rounded-xl shadow-md"
              style={{ width: '80px', height: '80px', backgroundColor: vibeSafe }}>
           <div className="absolute rounded-[6px]" style={{ inset: '26%', backgroundColor: coverSafe }} />
         </div>
 
         {/* Overlay Artist / Country */}
-        {(artistName || countryName) && (
+        {(headerLeft || countryName) && (
           <div className="pointer-events-none absolute left-2 bottom-2 md:left-3 md:bottom-3 rounded-lg bg-black/55 text-white px-2.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
                style={{ fontFamily: 'Roboto, Arial, sans-serif' }}>
-            {artistName && <div className="text-[0.82rem] leading-[1.1]">{artistName}</div>}
+            {headerLeft && <div className="text-[0.82rem] leading-[1.1]">{headerLeft}</div>}
             {countryName && <div className="mt-0.5 text-[0.7rem] opacity-90">{countryName}</div>}
           </div>
         )}
