@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
@@ -20,7 +21,7 @@ type ClipRow = {
   country: string | null;
   event_date: string | null;
   created_at: string | null;
-  kind?: 'concert' | 'other' | string | null;
+  kind?: 'concert' | 'experience' | string | null;
   experience?: 'ballet' | 'opera' | 'club' | string | null;
   profiles: ProfilesRelation;
 };
@@ -76,7 +77,8 @@ export default function TokVideoPage() {
     const { data, error } = await supabase
       .from('clips')
       .select(`
-        id, user_id, video_url, poster_url, caption, artist_name, venue, city, country, event_date, created_at,
+        id, user_id, video_url, poster_url, caption,
+        artist_name, venue, city, country, event_date, created_at,
         kind, experience,
         profiles:profiles(username)
       `)
@@ -101,7 +103,7 @@ export default function TokVideoPage() {
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
-  // Infinite scroll + scroll-snap vertical
+  // infinite scroll + scroll-snap vertical
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -123,11 +125,13 @@ export default function TokVideoPage() {
       ref={containerRef}
       className="h-screen w-screen overflow-y-scroll"
       style={{
-        background: '#FFFFFF', // FONDO BLANCO
+        background: '#FFFFFF', // fondo blanco
         scrollSnapType: 'y mandatory',
         WebkitOverflowScrolling: 'touch',
         fontFamily: "Roboto, system-ui, -apple-system, 'Segoe UI'",
         fontWeight: 300,
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
       {items.map((it) => (
@@ -142,11 +146,12 @@ export default function TokVideoPage() {
   );
 }
 
-/* ===== Card fullscreen con reproducción controlada ===== */
+/* ===== Card a pantalla casi completa ===== */
 function VideoCard({ item }: { item: ClipRow }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(false); // probamos con sonido y caemos a mute si falla
+  const [showHint, setShowHint] = useState(true);
 
   // Visibilidad para play/pause
   useEffect(() => {
@@ -163,7 +168,7 @@ function VideoCard({ item }: { item: ClipRow }) {
     return () => obs.unobserve(node);
   }, []);
 
-  // Autoplay con sonido si el navegador lo permite
+  // Autoplay con audio si el navegador lo permite
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -172,6 +177,7 @@ function VideoCard({ item }: { item: ClipRow }) {
       try {
         v.muted = false;
         await v.play();
+        setMuted(false);
       } catch {
         v.muted = true;
         setMuted(true);
@@ -200,72 +206,81 @@ function VideoCard({ item }: { item: ClipRow }) {
       className="relative h-screen w-screen flex items-center justify-center"
       style={{ scrollSnapAlign: 'start' }}
     >
-      {/* Contenedor centrado: vídeo GRANDE con márgenes */}
-      <div className="relative w-full max-w-[980px] px-4 sm:px-6 md:px-8">
-        {/* Marco del vídeo (no cubre la tarjeta) */}
-        <div className="w-full h-[72vh] md:h-[78vh] rounded-[28px] overflow-hidden bg-black/90 shadow-[0_18px_80px_rgba(0,0,0,0.18)] mx-auto">
-          <video
-            ref={videoRef}
-            src={item.video_url ?? undefined}
-            poster={item.poster_url ?? undefined}
-            className="w-full h-full object-cover"
-            loop
-            playsInline
-            preload="metadata"
-          />
-        </div>
-
-        {/* Tarjeta editorial FUERA del marco del vídeo */}
-        <a
+      <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
+        {/* Caja del vídeo: CASI TODO EL TELÉFONO */}
+        <Link
           href={`/u/${item.user_id ?? ''}`}
-          className="block mt-4 md:mt-6 no-underline"
+          className="block"
+          style={{ textDecoration: 'none' }}
         >
-          <div className="rounded-3xl border border-black/10 bg-white/90 backdrop-blur px-5 py-4 md:px-6 md:py-5 shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+          <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
+            <video
+              ref={videoRef}
+              src={item.video_url ?? undefined}
+              poster={item.poster_url ?? undefined}
+              className="w-full h-full object-cover"
+              loop
+              playsInline
+              preload="metadata"
+              // Nota: iOS puede bloquear autoplay con sonido; arriba lo gestionamos.
+            />
+          </div>
+        </Link>
+
+        {/* Tarjeta editorial grande, fuera del marco y más protagonista */}
+        <Link
+          href={`/u/${item.user_id ?? ''}`}
+          className="block no-underline"
+        >
+          <div className="mt-4 md:mt-6 rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_10px_36px_rgba(0,0,0,0.08)]">
             <div
-              className="text-[1.6rem] md:text-[2rem] leading-tight text-black"
+              className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
               style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
             >
               {primaryTitle}
             </div>
 
-            <div className="text-[0.98rem] md:text-[1.05rem] text-black/75 mt-1">
+            <div className="text-[1rem] md:text-[1.1rem] text-black/75 mt-1">
               {[item.city, item.country].filter(Boolean).join(', ')}
             </div>
 
             {editorialDate && (
-              <div className="text-[0.95rem] text-black/65 mt-0.5">
+              <div className="text-[0.98rem] text-black/65 mt-0.5">
                 {editorialDate}
               </div>
             )}
 
             {item.venue && (
-              <div className="text-[0.92rem] text-black/65 mt-0.5">
+              <div className="text-[0.98rem] text-black/65 mt-0.5">
                 {item.venue}
               </div>
             )}
 
             {username && (
-              <div className="text-sm text-black/55 mt-3">@{username}</div>
+              <div className="text-[0.95rem] text-black/55 mt-3">@{username}</div>
             )}
 
             {item.caption && (
-              <p className="text-[0.95rem] text-black/80 mt-3 leading-relaxed">
+              <p className="text-[1rem] text-black/80 mt-3 leading-relaxed">
                 {item.caption}
               </p>
             )}
           </div>
-        </a>
+        </Link>
 
-        {/* Botón mute/unmute discreto */}
+        {/* Botón sonido (el vídeo navega al perfil, así que el sonido va con este botón) */}
         <button
-          onClick={() => {
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const v = videoRef.current;
             if (!v) return;
             v.muted = !v.muted;
             setMuted(v.muted);
+            setShowHint(false);
             if (v.paused) { v.play().catch(()=>{}); }
           }}
-          className="absolute right-6 bottom-[18vh] md:bottom-[22vh] w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur"
+          className="absolute right-6 bottom-[22vh] md:bottom-[24vh] w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur"
           aria-label={muted ? 'Unmute' : 'Mute'}
           title={muted ? 'Unmute' : 'Mute'}
         >
@@ -281,6 +296,13 @@ function VideoCard({ item }: { item: ClipRow }) {
             </svg>
           )}
         </button>
+
+        {/* Hint “Tap for sound” (se oculta al pulsar el botón) */}
+        {showHint && muted && (
+          <div className="absolute left-6 bottom-[22vh] md:bottom-[24vh] rounded-full bg-black/55 text-white/95 text-xs px-3 py-2">
+            Tap for sound
+          </div>
+        )}
       </div>
     </section>
   );
