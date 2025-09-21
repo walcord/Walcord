@@ -61,7 +61,7 @@ export default function TokPage() {
     setErr(null);
     const from = pageIndex * PAGE_SIZE;
 
-    // 1) Trae clips (sin join)
+    // 1) Trae clips (sin join para evitar FKs no declaradas)
     const { data, error } = await supabase
       .from('clips')
       .select(`
@@ -73,7 +73,6 @@ export default function TokPage() {
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) {
-      console.error('clips select error:', error);
       setErr(error.message);
       setLoading(false);
       return;
@@ -82,7 +81,7 @@ export default function TokPage() {
     const batch = (data as ClipRow[]) ?? [];
     setItems(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
 
-    // 2) Trae usernames aparte (solo los que falten)
+    // 2) usernames aparte
     const ids = Array.from(new Set(batch.map(b => b.user_id).filter(Boolean) as string[]))
       .filter(id => !(id in usernames));
     if (ids.length) {
@@ -91,10 +90,7 @@ export default function TokPage() {
         .select('id, username')
         .in('id', ids)
         .limit(1000);
-      if (perr) {
-        console.error('profiles select error:', perr);
-        setErr(perr.message);
-      } else if (profs?.length) {
+      if (!perr && profs?.length) {
         const map: Record<string, string | null> = {};
         (profs as Profile[]).forEach(p => { map[p.id] = p.username ?? null; });
         setUsernames(prev => ({ ...prev, ...map }));
@@ -160,7 +156,6 @@ export default function TokPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {/* Estados vacíos/errores visibles (para no ver pantalla en blanco) */}
       {err && (
         <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">
           {err}
@@ -188,7 +183,7 @@ export default function TokPage() {
   );
 }
 
-/* ===== Sección: vídeo GRANDE + tarjeta editorial ===== */
+/* ===== Sección: vídeo GRANDE + tarjeta editorial CRUZADA con el vídeo ===== */
 function Section({
   clip,
   username,
@@ -198,6 +193,8 @@ function Section({
   username: string | null;
   registerVideo: (el: HTMLVideoElement | null) => void;
 }) {
+  const localVidRef = useRef<HTMLVideoElement | null>(null);
+
   const isConcert = (clip.kind ?? 'concert') === 'concert';
   const title = isConcert && clip.artist_name
     ? clip.artist_name
@@ -210,12 +207,13 @@ function Section({
       className="relative h-screen w-screen flex items-center justify-center"
       style={{ scrollSnapAlign: 'start' }}
     >
-      <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
-        {/* Vídeo casi a pantalla completa; al tocar → perfil */}
+      {/* Wrapper relativo para poder superponer la tarjeta */}
+      <div className="relative w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
+        {/* VÍDEO: ocupa casi toda la pantalla. Clic → perfil del usuario */}
         <Link href={`/u/${clip.user_id ?? ''}`} className="block no-underline">
-          <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
+          <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
             <video
-              ref={registerVideo}
+              ref={(el) => { registerVideo(el); localVidRef.current = el; }}
               src={clip.video_url ?? undefined}
               poster={clip.poster_url ?? undefined}
               className="w-full h-full object-cover"
@@ -223,12 +221,33 @@ function Section({
               playsInline
               preload="metadata"
             />
+            {/* Botón de sonido, dentro del marco y sobre la tarjeta */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const v = localVidRef.current;
+                if (!v) return;
+                v.muted = !v.muted;
+                if (v.paused) v.play().catch(() => {});
+              }}
+              className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur"
+              aria-label="Toggle sound"
+              title="Sound"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M5 9v6h4l5 5V4L9 9H5z" />
+                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
+              </svg>
+            </button>
           </div>
         </Link>
 
-        {/* Tarjeta editorial fuera del marco */}
+        {/* TARJETA: cruzando el borde inferior del vídeo (parte dentro y parte fuera) */}
         <Link href={`/u/${clip.user_id ?? ''}`} className="block no-underline">
-          <div className="mt-4 md:mt-6 rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_10px_36px_rgba(0,0,0,0.08)]">
+          <div
+            className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)]"
+          >
             <div
               className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
               style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
@@ -242,26 +261,6 @@ function Section({
             {clip.caption && <p className="text-[1rem] text-black/80 mt-3 leading-relaxed">{clip.caption}</p>}
           </div>
         </Link>
-
-        {/* Botón de sonido (necesario por autoplay policies en iOS/simulator) */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const v = document.querySelector<HTMLVideoElement>('video');
-            if (!v) return;
-            v.muted = !v.muted;
-            if (v.paused) v.play().catch(() => {});
-          }}
-          className="absolute right-6 bottom-[22vh] md:bottom-[24vh] w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur"
-          aria-label="Toggle sound"
-          title="Sound"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M5 9v6h4l5 5V4L9 9H5z" />
-            <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
-          </svg>
-        </button>
       </div>
     </section>
   );
