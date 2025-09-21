@@ -44,7 +44,7 @@ function formatEditorialDate(iso: string | null | undefined) {
   }
 }
 
-/* ===== Página: feed vertical a pantalla casi completa ===== */
+/* ===== Página: feed vertical ===== */
 export default function TokPage() {
   const supabase = createClientComponentClient();
   const [items, setItems] = useState<ClipRow[]>([]);
@@ -61,7 +61,7 @@ export default function TokPage() {
     setErr(null);
     const from = pageIndex * PAGE_SIZE;
 
-    // 1) Trae clips (sin join para evitar FKs no declaradas)
+    // 1) clips (sin join)
     const { data, error } = await supabase
       .from('clips')
       .select(`
@@ -85,16 +85,14 @@ export default function TokPage() {
     const ids = Array.from(new Set(batch.map(b => b.user_id).filter(Boolean) as string[]))
       .filter(id => !(id in usernames));
     if (ids.length) {
-      const { data: profs, error: perr } = await supabase
+      const { data: profs } = await supabase
         .from('profiles')
         .select('id, username')
         .in('id', ids)
         .limit(1000);
-      if (!perr && profs?.length) {
-        const map: Record<string, string | null> = {};
-        (profs as Profile[]).forEach(p => { map[p.id] = p.username ?? null; });
-        setUsernames(prev => ({ ...prev, ...map }));
-      }
+      const map: Record<string, string | null> = {};
+      (profs as Profile[] | null)?.forEach(p => { map[p.id] = p.username ?? null; });
+      setUsernames(prev => ({ ...prev, ...map }));
     }
 
     setLoading(false);
@@ -119,7 +117,7 @@ export default function TokPage() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
-  // Auto play/pause del vídeo visible
+  // Auto play/pause y focus en el clip visible
   useEffect(() => {
     const container = scrollerRef.current;
     if (!container) return;
@@ -183,7 +181,7 @@ export default function TokPage() {
   );
 }
 
-/* ===== Sección: vídeo GRANDE + tarjeta editorial CRUZADA con el vídeo ===== */
+/* ===== Sección: vídeo + tarjeta (cruzada), con fixes de SONIDO y navegación ===== */
 function Section({
   clip,
   username,
@@ -202,15 +200,18 @@ function Section({
   const place = [clip.city, clip.country].filter(Boolean).join(', ');
   const prettyDate = formatEditorialDate(clip.event_date);
 
+  // Prefiere username si existe, si no id
+  const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
+
   return (
     <section
       className="relative h-screen w-screen flex items-center justify-center"
       style={{ scrollSnapAlign: 'start' }}
     >
-      {/* Wrapper relativo para poder superponer la tarjeta */}
-      <div className="relative w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
-        {/* VÍDEO: ocupa casi toda la pantalla. Clic → perfil del usuario */}
-        <Link href={`/u/${clip.user_id ?? ''}`} className="block no-underline">
+      {/* z-index ALTO para quedar por encima de la bottom bar y que el click vaya al perfil */}
+      <div className="relative z-[99] w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
+        {/* VÍDEO casi full-screen. Click → perfil */}
+        <Link href={profileHref} className="block no-underline">
           <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
             <video
               ref={(el) => { registerVideo(el); localVidRef.current = el; }}
@@ -221,15 +222,18 @@ function Section({
               playsInline
               preload="metadata"
             />
-            {/* Botón de sonido, dentro del marco y sobre la tarjeta */}
+            {/* Botón de sonido (fix iOS: pausa → desmutea → play en gesto de usuario) */}
             <button
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 const v = localVidRef.current;
                 if (!v) return;
+                try { v.pause(); } catch {}
                 v.muted = !v.muted;
-                if (v.paused) v.play().catch(() => {});
+                // nudge para algunos navegadores
+                try { v.currentTime = Math.max(0, v.currentTime - 0.001); } catch {}
+                v.play().catch(() => {});
               }}
               className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur"
               aria-label="Toggle sound"
@@ -243,8 +247,8 @@ function Section({
           </div>
         </Link>
 
-        {/* TARJETA: cruzando el borde inferior del vídeo (parte dentro y parte fuera) */}
-        <Link href={`/u/${clip.user_id ?? ''}`} className="block no-underline">
+        {/* TARJETA cruzando el borde inferior del vídeo. Click → perfil */}
+        <Link href={profileHref} className="block no-underline">
           <div
             className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)]"
           >
