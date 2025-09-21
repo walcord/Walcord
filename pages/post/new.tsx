@@ -523,7 +523,7 @@ export default function NewPostPage() {
               </div>
 
               {/* Caption */}
-              <div className="mb-5 sm:mb-6">
+              <div className="hidden">
                 <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                   Caption (optional)
                 </label>
