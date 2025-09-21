@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
@@ -25,7 +25,6 @@ type ClipRow = {
 type Profile = { id: string; username: string | null };
 
 const PAGE_SIZE = 24;
-const NAVY = '#0B1440';
 
 /* ===== Utils ===== */
 function ordinal(n: number) {
@@ -70,7 +69,6 @@ export default function Tok() {
     setLoading(true);
     const from = pageIndex * PAGE_SIZE;
 
-    // 1) clips
     const { data, error } = await supabase
       .from('clips')
       .select(`
@@ -85,10 +83,8 @@ export default function Tok() {
       const batch = shuffle(data as ClipRow[]);
       setClips(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
 
-      // 2) usernames (evita join por si no hay FK declarada)
-      const ids = Array.from(
-        new Set(batch.map(b => b.user_id).filter(Boolean) as string[])
-      ).filter(id => !(id in usernames));
+      const ids = Array.from(new Set(batch.map(b => b.user_id).filter(Boolean) as string[]))
+        .filter(id => !(id in usernames));
       if (ids.length) {
         const { data: profs } = await supabase
           .from('profiles')
@@ -122,30 +118,20 @@ export default function Tok() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
-  // IntersectionObserver: reproduce solo la tarjeta visible
+  // Observer para auto-play del vídeo visible dentro de su tarjeta
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
-
     const io = new IntersectionObserver(
       entries => {
         entries.forEach(async e => {
           const vid = e.target as HTMLVideoElement;
           if (e.isIntersecting && e.intersectionRatio >= 0.6) {
-            // Pausa los demás
             videos.current.forEach(v => {
-              if (v !== vid) {
-                try { v.pause(); v.currentTime = 0; } catch {}
-              }
+              if (v !== vid) { try { v.pause(); v.currentTime = 0; } catch {} }
             });
-            // Intenta con sonido, si falla → mute
-            try {
-              vid.muted = false;
-              await vid.play();
-            } catch {
-              vid.muted = true;
-              try { await vid.play(); } catch {}
-            }
+            try { vid.muted = false; await vid.play(); }
+            catch { vid.muted = true; try { await vid.play(); } catch {} }
           } else {
             try { vid.pause(); } catch {}
           }
@@ -153,7 +139,6 @@ export default function Tok() {
       },
       { root, threshold: [0, 0.6, 1] }
     );
-
     videos.current.forEach(v => io.observe(v));
     return () => io.disconnect();
   }, [clips.length]);
@@ -163,8 +148,7 @@ export default function Tok() {
       ref={containerRef}
       className="min-h-screen w-full overflow-y-auto"
       style={{
-        background: NAVY,
-        // suaviza el corte con las barras blancas superior/inferior del dispositivo
+        background: '#FFFFFF', // FONDO BLANCO
         paddingTop: 'max(env(safe-area-inset-top), 10px)',
         paddingBottom: 'calc(env(safe-area-inset-bottom) + 18px)',
         WebkitOverflowScrolling: 'touch',
@@ -172,15 +156,8 @@ export default function Tok() {
         fontWeight: 300,
       }}
     >
-      {/* degradados para que no se vea un corte brusco */}
-      <div aria-hidden className="pointer-events-none fixed left-0 right-0 top-0 h-6"
-           style={{ background: `linear-gradient(180deg, ${NAVY} 0%, rgba(11,20,64,0) 100%)` }}/>
-      <div aria-hidden className="pointer-events-none fixed left-0 right-0 bottom-0 h-8"
-           style={{ background: `linear-gradient(0deg, ${NAVY} 0%, rgba(11,20,64,0) 100%)` }}/>
-
-      {/* Grid de cajitas */}
       <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8">
-        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6 py-8">
+        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-6 md:gap-8 py-10">
           {clips.map((c) => (
             <li key={c.id}>
               <ClipCard
@@ -192,13 +169,13 @@ export default function Tok() {
           ))}
         </ul>
 
-        {loading && <div className="text-center text-white/70 py-8">Loading…</div>}
+        {loading && <div className="text-center text-black/50 py-10">Loading…</div>}
       </div>
     </div>
   );
 }
 
-/* ===== Tarjeta cuadrada ===== */
+/* ===== Tarjeta cuadrada grande y limpia ===== */
 function ClipCard({
   clip,
   username,
@@ -221,7 +198,8 @@ function ClipCard({
 
   return (
     <Link href={`/u/${clip.user_id ?? ''}`} className="group block no-underline">
-      <div className="relative aspect-square rounded-3xl overflow-hidden bg-[#0A1033] shadow-[0_12px_40px_rgba(0,0,0,0.5)]">
+      {/* Marco del vídeo más grande y centrado dentro de la tarjeta */}
+      <div className="relative aspect-[4/5] rounded-[28px] overflow-hidden bg-black/90 shadow-[0_18px_80px_rgba(0,0,0,0.12)]">
         <video
           data-id={clip.id}
           ref={register}
@@ -232,42 +210,33 @@ function ClipCard({
           playsInline
           preload="metadata"
         />
-        <div className="absolute inset-0 rounded-3xl ring-1 ring-white/10 pointer-events-none" />
-
-        {/* rótulo inferior */}
-        <div className="absolute left-0 right-0 bottom-0 p-3 md:p-4">
-          <div className="rounded-2xl px-3 py-2 md:px-4 md:py-[10px] backdrop-blur bg-[rgba(7,12,36,0.55)] ring-1 ring-white/10">
-            <div
-              className="truncate text-white leading-snug text-[1.05rem] md:text-[1.15rem]"
-              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
-              title={title ?? undefined}
-            >
-              {title}
-            </div>
-            <div className="mt-0.5 text-[0.78rem] md:text-[0.85rem] text-white/85 truncate">
-              {place}
-            </div>
-            <div className="text-[0.74rem] md:text-[0.8rem] text-white/70 truncate">
-              {datePretty}
-            </div>
-          </div>
-        </div>
-
-        {/* caption (si existe) */}
-        {clip.caption && (
-          <div className="absolute top-0 left-0 right-0 p-2 md:p-3">
-            <div className="max-h-[38%] overflow-hidden text-ellipsis">
-              <p className="text-[0.75rem] md:text-[0.85rem] leading-snug text-white/80">
-                {clip.caption}
-              </p>
-            </div>
-          </div>
-        )}
       </div>
 
-      {username && (
-        <div className="mt-2 text-white/60 text-sm">@{username}</div>
-      )}
+      {/* Tarjeta editorial fuera del marco, debajo */}
+      <div className="mt-3 rounded-3xl border border-black/10 bg-white/90 backdrop-blur px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
+        <div
+          className="truncate text-black text-[1.25rem] leading-tight"
+          style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
+          title={title ?? undefined}
+        >
+          {title}
+        </div>
+        <div className="mt-0.5 text-[0.95rem] text-black/75 truncate">{place}</div>
+        {datePretty && (
+          <div className="text-[0.9rem] text-black/65 truncate">{datePretty}</div>
+        )}
+        {clip.venue && (
+          <div className="text-[0.9rem] text-black/60 truncate">{clip.venue}</div>
+        )}
+        {username && (
+          <div className="text-sm text-black/55 mt-2">@{username}</div>
+        )}
+        {clip.caption && (
+          <p className="text-[0.95rem] text-black/80 mt-2 leading-relaxed">
+            {clip.caption}
+          </p>
+        )}
+      </div>
     </Link>
   );
 }

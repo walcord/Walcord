@@ -86,7 +86,6 @@ export default function TokVideoPage() {
     if (!error && data) {
       const rows = shuffleInPlace([...data]) as ClipRow[];
 
-      // si llega id inicial, ponlo primero la primera vez
       if (pageIndex === 0 && id) {
         const idx = rows.findIndex(d => d.id === id);
         if (idx > 0) {
@@ -100,11 +99,9 @@ export default function TokVideoPage() {
     setLoading(false);
   }, [supabase, id]);
 
-  useEffect(() => {
-    fetchPage(0);
-  }, [fetchPage]);
+  useEffect(() => { fetchPage(0); }, [fetchPage]);
 
-  // infinite scroll con scroll-snap vertical
+  // Infinite scroll + scroll-snap vertical
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -126,7 +123,7 @@ export default function TokVideoPage() {
       ref={containerRef}
       className="h-screen w-screen overflow-y-scroll"
       style={{
-        background: '#0B1440',
+        background: '#FFFFFF', // FONDO BLANCO
         scrollSnapType: 'y mandatory',
         WebkitOverflowScrolling: 'touch',
         fontFamily: "Roboto, system-ui, -apple-system, 'Segoe UI'",
@@ -137,7 +134,7 @@ export default function TokVideoPage() {
         <VideoCard key={it.id} item={it} />
       ))}
       {loading && (
-        <div className="h-[25vh] flex items-center justify-center text-white/70">
+        <div className="h-[25vh] flex items-center justify-center text-black/50">
           Loading…
         </div>
       )}
@@ -149,22 +146,24 @@ export default function TokVideoPage() {
 function VideoCard({ item }: { item: ClipRow }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [muted, setMuted] = useState(false); // intentamos con sonido
+  const [muted, setMuted] = useState(false);
 
+  // Visibilidad para play/pause
   useEffect(() => {
     const node = videoRef.current;
     if (!node) return;
     const obs = new IntersectionObserver(
       (entries) => {
         const e = entries[0];
-        setIsVisible(e.isIntersecting && e.intersectionRatio >= 0.65);
+        setIsVisible(e.isIntersecting && e.intersectionRatio >= 0.7);
       },
-      { threshold: [0, 0.65, 1] }
+      { threshold: [0, 0.7, 1] }
     );
     obs.observe(node);
     return () => obs.unobserve(node);
   }, []);
 
+  // Autoplay con sonido si el navegador lo permite
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -174,7 +173,6 @@ function VideoCard({ item }: { item: ClipRow }) {
         v.muted = false;
         await v.play();
       } catch {
-        // Autoplay con audio bloqueado → mute y reintenta
         v.muted = true;
         setMuted(true);
         try { await v.play(); } catch {}
@@ -202,10 +200,10 @@ function VideoCard({ item }: { item: ClipRow }) {
       className="relative h-screen w-screen flex items-center justify-center"
       style={{ scrollSnapAlign: 'start' }}
     >
-      {/* Lienzo */}
-      <div className="relative w-[100vw] h-[100vh] flex items-center justify-center">
-        {/* Caja de vídeo centrada y grande */}
-        <div className="absolute left-1/2 -translate-x-[52%] md:-translate-x-[55%] w-[88vw] md:w-[70vw] h-[78vh] md:h-[82vh] rounded-3xl overflow-hidden bg-[#0A1033] shadow-[0_14px_60px_rgba(0,0,0,0.5)]">
+      {/* Contenedor centrado: vídeo GRANDE con márgenes */}
+      <div className="relative w-full max-w-[980px] px-4 sm:px-6 md:px-8">
+        {/* Marco del vídeo (no cubre la tarjeta) */}
+        <div className="w-full h-[72vh] md:h-[78vh] rounded-[28px] overflow-hidden bg-black/90 shadow-[0_18px_80px_rgba(0,0,0,0.18)] mx-auto">
           <video
             ref={videoRef}
             src={item.video_url ?? undefined}
@@ -215,65 +213,68 @@ function VideoCard({ item }: { item: ClipRow }) {
             playsInline
             preload="metadata"
           />
-          <div className="absolute inset-0 rounded-3xl ring-1 ring-white/6 pointer-events-none" />
         </div>
 
-        {/* Rótulo editorial a la derecha */}
+        {/* Tarjeta editorial FUERA del marco del vídeo */}
         <a
           href={`/u/${item.user_id ?? ''}`}
-          className="absolute right-[4vw] md:right-[6vw] top-1/2 -translate-y-1/2 w-[70vw] md:w-[26vw] text-white no-underline"
+          className="block mt-4 md:mt-6 no-underline"
         >
-          <div
-            className="text-[1.8rem] md:text-[2.2rem] leading-tight"
-            style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
-          >
-            {primaryTitle}
+          <div className="rounded-3xl border border-black/10 bg-white/90 backdrop-blur px-5 py-4 md:px-6 md:py-5 shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+            <div
+              className="text-[1.6rem] md:text-[2rem] leading-tight text-black"
+              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
+            >
+              {primaryTitle}
+            </div>
+
+            <div className="text-[0.98rem] md:text-[1.05rem] text-black/75 mt-1">
+              {[item.city, item.country].filter(Boolean).join(', ')}
+            </div>
+
+            {editorialDate && (
+              <div className="text-[0.95rem] text-black/65 mt-0.5">
+                {editorialDate}
+              </div>
+            )}
+
+            {item.venue && (
+              <div className="text-[0.92rem] text-black/65 mt-0.5">
+                {item.venue}
+              </div>
+            )}
+
+            {username && (
+              <div className="text-sm text-black/55 mt-3">@{username}</div>
+            )}
+
+            {item.caption && (
+              <p className="text-[0.95rem] text-black/80 mt-3 leading-relaxed">
+                {item.caption}
+              </p>
+            )}
           </div>
-
-          <div className="text-base md:text-lg text-white/85 mt-2">
-            {[item.city, item.country].filter(Boolean).join(', ')}
-          </div>
-
-          {item.venue && (
-            <div className="text-sm md:text-base text-white/80 mt-1">{item.venue}</div>
-          )}
-
-          {editorialDate && (
-            <div className="text-sm md:text-base text-white/70 mt-1">{editorialDate}</div>
-          )}
-
-          {item.caption && (
-            <p className="text-sm md:text-[0.95rem] text-white/80 mt-4 leading-relaxed">
-              {item.caption}
-            </p>
-          )}
-
-          {username && (
-            <div className="text-sm text-white/60 mt-4">@{username}</div>
-          )}
         </a>
 
-        {/* Botón mute/unmute (discreto) */}
+        {/* Botón mute/unmute discreto */}
         <button
           onClick={() => {
             const v = videoRef.current;
             if (!v) return;
             v.muted = !v.muted;
             setMuted(v.muted);
-            if (v.paused) {
-              v.play().catch(()=>{});
-            }
+            if (v.paused) { v.play().catch(()=>{}); }
           }}
-          className="absolute left-[4vw] bottom-[6vh] w-11 h-11 rounded-full bg-white/12 backdrop-blur flex items-center justify-center"
+          className="absolute right-6 bottom-[18vh] md:bottom-[22vh] w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur"
           aria-label={muted ? 'Unmute' : 'Mute'}
           title={muted ? 'Unmute' : 'Mute'}
         >
           {muted ? (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M5 9v6h4l5 5V4L9 9H5z" />
             </svg>
           ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M5 9v6h4l5 5V4L9 9H5z" />
               <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
               <path d="M19 12c0 3.04-1.72 5.64-4.24 6.93l.76 1.85C18.09 19.72 20 16.09 20 12s-1.91-7.72-4.48-8.78l-.76 1.85C17.28 6.36 19 8.96 19 12z"/>
