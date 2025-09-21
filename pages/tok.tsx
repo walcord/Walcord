@@ -1,13 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 /* ===== Tipos ===== */
-type ProfileSlim = { username: string | null };
-type ProfilesRelation = ProfileSlim | ProfileSlim[] | null;
-
 type ClipRow = {
   id: string;
   user_id: string | null;
@@ -21,20 +18,16 @@ type ClipRow = {
   event_date: string | null; // ISO
   duration_seconds: number | null;
   created_at: string | null;
-  kind?: 'concert' | 'other' | string | null;
+  kind?: 'concert' | 'experience' | string | null;
   experience?: 'ballet' | 'opera' | 'club' | string | null;
-  profiles: ProfilesRelation;
 };
+
+type Profile = { id: string; username: string | null };
 
 const PAGE_SIZE = 24;
 const NAVY = '#0B1440';
 
 /* ===== Utils ===== */
-function getUsername(p: ProfilesRelation): string | null {
-  if (!p) return null;
-  if (Array.isArray(p)) return p[0]?.username ?? null;
-  return p.username ?? null;
-}
 function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -65,6 +58,7 @@ function shuffle<T>(arr: T[]) {
 export default function Tok() {
   const supabase = createClientComponentClient();
   const [clips, setClips] = useState<ClipRow[]>([]);
+  const [usernames, setUsernames] = useState<Record<string, string | null>>({});
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -76,24 +70,38 @@ export default function Tok() {
     setLoading(true);
     const from = pageIndex * PAGE_SIZE;
 
+    // 1) clips
     const { data, error } = await supabase
       .from('clips')
       .select(`
         id, user_id, video_url, poster_url, caption,
         artist_name, venue, city, country, event_date,
-        duration_seconds, created_at, kind, experience,
-        profiles:profiles(username)
+        duration_seconds, created_at, kind, experience
       `)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
     if (!error && data) {
-      setClips(prev =>
-        pageIndex === 0 ? shuffle(data as ClipRow[]) : [...prev, ...shuffle(data as ClipRow[])]
-      );
+      const batch = shuffle(data as ClipRow[]);
+      setClips(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
+
+      // 2) usernames (evita join por si no hay FK declarada)
+      const ids = Array.from(
+        new Set(batch.map(b => b.user_id).filter(Boolean) as string[])
+      ).filter(id => !(id in usernames));
+      if (ids.length) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, username')
+          .in('id', ids)
+          .limit(1000);
+        const map: Record<string, string | null> = {};
+        (profs as Profile[] | null)?.forEach(p => { map[p.id] = p.username ?? null; });
+        setUsernames(prev => ({ ...prev, ...map }));
+      }
     }
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, usernames]);
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
@@ -123,7 +131,6 @@ export default function Tok() {
       entries => {
         entries.forEach(async e => {
           const vid = e.target as HTMLVideoElement;
-          const id = vid.dataset.id!;
           if (e.isIntersecting && e.intersectionRatio >= 0.6) {
             // Pausa los demás
             videos.current.forEach(v => {
@@ -134,7 +141,6 @@ export default function Tok() {
             // Intenta con sonido, si falla → mute
             try {
               vid.muted = false;
-              // @ts-ignore - algunos navegadores requieren playsInline+autoplay state
               await vid.play();
             } catch {
               vid.muted = true;
@@ -158,7 +164,7 @@ export default function Tok() {
       className="min-h-screen w-full overflow-y-auto"
       style={{
         background: NAVY,
-        // amortigua el corte con las barras blancas superiores/inferiores del dispositivo
+        // suaviza el corte con las barras blancas superior/inferior del dispositivo
         paddingTop: 'max(env(safe-area-inset-top), 10px)',
         paddingBottom: 'calc(env(safe-area-inset-bottom) + 18px)',
         WebkitOverflowScrolling: 'touch',
@@ -166,48 +172,27 @@ export default function Tok() {
         fontWeight: 300,
       }}
     >
-      {/* Overlays para que el corte no sea brusco en iOS (top/bottom) */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed left-0 right-0 top-0 h-6"
-        style={{
-          background: `linear-gradient(180deg, ${NAVY} 0%, rgba(11,20,64,0) 100%)`,
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed left-0 right-0 bottom-0 h-8"
-        style={{
-          background: `linear-gradient(0deg, ${NAVY} 0%, rgba(11,20,64,0) 100%)`,
-        }}
-      />
+      {/* degradados para que no se vea un corte brusco */}
+      <div aria-hidden className="pointer-events-none fixed left-0 right-0 top-0 h-6"
+           style={{ background: `linear-gradient(180deg, ${NAVY} 0%, rgba(11,20,64,0) 100%)` }}/>
+      <div aria-hidden className="pointer-events-none fixed left-0 right-0 bottom-0 h-8"
+           style={{ background: `linear-gradient(0deg, ${NAVY} 0%, rgba(11,20,64,0) 100%)` }}/>
 
-      {/* Grid de cajitas cuadradas */}
+      {/* Grid de cajitas */}
       <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8">
-        <h1
-          className="sr-only"
-          style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
-        >
-          Tok
-        </h1>
-
         <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6 py-8">
           {clips.map((c) => (
             <li key={c.id}>
               <ClipCard
                 clip={c}
-                register={(el) => {
-                  if (!el) return;
-                  videos.current.set(c.id, el);
-                }}
+                username={c.user_id ? usernames[c.user_id] ?? null : null}
+                register={(el) => { if (el) videos.current.set(c.id, el); }}
               />
             </li>
           ))}
         </ul>
 
-        {loading && (
-          <div className="text-center text-white/70 py-8">Loading…</div>
-        )}
+        {loading && <div className="text-center text-white/70 py-8">Loading…</div>}
       </div>
     </div>
   );
@@ -216,12 +201,13 @@ export default function Tok() {
 /* ===== Tarjeta cuadrada ===== */
 function ClipCard({
   clip,
+  username,
   register,
 }: {
   clip: ClipRow;
+  username: string | null;
   register: (el: HTMLVideoElement | null) => void;
 }) {
-  const username = getUsername(clip.profiles);
   const isConcert = (clip.kind ?? 'concert') === 'concert';
   const title =
     (isConcert && clip.artist_name)
@@ -246,7 +232,6 @@ function ClipCard({
           playsInline
           preload="metadata"
         />
-        {/* borde interno sutil */}
         <div className="absolute inset-0 rounded-3xl ring-1 ring-white/10 pointer-events-none" />
 
         {/* rótulo inferior */}
@@ -259,18 +244,16 @@ function ClipCard({
             >
               {title}
             </div>
-
             <div className="mt-0.5 text-[0.78rem] md:text-[0.85rem] text-white/85 truncate">
               {place}
             </div>
-
             <div className="text-[0.74rem] md:text-[0.8rem] text-white/70 truncate">
               {datePretty}
             </div>
           </div>
         </div>
 
-        {/* caption (solo si existe) */}
+        {/* caption (si existe) */}
         {clip.caption && (
           <div className="absolute top-0 left-0 right-0 p-2 md:p-3">
             <div className="max-h-[38%] overflow-hidden text-ellipsis">
