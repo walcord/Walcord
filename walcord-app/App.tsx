@@ -5,7 +5,6 @@ import '../styles/globals.css'
 import { SessionContextProvider } from '@supabase/auth-helpers-react'
 import Supabase, { supabase } from '../lib/supabaseClient' // ambas formas por compatibilidad
 import AuthProvider from '../components/AuthProvider'
-
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 
@@ -70,14 +69,4 @@ export default function MyApp({ Component, pageProps }: AppProps) {
     if (is) html.classList.add('is-app')
     else html.classList.remove('is-app')
   }, [])
-
-  return (
-    // ✅ usa SIEMPRE el cliente estable (cualquiera de los dos es el mismo)
-    <SessionContextProvider supabaseClient={Supabase ?? supabase} initialSession={pageProps?.initialSession}>
-      <AuthProvider>
-        {isApp && <AppButtons pathname={router.pathname} />}
-        <Component {...pageProps} />
-      </AuthProvider>
-    </SessionContextProvider>
-  )
 }

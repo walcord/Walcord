@@ -15,6 +15,8 @@ type Concert = {
   tour_name: string | null;
   caption: string | null;
   created_at: string | null;
+  post_type?: 'concert' | 'experience' | null;
+  experience?: string | null; // ballet / opera / club / ...
 };
 
 type MediaItem = { id: string; url: string; type: 'image' | 'video' };
@@ -38,19 +40,7 @@ function BackArrow() {
   );
 }
 
-/* ========= Icono Vinilo ========= */
-function VinylIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="32" height="32" viewBox="0 0 48 48" aria-hidden="true">
-      <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.9" />
-      <circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.7" />
-      <circle cx="24" cy="24" r="10" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.5" />
-      <circle cx="24" cy="24" r="6" fill={active ? 'currentColor' : 'transparent'} stroke="currentColor" strokeWidth="1" />
-      <circle cx="24" cy="24" r="1.5" fill={active ? 'white' : 'currentColor'} />
-    </svg>
-  );
-}
+const cap = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
 export default function ConcertViewer() {
   const router = useRouter();
@@ -80,17 +70,26 @@ export default function ConcertViewer() {
   }, [id, user?.id]);
 
   async function loadConcert(concertId: string) {
-    const { data } = await supabase.from('concerts').select('*').eq('id', concertId).single();
+    const { data } = await supabase
+      .from('concerts')
+      .select('id,user_id,artist_id,country_code,city,event_date,tour_name,caption,created_at,post_type,experience')
+      .eq('id', concertId)
+      .single();
+
     if (!data) return;
     setConcert(data as Concert);
 
     if (data.artist_id) {
       const { data: a } = await supabase.from('artists').select('name').eq('id', data.artist_id).single();
       if (a?.name) setArtistName(a.name);
+    } else {
+      setArtistName('');
     }
     if (data.country_code) {
       const { data: c } = await supabase.from('countries').select('name').eq('code', data.country_code).single();
       if (c?.name) setCountryName(c.name);
+    } else {
+      setCountryName('');
     }
   }
 
@@ -161,9 +160,16 @@ export default function ConcertViewer() {
     }
   }, [concert?.event_date]);
 
+  // 👇 Encabezado principal: categoría si post_type='experience', si no, artista o 'Concert'
+  const headerTitle = concert?.post_type === 'experience' && concert.experience
+    ? cap(concert.experience)
+    : (artistName || 'Concert');
+
+  const userLiked = iLike;
+
   const handleLike = async () => {
     if (!user?.id || !id) return;
-    if (iLike) {
+    if (userLiked) {
       await supabase.from('concert_likes').delete().eq('concert_id', id).eq('user_id', user.id);
       setILike(false);
       setLikesCount((c) => Math.max(0, c - 1));
@@ -192,7 +198,7 @@ export default function ConcertViewer() {
         </button>
         <div className="ml-3 min-w-0 pb-0.5">
           <h1 className="truncate text-white text-[16px] sm:text-[18px]" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
-            {artistName || 'Concert'}
+            {headerTitle}
           </h1>
           <p className="truncate text-white/80 text-[12px]" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
             {concert?.tour_name ? `${concert.tour_name} — ` : ''}
@@ -213,7 +219,7 @@ export default function ConcertViewer() {
           </p>
         )}
 
-        {/* Bloque media siempre con margen arriba */}
+        {/* Media */}
         {loading ? (
           <p className="text-sm text-black/60">Loading…</p>
         ) : media.length > 0 ? (
@@ -253,12 +259,19 @@ export default function ConcertViewer() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleLike}
-              aria-label={iLike ? 'Unlike' : 'Like'}
+              aria-label={userLiked ? 'Unlike' : 'Like'}
               className={`inline-flex items-center gap-2 transition-transform active:scale-95 ${
-                iLike ? 'text-[#1F48AF]' : 'text-neutral-600 hover:text-neutral-800'
+                userLiked ? 'text-[#1F48AF]' : 'text-neutral-600 hover:text-neutral-800'
               }`}
             >
-              <VinylIcon active={iLike} />
+              <svg width="32" height="32" viewBox="0 0 48 48" aria-hidden="true">
+                <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.9" />
+                <circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.7" />
+                <circle cx="24" cy="24" r="10" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.5" />
+                <circle cx="24" cy="24" r="6" fill={userLiked ? 'currentColor' : 'transparent'} stroke="currentColor" strokeWidth="1" />
+                <circle cx="24" cy="24" r="1.5" fill={userLiked ? 'white' : 'currentColor'} />
+              </svg>
               <span className="text-sm">{likesCount}</span>
             </button>
           </div>
