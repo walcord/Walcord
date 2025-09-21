@@ -37,6 +37,7 @@ function getUsername(p: ProfilesRelation): string | null {
 function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
+  // @ts-ignore
   return s[(v - 20) % 10] || s[v] || s[0];
 }
 function formatEditorialDate(iso: string | null | undefined) {
@@ -48,13 +49,13 @@ function formatEditorialDate(iso: string | null | undefined) {
     const year = d.getFullYear();
     return `${day}${ordinal(day)} ${month}, ${year}`;
   } catch {
-    return iso;
+    return iso ?? null;
   }
 }
 function shuffleInPlace<T>(arr: T[]) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+[arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
@@ -125,7 +126,7 @@ export default function TokVideoPage() {
       ref={containerRef}
       className="h-screen w-screen overflow-y-scroll"
       style={{
-        background: '#FFFFFF', // fondo blanco
+        background: '#FFFFFF',
         scrollSnapType: 'y mandatory',
         WebkitOverflowScrolling: 'touch',
         fontFamily: "Roboto, system-ui, -apple-system, 'Segoe UI'",
@@ -149,9 +150,11 @@ export default function TokVideoPage() {
 /* ===== Card a pantalla casi completa ===== */
 function VideoCard({ item }: { item: ClipRow }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [muted, setMuted] = useState(false); // probamos con sonido y caemos a mute si falla
+  const [muted, setMuted] = useState(false);
   const [showHint, setShowHint] = useState(true);
+  const [shouldLoad, setShouldLoad] = useState(false); // ← carga diferida del SRC
 
   // Visibilidad para play/pause
   useEffect(() => {
@@ -166,6 +169,24 @@ function VideoCard({ item }: { item: ClipRow }) {
     );
     obs.observe(node);
     return () => obs.unobserve(node);
+  }, []);
+
+  // Decidir cuándo asignar el SRC (prioriza lo que está arriba/en viewport)
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[0];
+        if (e.isIntersecting) {
+          setShouldLoad(true);
+          io.disconnect();
+        }
+      },
+      { root: null, rootMargin: '300px 0px', threshold: 0.01 }
+    );
+    io.observe(node);
+    return () => io.disconnect();
   }, []);
 
   // Autoplay con audio si el navegador lo permite
@@ -206,28 +227,65 @@ function VideoCard({ item }: { item: ClipRow }) {
       className="relative h-screen w-screen flex items-center justify-center"
       style={{ scrollSnapAlign: 'start' }}
     >
+      {/* Sentinel para activar la carga del vídeo */}
+      <div ref={sentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
+
       <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
-        {/* Caja del vídeo: CASI TODO EL TELÉFONO */}
+        {/* Caja del vídeo */}
         <Link
           href={`/u/${item.user_id ?? ''}`}
           className="block"
           style={{ textDecoration: 'none' }}
         >
-          <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
+          <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)] relative">
             <video
               ref={videoRef}
-              src={item.video_url ?? undefined}
+              src={shouldLoad ? (item.video_url ?? undefined) : undefined}
               poster={item.poster_url ?? undefined}
               className="w-full h-full object-cover"
               loop
               playsInline
-              preload="metadata"
-              // Nota: iOS puede bloquear autoplay con sonido; arriba lo gestionamos.
+              preload="none"
             />
+            {/* Botón sonido por encima de cualquier overlay */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const v = videoRef.current;
+                if (!v) return;
+                v.muted = !v.muted;
+                setMuted(v.muted);
+                setShowHint(false);
+                if (v.paused) { v.play().catch(()=>{}); }
+              }}
+              className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
+              aria-label={muted ? 'Unmute' : 'Mute'}
+              title={muted ? 'Unmute' : 'Mute'}
+            >
+              {muted ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M5 9v6h4l5 5V4L9 9H5z" />
+                </svg>
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M5 9v6h4l5 5V4L9 9H5z" />
+                  <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
+                  <path d="M19 12c0 3.04-1.72 5.64-4.24 6.93l.76 1.85C18.09 19.72 20 16.09 20 12s-1.91-7.72-4.48-8.78l-.76 1.85C17.28 6.36 19 8.96 19 12z"/>
+                </svg>
+              )}
+            </button>
+
+            {/* Hint “Tap for sound” */}
+            {showHint && muted && (
+              <div className="absolute left-4 bottom-4 rounded-full bg-black/55 text-white/95 text-xs px-3 py-2 z-[50]">
+                Tap for sound
+              </div>
+            )}
           </div>
         </Link>
 
-        {/* Tarjeta editorial grande, fuera del marco y más protagonista */}
+        {/* Tarjeta editorial (no bold en el título) */}
         <Link
           href={`/u/${item.user_id ?? ''}`}
           className="block no-underline"
@@ -235,7 +293,7 @@ function VideoCard({ item }: { item: ClipRow }) {
           <div className="mt-4 md:mt-6 rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_10px_36px_rgba(0,0,0,0.08)]">
             <div
               className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
-              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
+              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}
             >
               {primaryTitle}
             </div>
@@ -244,9 +302,9 @@ function VideoCard({ item }: { item: ClipRow }) {
               {[item.city, item.country].filter(Boolean).join(', ')}
             </div>
 
-            {editorialDate && (
+            {formatEditorialDate(item.event_date) && (
               <div className="text-[0.98rem] text-black/65 mt-0.5">
-                {editorialDate}
+                {formatEditorialDate(item.event_date)}
               </div>
             )}
 
@@ -267,42 +325,6 @@ function VideoCard({ item }: { item: ClipRow }) {
             )}
           </div>
         </Link>
-
-        {/* Botón sonido (el vídeo navega al perfil, así que el sonido va con este botón) */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const v = videoRef.current;
-            if (!v) return;
-            v.muted = !v.muted;
-            setMuted(v.muted);
-            setShowHint(false);
-            if (v.paused) { v.play().catch(()=>{}); }
-          }}
-          className="absolute right-6 bottom-[22vh] md:bottom-[24vh] w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur"
-          aria-label={muted ? 'Unmute' : 'Mute'}
-          title={muted ? 'Unmute' : 'Mute'}
-        >
-          {muted ? (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5 9v6h4l5 5V4L9 9H5z" />
-            </svg>
-          ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5 9v6h4l5 5V4L9 9H5z" />
-              <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
-              <path d="M19 12c0 3.04-1.72 5.64-4.24 6.93l.76 1.85C18.09 19.72 20 16.09 20 12s-1.91-7.72-4.48-8.78l-.76 1.85C17.28 6.36 19 8.96 19 12z"/>
-            </svg>
-          )}
-        </button>
-
-        {/* Hint “Tap for sound” (se oculta al pulsar el botón) */}
-        {showHint && muted && (
-          <div className="absolute left-6 bottom-[22vh] md:bottom-[24vh] rounded-full bg-black/55 text-white/95 text-xs px-3 py-2">
-            Tap for sound
-          </div>
-        )}
       </div>
     </section>
   );

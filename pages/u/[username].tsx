@@ -159,20 +159,23 @@ export default function ExternalProfilePage() {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner azul */}
-      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-      </header>
+      {/* Banner (alineado con el del perfil actual) */}
+      <div className="w-full h-24 flex items-end justify-between px-6 bg-[#1F48AF] pb-3 pt-[env(safe-area-inset-top)]">
+        <div className="flex items-center gap-2 ml-auto">
+          <a
+            href="/feed"
+            aria-label="Back to The Wall"
+            className="inline-flex items-center gap-2 rounded-full bg-white/95 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition-all"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M19 12H5m6 7l-7-7 7-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="hidden sm:inline">The Wall</span>
+          </a>
+        </div>
+      </div>
 
-      {/* Título CORRECTO */}
+      {/* Título (Times New Roman) */}
       <div className="w-full px-10 sm:px-12 mt-6 mb-8 relative">
         <h1 className="text-[clamp(1.8rem,4.5vw,2.375rem)] font-normal" style={{ fontFamily: 'Times New Roman, serif' }}>
           Profile
@@ -187,13 +190,13 @@ export default function ExternalProfilePage() {
         </div>
 
         <aside className="m-0 p-0">
-          {/* Encabezado de sección (como en el perfil propio) */}
-          <h2 className="text-[clamp(1.1rem,2vw,1.5rem)] font-light mb-1">Concerts</h2>
+          {/* Encabezado de sección alineado al perfil actual */}
+          <h2 className="text-[clamp(1.1rem,2vw,1.5rem)] font-light mb-1">Musical Memories</h2>
 
           {concertsLoading ? (
-            <div className="mt-4 text-sm text-neutral-600">Loading concerts…</div>
+            <div className="mt-4 text-sm text-neutral-600">Loading memories…</div>
           ) : groupsOrdered.length === 0 ? (
-            <div className="mt-4 text-sm text-neutral-600">No concerts yet.</div>
+            <div className="mt-4 text-sm text-neutral-600">No musical memories yet.</div>
           ) : (
             groupsOrdered.map(({ yearLabel, items }) => (
               <section key={yearLabel} className="mt-7">
@@ -213,7 +216,6 @@ export default function ExternalProfilePage() {
                         artist_name: c.artist_name,
                         country_code: c.country_code,
                         country_name: c.country_name,
-                        city: c.city,
                         event_date: c.event_date,
                         cover_url: c.cover_url,
                       }}

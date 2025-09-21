@@ -29,6 +29,7 @@ const PAGE_SIZE = 10;
 function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
+  // @ts-ignore
   return s[(v - 20) % 10] || s[v] || s[0];
 }
 function formatEditorialDate(iso: string | null | undefined) {
@@ -117,7 +118,7 @@ export default function TokPage() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
-  // Auto play/pause y focus en el clip visible
+  // Auto play/pause y focus en el clip visible (solo controla play/pause; el SRC se gestiona en cada Section)
   useEffect(() => {
     const container = scrollerRef.current;
     if (!container) return;
@@ -181,7 +182,7 @@ export default function TokPage() {
   );
 }
 
-/* ===== Sección: vídeo + tarjeta (cruzada), con fixes de SONIDO y navegación ===== */
+/* ===== Sección: vídeo + tarjeta (cruzada), con fixes de SONIDO y carga diferida ===== */
 function Section({
   clip,
   username,
@@ -192,6 +193,8 @@ function Section({
   registerVideo: (el: HTMLVideoElement | null) => void;
 }) {
   const localVidRef = useRef<HTMLVideoElement | null>(null);
+  const loadSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [shouldLoad, setShouldLoad] = useState(false); // ← solo cargamos src cuando entra en viewport
 
   const isConcert = (clip.kind ?? 'concert') === 'concert';
   const title = isConcert && clip.artist_name
@@ -200,29 +203,49 @@ function Section({
   const place = [clip.city, clip.country].filter(Boolean).join(', ');
   const prettyDate = formatEditorialDate(clip.event_date);
 
-  // Prefiere username si existe, si no id
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
+
+  // Observer para decidir cuándo cargar el SRC (prioriza los de arriba conforme vas bajando)
+  useEffect(() => {
+    const node = loadSentinelRef.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[0];
+        if (e.isIntersecting) {
+          setShouldLoad(true);
+          io.disconnect();
+        }
+      },
+      { root: null, rootMargin: '300px 0px', threshold: 0.01 } // pre-carga cuando está a ~300px
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
 
   return (
     <section
       className="relative h-screen w-screen flex items-center justify-center"
       style={{ scrollSnapAlign: 'start' }}
     >
-      {/* z-index ALTO para quedar por encima de la bottom bar y que el click vaya al perfil */}
+      {/* Sentinel invisible para activar la carga del vídeo */}
+      <div ref={loadSentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
+
+      {/* z-index ALTO para quedar por encima de la bottom bar y permitir click al perfil */}
       <div className="relative z-[99] w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
         {/* VÍDEO casi full-screen. Click → perfil */}
         <Link href={profileHref} className="block no-underline">
           <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
             <video
               ref={(el) => { registerVideo(el); localVidRef.current = el; }}
-              src={clip.video_url ?? undefined}
+              src={shouldLoad ? (clip.video_url ?? undefined) : undefined}
               poster={clip.poster_url ?? undefined}
               className="w-full h-full object-cover"
               loop
               playsInline
-              preload="metadata"
+              preload="none"
             />
-            {/* Botón de sonido (fix iOS: pausa → desmutea → play en gesto de usuario) */}
+            {/* Botón de sonido con z-index por encima de la tarjeta */}
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -231,11 +254,10 @@ function Section({
                 if (!v) return;
                 try { v.pause(); } catch {}
                 v.muted = !v.muted;
-                // nudge para algunos navegadores
                 try { v.currentTime = Math.max(0, v.currentTime - 0.001); } catch {}
                 v.play().catch(() => {});
               }}
-              className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur"
+              className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
               aria-label="Toggle sound"
               title="Sound"
             >
@@ -250,11 +272,11 @@ function Section({
         {/* TARJETA cruzando el borde inferior del vídeo. Click → perfil */}
         <Link href={profileHref} className="block no-underline">
           <div
-            className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)]"
+            className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)] z-[40]"
           >
             <div
               className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
-              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
+              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}
             >
               {title}
             </div>
