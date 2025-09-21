@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 /* ===== Tipos ===== */
+type ProfileSlim = { username: string | null };
+type ProfilesRelation = ProfileSlim | ProfileSlim[] | null;
+
 type ClipRow = {
   id: string;
   user_id: string | null;
@@ -20,13 +23,17 @@ type ClipRow = {
   created_at: string | null;
   kind?: 'concert' | 'experience' | string | null;
   experience?: 'ballet' | 'opera' | 'club' | string | null;
+  profiles: ProfilesRelation;
 };
 
-type Profile = { id: string; username: string | null };
-
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 10;
 
 /* ===== Utils ===== */
+function getUsername(p: ProfilesRelation): string | null {
+  if (!p) return null;
+  if (Array.isArray(p)) return p[0]?.username ?? null;
+  return p.username ?? null;
+}
 function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -44,26 +51,17 @@ function formatEditorialDate(iso: string | null | undefined) {
     return iso ?? null;
   }
 }
-function shuffle<T>(arr: T[]) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
-/* ===== Página ===== */
-export default function Tok() {
+/* ===== Página: feed vertical a pantalla casi completa ===== */
+export default function TokPage() {
   const supabase = createClientComponentClient();
-  const [clips, setClips] = useState<ClipRow[]>([]);
-  const [usernames, setUsernames] = useState<Record<string, string | null>>({});
+  const [items, setItems] = useState<ClipRow[]>([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   // para pausar todos menos el visible
-  const videos = useRef<Map<string, HTMLVideoElement>>(new Map());
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
   const fetchPage = useCallback(async (pageIndex: number) => {
     setLoading(true);
@@ -73,37 +71,23 @@ export default function Tok() {
       .from('clips')
       .select(`
         id, user_id, video_url, poster_url, caption,
-        artist_name, venue, city, country, event_date,
-        duration_seconds, created_at, kind, experience
+        artist_name, venue, city, country, event_date, duration_seconds, created_at,
+        kind, experience, profiles:profiles(username)
       `)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
     if (!error && data) {
-      const batch = shuffle(data as ClipRow[]);
-      setClips(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
-
-      const ids = Array.from(new Set(batch.map(b => b.user_id).filter(Boolean) as string[]))
-        .filter(id => !(id in usernames));
-      if (ids.length) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, username')
-          .in('id', ids)
-          .limit(1000);
-        const map: Record<string, string | null> = {};
-        (profs as Profile[] | null)?.forEach(p => { map[p.id] = p.username ?? null; });
-        setUsernames(prev => ({ ...prev, ...map }));
-      }
+      setItems(prev => (pageIndex === 0 ? (data as ClipRow[]) : [...prev, ...(data as ClipRow[])]));
     }
     setLoading(false);
-  }, [supabase, usernames]);
+  }, [supabase]);
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
-  // infinite scroll
+  // Infinite scroll
   useEffect(() => {
-    const el = containerRef.current;
+    const el = scrollerRef.current;
     if (!el) return;
     const onScroll = () => {
       if (loading) return;
@@ -118,18 +102,17 @@ export default function Tok() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
-  // Observer para auto-play del vídeo visible dentro de su tarjeta
+  // Auto play/pause del vídeo visible (intenta con sonido, cae a mute si iOS lo bloquea)
   useEffect(() => {
-    const root = containerRef.current;
-    if (!root) return;
+    const container = scrollerRef.current;
+    if (!container) return;
     const io = new IntersectionObserver(
-      entries => {
-        entries.forEach(async e => {
+      (entries) => {
+        entries.forEach(async (e) => {
           const vid = e.target as HTMLVideoElement;
-          if (e.isIntersecting && e.intersectionRatio >= 0.6) {
-            videos.current.forEach(v => {
-              if (v !== vid) { try { v.pause(); v.currentTime = 0; } catch {} }
-            });
+          if (e.isIntersecting && e.intersectionRatio >= 0.7) {
+            // pausa el resto
+            videosRef.current.forEach(v => { if (v !== vid) { try { v.pause(); v.currentTime = 0; } catch {} } });
             try { vid.muted = false; await vid.play(); }
             catch { vid.muted = true; try { await vid.play(); } catch {} }
           } else {
@@ -137,106 +120,117 @@ export default function Tok() {
           }
         });
       },
-      { root, threshold: [0, 0.6, 1] }
+      { root: container, threshold: [0, 0.7, 1] }
     );
-    videos.current.forEach(v => io.observe(v));
+
+    videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
-  }, [clips.length]);
+  }, [items.length]);
 
   return (
     <div
-      ref={containerRef}
+      ref={scrollerRef}
       className="min-h-screen w-full overflow-y-auto"
       style={{
-        background: '#FFFFFF', // FONDO BLANCO
-        paddingTop: 'max(env(safe-area-inset-top), 10px)',
-        paddingBottom: 'calc(env(safe-area-inset-bottom) + 18px)',
+        background: '#FFFFFF',           // FONDO BLANCO
+        scrollSnapType: 'y mandatory',   // feed por pantallas
         WebkitOverflowScrolling: 'touch',
         fontFamily: "Roboto, system-ui, -apple-system, 'Segoe UI'",
         fontWeight: 300,
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8">
-        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-6 md:gap-8 py-10">
-          {clips.map((c) => (
-            <li key={c.id}>
-              <ClipCard
-                clip={c}
-                username={c.user_id ? usernames[c.user_id] ?? null : null}
-                register={(el) => { if (el) videos.current.set(c.id, el); }}
-              />
-            </li>
-          ))}
-        </ul>
+      {items.map((clip) => (
+        <Section key={clip.id} clip={clip} registerVideo={(el) => { if (el) videosRef.current.set(clip.id, el); }} />
+      ))}
 
-        {loading && <div className="text-center text-black/50 py-10">Loading…</div>}
-      </div>
+      {loading && <div className="h-[20vh] flex items-center justify-center text-black/50">Loading…</div>}
     </div>
   );
 }
 
-/* ===== Tarjeta cuadrada grande y limpia ===== */
-function ClipCard({
+/* ===== Sección: vídeo GRANDE + tarjeta editorial fuera del marco ===== */
+function Section({
   clip,
-  username,
-  register,
+  registerVideo,
 }: {
   clip: ClipRow;
-  username: string | null;
-  register: (el: HTMLVideoElement | null) => void;
+  registerVideo: (el: HTMLVideoElement | null) => void;
 }) {
+  const username = getUsername(clip.profiles);
   const isConcert = (clip.kind ?? 'concert') === 'concert';
-  const title =
-    (isConcert && clip.artist_name)
-      ? clip.artist_name
-      : (clip.experience
-          ? clip.experience.charAt(0).toUpperCase() + clip.experience.slice(1)
-          : 'Event');
-
+  const title = isConcert && clip.artist_name
+    ? clip.artist_name
+    : (clip.experience ? clip.experience.charAt(0).toUpperCase() + clip.experience.slice(1) : 'Event');
   const place = [clip.city, clip.country].filter(Boolean).join(', ');
-  const datePretty = formatEditorialDate(clip.event_date);
+  const prettyDate = formatEditorialDate(clip.event_date);
 
   return (
-    <Link href={`/u/${clip.user_id ?? ''}`} className="group block no-underline">
-      {/* Marco del vídeo más grande y centrado dentro de la tarjeta */}
-      <div className="relative aspect-[4/5] rounded-[28px] overflow-hidden bg-black/90 shadow-[0_18px_80px_rgba(0,0,0,0.12)]">
-        <video
-          data-id={clip.id}
-          ref={register}
-          src={clip.video_url ?? undefined}
-          poster={clip.poster_url ?? undefined}
-          className="absolute inset-0 w-full h-full object-cover"
-          loop
-          playsInline
-          preload="metadata"
-        />
-      </div>
+    <section
+      className="relative h-screen w-screen flex items-center justify-center"
+      style={{ scrollSnapAlign: 'start' }}
+    >
+      <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
+        {/* El VÍDEO ocupa CASI TODO el teléfono */}
+        <Link href={`/u/${clip.user_id ?? ''}`} className="block no-underline">
+          <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
+            <video
+              ref={registerVideo}
+              src={clip.video_url ?? undefined}
+              poster={clip.poster_url ?? undefined}
+              className="w-full h-full object-cover"
+              loop
+              playsInline
+              preload="metadata"
+            />
+          </div>
+        </Link>
 
-      {/* Tarjeta editorial fuera del marco, debajo */}
-      <div className="mt-3 rounded-3xl border border-black/10 bg-white/90 backdrop-blur px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
-        <div
-          className="truncate text-black text-[1.25rem] leading-tight"
-          style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
-          title={title ?? undefined}
-        >
-          {title}
-        </div>
-        <div className="mt-0.5 text-[0.95rem] text-black/75 truncate">{place}</div>
-        {datePretty && (
-          <div className="text-[0.9rem] text-black/65 truncate">{datePretty}</div>
-        )}
-        {clip.venue && (
-          <div className="text-[0.9rem] text-black/60 truncate">{clip.venue}</div>
-        )}
-        {username && (
-          <div className="text-sm text-black/55 mt-2">@{username}</div>
-        )}
-        {clip.caption && (
-          <p className="text-[0.95rem] text-black/80 mt-2 leading-relaxed">
-            {clip.caption}
-          </p>
-        )}
+        {/* Tarjeta editorial GRANDE fuera del vídeo */}
+        <Link href={`/u/${clip.user_id ?? ''}`} className="block no-underline">
+          <div className="mt-4 md:mt-6 rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_10px_36px_rgba(0,0,0,0.08)]">
+            <div
+              className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
+              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 700 }}
+            >
+              {title}
+            </div>
+            <div className="text-[1rem] md:text-[1.1rem] text-black/75 mt-1">{place}</div>
+            {prettyDate && <div className="text-[0.98rem] text-black/65 mt-0.5">{prettyDate}</div>}
+            {clip.venue && <div className="text-[0.98rem] text-black/65 mt-0.5">{clip.venue}</div>}
+            {username && <div className="text-[0.95rem] text-black/55 mt-3">@{username}</div>}
+            {clip.caption && <p className="text-[1rem] text-black/80 mt-3 leading-relaxed">{clip.caption}</p>}
+          </div>
+        </Link>
+
+        {/* Botón de sonido (porque iOS bloquea audio en autoplay) */}
+        <SoundToggle targetSelector="video" />
       </div>
-    </Link>
+    </section>
+  );
+}
+
+/* ===== Botón sonido: desmutea el vídeo visible ===== */
+function SoundToggle({ targetSelector }: { targetSelector: string }) {
+  const onClick = () => {
+    const v = document.querySelector<HTMLVideoElement>(targetSelector);
+    if (!v) return;
+    v.muted = !v.muted;
+    if (v.paused) v.play().catch(() => {});
+  };
+  return (
+    <button
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
+      className="absolute right-6 bottom-[22vh] md:bottom-[24vh] w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur"
+      aria-label="Toggle sound"
+      title="Sound"
+    >
+      {/* icono simple */}
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M5 9v6h4l5 5V4L9 9H5z" />
+        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
+      </svg>
+    </button>
   );
 }
