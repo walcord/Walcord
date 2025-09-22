@@ -55,7 +55,7 @@ function formatEditorialDate(iso: string | null | undefined) {
 function shuffleInPlace<T>(arr: T[]) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-[arr[i], arr[j]] = [arr[j], arr[i]];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
@@ -75,7 +75,7 @@ export default function TokVideoPage() {
     setLoading(true);
     const from = pageIndex * PAGE_SIZE;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('clips')
       .select(`
         id, user_id, video_url, poster_url, caption,
@@ -86,7 +86,7 @@ export default function TokVideoPage() {
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
-    if (!error && data) {
+    if (data) {
       const rows = shuffleInPlace([...data]) as ClipRow[];
 
       if (pageIndex === 0 && id) {
@@ -152,9 +152,9 @@ function VideoCard({ item }: { item: ClipRow }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [showHint, setShowHint] = useState(true);
-  const [shouldLoad, setShouldLoad] = useState(false); // ← carga diferida del SRC
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   // Visibilidad para play/pause
   useEffect(() => {
@@ -222,6 +222,8 @@ function VideoCard({ item }: { item: ClipRow }) {
         ? item.experience.charAt(0).toUpperCase() + item.experience.slice(1)
         : 'Event');
 
+  const profileHref = username ? `/u/${username}` : `/u/${item.user_id ?? ''}`;
+
   return (
     <section
       className="relative h-screen w-screen flex items-center justify-center"
@@ -232,11 +234,7 @@ function VideoCard({ item }: { item: ClipRow }) {
 
       <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
         {/* Caja del vídeo */}
-        <Link
-          href={`/u/${item.user_id ?? ''}`}
-          className="block"
-          style={{ textDecoration: 'none' }}
-        >
+        <Link href={profileHref} className="block" style={{ textDecoration: 'none' }}>
           <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)] relative">
             <video
               ref={videoRef}
@@ -246,6 +244,7 @@ function VideoCard({ item }: { item: ClipRow }) {
               loop
               playsInline
               preload="none"
+              muted
             />
             {/* Botón sonido por encima de cualquier overlay */}
             <button
@@ -258,6 +257,7 @@ function VideoCard({ item }: { item: ClipRow }) {
                 setMuted(v.muted);
                 setShowHint(false);
                 if (v.paused) { v.play().catch(()=>{}); }
+                try { v.currentTime = Math.max(0, v.currentTime - 0.001); } catch {}
               }}
               className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
               aria-label={muted ? 'Unmute' : 'Mute'}
@@ -286,10 +286,7 @@ function VideoCard({ item }: { item: ClipRow }) {
         </Link>
 
         {/* Tarjeta editorial (no bold en el título) */}
-        <Link
-          href={`/u/${item.user_id ?? ''}`}
-          className="block no-underline"
-        >
+        <Link href={profileHref} className="block no-underline">
           <div className="mt-4 md:mt-6 rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_10px_36px_rgba(0,0,0,0.08)]">
             <div
               className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
@@ -302,9 +299,9 @@ function VideoCard({ item }: { item: ClipRow }) {
               {[item.city, item.country].filter(Boolean).join(', ')}
             </div>
 
-            {formatEditorialDate(item.event_date) && (
+            {editorialDate && (
               <div className="text-[0.98rem] text-black/65 mt-0.5">
-                {formatEditorialDate(item.event_date)}
+                {editorialDate}
               </div>
             )}
 

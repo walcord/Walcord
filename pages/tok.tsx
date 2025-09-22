@@ -62,7 +62,6 @@ export default function TokPage() {
     setErr(null);
     const from = pageIndex * PAGE_SIZE;
 
-    // 1) clips (sin join)
     const { data, error } = await supabase
       .from('clips')
       .select(`
@@ -82,7 +81,7 @@ export default function TokPage() {
     const batch = (data as ClipRow[]) ?? [];
     setItems(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
 
-    // 2) usernames aparte
+    // usernames aparte
     const ids = Array.from(new Set(batch.map(b => b.user_id).filter(Boolean) as string[]))
       .filter(id => !(id in usernames));
     if (ids.length) {
@@ -118,7 +117,7 @@ export default function TokPage() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
-  // Auto play/pause y focus en el clip visible (solo controla play/pause; el SRC se gestiona en cada Section)
+  // Autoplay/pause según visibilidad (controla play/pause; el SRC se decide en cada Section)
   useEffect(() => {
     const container = scrollerRef.current;
     if (!container) return;
@@ -127,9 +126,16 @@ export default function TokPage() {
         entries.forEach(async (e) => {
           const vid = e.target as HTMLVideoElement;
           if (e.isIntersecting && e.intersectionRatio >= 0.7) {
+            // Pausar el resto
             videosRef.current.forEach(v => { if (v !== vid) { try { v.pause(); v.currentTime = 0; } catch {} } });
-            try { vid.muted = false; await vid.play(); }
-            catch { vid.muted = true; try { await vid.play(); } catch {} }
+            // Intentar reproducir con sonido; si falla → mute
+            try {
+              vid.muted = false;
+              await vid.play();
+            } catch {
+              vid.muted = true;
+              try { await vid.play(); } catch {}
+            }
           } else {
             try { vid.pause(); } catch {}
           }
@@ -140,6 +146,12 @@ export default function TokPage() {
     videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
   }, [items.length]);
+
+  // Limpieza del map cuando un vídeo se desmonta
+  const registerVideo = useCallback((id: string, el: HTMLVideoElement | null) => {
+    if (el) videosRef.current.set(id, el);
+    else videosRef.current.delete(id);
+  }, []);
 
   return (
     <div
@@ -171,7 +183,7 @@ export default function TokPage() {
           key={clip.id}
           clip={clip}
           username={clip.user_id ? usernames[clip.user_id] ?? null : null}
-          registerVideo={(el) => { if (el) videosRef.current.set(clip.id, el); }}
+          register={(el) => registerVideo(clip.id, el)}
         />
       ))}
 
@@ -186,15 +198,15 @@ export default function TokPage() {
 function Section({
   clip,
   username,
-  registerVideo,
+  register,
 }: {
   clip: ClipRow;
   username: string | null;
-  registerVideo: (el: HTMLVideoElement | null) => void;
+  register: (el: HTMLVideoElement | null) => void;
 }) {
   const localVidRef = useRef<HTMLVideoElement | null>(null);
   const loadSentinelRef = useRef<HTMLDivElement | null>(null);
-  const [shouldLoad, setShouldLoad] = useState(false); // ← solo cargamos src cuando entra en viewport
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   const isConcert = (clip.kind ?? 'concert') === 'concert';
   const title = isConcert && clip.artist_name
@@ -205,7 +217,7 @@ function Section({
 
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
 
-  // Observer para decidir cuándo cargar el SRC (prioriza los de arriba conforme vas bajando)
+  // Decidir cuándo cargar el SRC (pre-carga ~300px antes)
   useEffect(() => {
     const node = loadSentinelRef.current;
     if (!node) return;
@@ -217,7 +229,7 @@ function Section({
           io.disconnect();
         }
       },
-      { root: null, rootMargin: '300px 0px', threshold: 0.01 } // pre-carga cuando está a ~300px
+      { root: null, rootMargin: '300px 0px', threshold: 0.01 }
     );
     io.observe(node);
     return () => io.disconnect();
@@ -237,13 +249,16 @@ function Section({
         <Link href={profileHref} className="block no-underline">
           <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
             <video
-              ref={(el) => { registerVideo(el); localVidRef.current = el; }}
+              ref={(el) => { register(el); localVidRef.current = el; }}
               src={shouldLoad ? (clip.video_url ?? undefined) : undefined}
               poster={clip.poster_url ?? undefined}
               className="w-full h-full object-cover"
               loop
               playsInline
               preload="none"
+              // arrancamos en mute para cumplir autoplay en móviles;
+              // el observer de la página intentará desmutear y reproducir
+              muted
             />
             {/* Botón de sonido con z-index por encima de la tarjeta */}
             <button
@@ -252,6 +267,7 @@ function Section({
                 e.stopPropagation();
                 const v = localVidRef.current;
                 if (!v) return;
+                // flip mute, “jog” tiny jump para forzar refetch de audio en iOS
                 try { v.pause(); } catch {}
                 v.muted = !v.muted;
                 try { v.currentTime = Math.max(0, v.currentTime - 0.001); } catch {}
