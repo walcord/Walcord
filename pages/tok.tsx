@@ -56,6 +56,16 @@ export default function TokPage() {
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const activeIdRef = useRef<string | null>(null);
+
+  // “Sound On” global tras interacción del usuario
+  const [globalSound, setGlobalSound] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && sessionStorage.getItem('walcordTokSoundOn') === '1';
+  });
+  const enableGlobalSound = (on: boolean) => {
+    setGlobalSound(on);
+    try { sessionStorage.setItem('walcordTokSoundOn', on ? '1' : '0'); } catch {}
+  };
 
   const fetchPage = useCallback(async (pageIndex: number) => {
     setLoading(true);
@@ -100,6 +110,58 @@ export default function TokPage() {
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
+  // Registro / limpieza de refs
+  const registerVideo = useCallback((id: string, el: HTMLVideoElement | null) => {
+    if (el) videosRef.current.set(id, el);
+    else videosRef.current.delete(id);
+  }, []);
+
+  // ÚNICO vídeo activo + autoplay; el resto se silencian y pausan
+  useEffect(() => {
+    const container = scrollerRef.current;
+    if (!container) return;
+
+    const io = new IntersectionObserver(
+      async (entries) => {
+        for (const e of entries) {
+          const vid = e.target as HTMLVideoElement;
+          const id = vid.dataset.vid as string;
+          if (!id) continue;
+
+          if (e.isIntersecting && e.intersectionRatio >= 0.7) {
+            // Desactivar todos los demás
+            videosRef.current.forEach((v, k) => {
+              if (k !== id) {
+                try { v.pause(); v.muted = true; v.currentTime = 0; } catch {}
+              }
+            });
+
+            activeIdRef.current = id;
+
+            // Intentar reproducir con sonido si globalSound=true (tras gesto de usuario)
+            try {
+              vid.muted = !globalSound;
+              await vid.play();
+            } catch {
+              // Fallback: mute + botón central disponible
+              vid.muted = true;
+              try { await vid.play(); } catch {}
+            }
+          } else {
+            // Sale del foco
+            if (activeIdRef.current === id) activeIdRef.current = null;
+            try { vid.pause(); vid.muted = true; vid.currentTime = 0; } catch {}
+          }
+        }
+      },
+      { root: container, threshold: [0, 0.7, 1] }
+    );
+
+    videosRef.current.forEach(v => io.observe(v));
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, globalSound]);
+
   // Infinite scroll
   useEffect(() => {
     const el = scrollerRef.current;
@@ -117,42 +179,6 @@ export default function TokPage() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
-  // Autoplay/pause según visibilidad (controla play/pause; el SRC se decide en cada Section)
-  useEffect(() => {
-    const container = scrollerRef.current;
-    if (!container) return;
-    const io = new IntersectionObserver(
-      entries => {
-        entries.forEach(async (e) => {
-          const vid = e.target as HTMLVideoElement;
-          if (e.isIntersecting && e.intersectionRatio >= 0.7) {
-            // Pausar el resto
-            videosRef.current.forEach(v => { if (v !== vid) { try { v.pause(); v.currentTime = 0; } catch {} } });
-            // Intentar reproducir con sonido; si falla → mute
-            try {
-              vid.muted = false;
-              await vid.play();
-            } catch {
-              vid.muted = true;
-              try { await vid.play(); } catch {}
-            }
-          } else {
-            try { vid.pause(); } catch {}
-          }
-        });
-      },
-      { root: container, threshold: [0, 0.7, 1] }
-    );
-    videosRef.current.forEach(v => io.observe(v));
-    return () => io.disconnect();
-  }, [items.length]);
-
-  // Limpieza del map cuando un vídeo se desmonta
-  const registerVideo = useCallback((id: string, el: HTMLVideoElement | null) => {
-    if (el) videosRef.current.set(id, el);
-    else videosRef.current.delete(id);
-  }, []);
-
   return (
     <div
       ref={scrollerRef}
@@ -167,15 +193,23 @@ export default function TokPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
+      {/* Toggle de sonido global (opcional) */}
+      <div className="fixed top-3 right-3 z-[120]">
+        <button
+          onClick={() => enableGlobalSound(!globalSound)}
+          className="px-3 py-1.5 rounded-full text-white text-sm"
+          style={{ background: globalSound ? '#1F48AF' : 'rgba(0,0,0,0.55)' }}
+          title={globalSound ? 'Sound On: try audio autoplay' : 'Sound Off: autoplay muted'}
+        >
+          {globalSound ? 'Sound On' : 'Sound Off'}
+        </button>
+      </div>
+
       {err && (
-        <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">
-          {err}
-        </div>
+        <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">{err}</div>
       )}
       {!err && !loading && items.length === 0 && (
-        <div className="h-[20vh] flex items-center justify-center text-black/50 px-4">
-          No clips yet.
-        </div>
+        <div className="h-[20vh] flex items-center justify-center text-black/50 px-4">No clips yet.</div>
       )}
 
       {items.map((clip) => (
@@ -184,6 +218,7 @@ export default function TokPage() {
           clip={clip}
           username={clip.user_id ? usernames[clip.user_id] ?? null : null}
           register={(el) => registerVideo(clip.id, el)}
+          dataVid={clip.id}
         />
       ))}
 
@@ -194,19 +229,22 @@ export default function TokPage() {
   );
 }
 
-/* ===== Sección: vídeo + tarjeta (cruzada), con fixes de SONIDO y carga diferida ===== */
+/* ===== Sección: vídeo + tarjeta ===== */
 function Section({
   clip,
   username,
   register,
+  dataVid,
 }: {
   clip: ClipRow;
   username: string | null;
   register: (el: HTMLVideoElement | null) => void;
+  dataVid: string;
 }) {
   const localVidRef = useRef<HTMLVideoElement | null>(null);
   const loadSentinelRef = useRef<HTMLDivElement | null>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
+  const [pausedByBlock, setPausedByBlock] = useState(false); // muestra botón Play
 
   const isConcert = (clip.kind ?? 'concert') === 'concert';
   const title = isConcert && clip.artist_name
@@ -214,7 +252,6 @@ function Section({
     : (clip.experience ? clip.experience.charAt(0).toUpperCase() + clip.experience.slice(1) : 'Event');
   const place = [clip.city, clip.country].filter(Boolean).join(', ');
   const prettyDate = formatEditorialDate(clip.event_date);
-
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
 
   // Decidir cuándo cargar el SRC (pre-carga ~300px antes)
@@ -235,6 +272,23 @@ function Section({
     return () => io.disconnect();
   }, []);
 
+  // Si el navegador bloquea play con sonido, quedará en pause -> mostramos botón Play
+  useEffect(() => {
+    const v = localVidRef.current;
+    if (!v) return;
+    const onPlay = () => setPausedByBlock(false);
+    const onPause = () => {
+      // si no está al final y el src está puesto, puede que sea bloqueo de autoplay
+      setPausedByBlock(true);
+    };
+    v.addEventListener('play', onPlay);
+    v.addEventListener('pause', onPause);
+    return () => {
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('pause', onPause);
+    };
+  }, [shouldLoad]);
+
   return (
     <section
       className="relative h-screen w-screen flex items-center justify-center"
@@ -243,49 +297,68 @@ function Section({
       {/* Sentinel invisible para activar la carga del vídeo */}
       <div ref={loadSentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
 
-      {/* z-index ALTO para quedar por encima de la bottom bar y permitir click al perfil */}
       <div className="relative z-[99] w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
-        {/* VÍDEO casi full-screen. Click → perfil */}
-        <Link href={profileHref} className="block no-underline">
-          <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
-            <video
-              ref={(el) => { register(el); localVidRef.current = el; }}
-              src={shouldLoad ? (clip.video_url ?? undefined) : undefined}
-              poster={clip.poster_url ?? undefined}
-              className="w-full h-full object-cover"
-              loop
-              playsInline
-              preload="none"
-              // arrancamos en mute para cumplir autoplay en móviles;
-              // el observer de la página intentará desmutear y reproducir
-              muted
-            />
-            {/* Botón de sonido con z-index por encima de la tarjeta */}
+        {/* VÍDEO: no es link (gestos no se interrumpen). Poster SIEMPRE visible */}
+        <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
+          <video
+            ref={(el) => { register(el); localVidRef.current = el; }}
+            data-vid={dataVid}
+            src={shouldLoad ? (clip.video_url ?? undefined) : undefined}
+            poster={clip.poster_url ?? undefined}
+            className="w-full h-full object-cover"
+            loop
+            playsInline
+            preload="none"
+            muted
+            // @ts-ignore – para iOS
+            webkit-playsinline="true"
+          />
+
+          {/* Botón central Play cuando hay bloqueo/pausa */}
+          {pausedByBlock && (
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
+              onClick={() => {
                 const v = localVidRef.current;
                 if (!v) return;
-                // flip mute, “jog” tiny jump para forzar refetch de audio en iOS
-                try { v.pause(); } catch {}
-                v.muted = !v.muted;
-                try { v.currentTime = Math.max(0, v.currentTime - 0.001); } catch {}
                 v.play().catch(() => {});
               }}
-              className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
-              aria-label="Toggle sound"
-              title="Sound"
+              className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
+              aria-label="Play"
+              title="Play"
+              style={{ backdropFilter: 'none' }}
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M5 9v6h4l5 5V4L9 9H5z" />
-                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
-              </svg>
+              <span
+                className="w-16 h-16 rounded-full bg-black/55 text-white flex items-center justify-center"
+                style={{ boxShadow: '0 6px 24px rgba(0,0,0,0.28)' }}
+              >
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </span>
             </button>
-          </div>
-        </Link>
+          )}
 
-        {/* TARJETA cruzando el borde inferior del vídeo. Click → perfil */}
+          {/* Botón de sonido (no abre links) */}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const v = localVidRef.current;
+              if (!v) return;
+              try { v.muted = !v.muted; if (v.paused) v.play().catch(()=>{}); } catch {}
+            }}
+            className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
+            aria-label="Toggle sound"
+            title="Sound"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5 9v6h4l5 5V4L9 9H5z" />
+              <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* TARJETA (link al perfil) */}
         <Link href={profileHref} className="block no-underline">
           <div
             className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)] z-[40]"
