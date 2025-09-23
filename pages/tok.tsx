@@ -44,6 +44,13 @@ function formatEditorialDate(iso: string | null | undefined) {
     return iso ?? null;
   }
 }
+function shuffleInPlace<T>(arr: T[]) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 /* ===== Página: feed vertical ===== */
 export default function TokPage() {
@@ -57,15 +64,6 @@ export default function TokPage() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const activeIdRef = useRef<string | null>(null);
-
-  // “Sound On” global tras interacción del usuario
-  const [globalSound, setGlobalSound] = useState<boolean>(() => {
-    return typeof window !== 'undefined' && sessionStorage.getItem('walcordTokSoundOn') === '1';
-  });
-  const enableGlobalSound = (on: boolean) => {
-    setGlobalSound(on);
-    try { sessionStorage.setItem('walcordTokSoundOn', on ? '1' : '0'); } catch {}
-  };
 
   const fetchPage = useCallback(async (pageIndex: number) => {
     setLoading(true);
@@ -89,10 +87,13 @@ export default function TokPage() {
     }
 
     const batch = (data as ClipRow[]) ?? [];
-    setItems(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
+    // ➜ orden aleatorio cada vez que entras/cargas
+    const randomized = shuffleInPlace([...batch]);
+
+    setItems(prev => (pageIndex === 0 ? randomized : [...prev, ...randomized]));
 
     // usernames aparte
-    const ids = Array.from(new Set(batch.map(b => b.user_id).filter(Boolean) as string[]))
+    const ids = Array.from(new Set(randomized.map(b => b.user_id).filter(Boolean) as string[]))
       .filter(id => !(id in usernames));
     if (ids.length) {
       const { data: profs } = await supabase
@@ -116,7 +117,7 @@ export default function TokPage() {
     else videosRef.current.delete(id);
   }, []);
 
-  // ÚNICO vídeo activo + autoplay; el resto se silencian y pausan
+  // ÚNICO vídeo activo + autoplay con sonido (si el navegador lo permite)
   useEffect(() => {
     const container = scrollerRef.current;
     if (!container) return;
@@ -138,17 +139,15 @@ export default function TokPage() {
 
             activeIdRef.current = id;
 
-            // Intentar reproducir con sonido si globalSound=true (tras gesto de usuario)
             try {
-              vid.muted = !globalSound;
+              vid.muted = false; // intenta con sonido
               await vid.play();
             } catch {
-              // Fallback: mute + botón central disponible
+              // Fallback si el navegador bloquea: lo dejamos mute y probamos
               vid.muted = true;
               try { await vid.play(); } catch {}
             }
           } else {
-            // Sale del foco
             if (activeIdRef.current === id) activeIdRef.current = null;
             try { vid.pause(); vid.muted = true; vid.currentTime = 0; } catch {}
           }
@@ -159,8 +158,7 @@ export default function TokPage() {
 
     videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length, globalSound]);
+  }, [items.length]);
 
   // Infinite scroll
   useEffect(() => {
@@ -193,18 +191,6 @@ export default function TokPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {/* Toggle de sonido global (opcional) */}
-      <div className="fixed top-3 right-3 z-[120]">
-        <button
-          onClick={() => enableGlobalSound(!globalSound)}
-          className="px-3 py-1.5 rounded-full text-white text-sm"
-          style={{ background: globalSound ? '#1F48AF' : 'rgba(0,0,0,0.55)' }}
-          title={globalSound ? 'Sound On: try audio autoplay' : 'Sound Off: autoplay muted'}
-        >
-          {globalSound ? 'Sound On' : 'Sound Off'}
-        </button>
-      </div>
-
       {err && (
         <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">{err}</div>
       )}
@@ -272,15 +258,12 @@ function Section({
     return () => io.disconnect();
   }, []);
 
-  // Si el navegador bloquea play con sonido, quedará en pause -> mostramos botón Play
+  // Mostrar/ocultar botón play central según evento
   useEffect(() => {
     const v = localVidRef.current;
     if (!v) return;
     const onPlay = () => setPausedByBlock(false);
-    const onPause = () => {
-      // si no está al final y el src está puesto, puede que sea bloqueo de autoplay
-      setPausedByBlock(true);
-    };
+    const onPause = () => setPausedByBlock(true);
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);
     return () => {
@@ -298,7 +281,7 @@ function Section({
       <div ref={loadSentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
 
       <div className="relative z-[99] w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
-        {/* VÍDEO: no es link (gestos no se interrumpen). Poster SIEMPRE visible */}
+        {/* VÍDEO */}
         <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
           <video
             ref={(el) => { register(el); localVidRef.current = el; }}
@@ -314,12 +297,13 @@ function Section({
             webkit-playsinline="true"
           />
 
-          {/* Botón central Play cuando hay bloqueo/pausa */}
+          {/* Botón central Play */}
           {pausedByBlock && (
             <button
               onClick={() => {
                 const v = localVidRef.current;
                 if (!v) return;
+                v.muted = false;
                 v.play().catch(() => {});
               }}
               className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
@@ -338,22 +322,21 @@ function Section({
             </button>
           )}
 
-          {/* Botón de sonido (no abre links) */}
+          {/* Botón Stop (pausar y resetear) */}
           <button
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               const v = localVidRef.current;
               if (!v) return;
-              try { v.muted = !v.muted; if (v.paused) v.play().catch(()=>{}); } catch {}
+              try { v.pause(); v.currentTime = 0; } catch {}
             }}
             className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
-            aria-label="Toggle sound"
-            title="Sound"
+            aria-label="Stop"
+            title="Stop"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5 9v6h4l5 5V4L9 9H5z" />
-              <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
+              <rect x="6" y="6" width="12" height="12" rx="2" />
             </svg>
           </button>
         </div>

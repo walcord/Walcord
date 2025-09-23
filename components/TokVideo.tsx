@@ -53,11 +53,6 @@ export default function TokVideoPage() {
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Sound On global
-  const [globalSound] = useState<boolean>(() => {
-    return typeof window !== 'undefined' && sessionStorage.getItem('walcordTokSoundOn') === '1';
-  });
-
   // Refs para control único vídeo
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const activeIdRef = useRef<string | null>(null);
@@ -78,7 +73,7 @@ export default function TokVideoPage() {
       .range(from, from + PAGE_SIZE - 1);
 
     if (data) {
-      const rows = shuffleInPlace([...data]) as ClipRow[];
+      const rows = shuffleInPlace([...(data as ClipRow[])]);
 
       if (pageIndex === 0 && id) {
         const idx = rows.findIndex(d => d.id === id);
@@ -91,7 +86,7 @@ export default function TokVideoPage() {
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
-  // Único vídeo activo
+  // Único vídeo activo con intento de sonido auto
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -105,7 +100,7 @@ export default function TokVideoPage() {
             if (k !== id) { try { v.pause(); v.muted = true; v.currentTime = 0; } catch {} }
           });
           activeIdRef.current = id;
-          try { vid.muted = !globalSound; await vid.play(); }
+          try { vid.muted = false; await vid.play(); }
           catch { vid.muted = true; try { await vid.play(); } catch {} }
         } else {
           if (activeIdRef.current === id) activeIdRef.current = null;
@@ -116,7 +111,7 @@ export default function TokVideoPage() {
 
     videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
-  }, [items.length, globalSound]);
+  }, [items.length]);
 
   // infinite scroll
   useEffect(() => {
@@ -218,7 +213,7 @@ function VideoCard({ item, register }: { item: ClipRow, register: (el: HTMLVideo
           />
           {showPlay && (
             <button
-              onClick={() => videoRef.current?.play().catch(()=>{})}
+              onClick={() => { if (!videoRef.current) return; videoRef.current.muted = false; videoRef.current.play().catch(()=>{}); }}
               className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
               aria-label="Play"
               title="Play"
@@ -228,13 +223,14 @@ function VideoCard({ item, register }: { item: ClipRow, register: (el: HTMLVideo
               </span>
             </button>
           )}
+          {/* Botón Stop */}
           <button
-            onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); const v=videoRef.current; if(!v) return; v.muted=!v.muted; if (v.paused) v.play().catch(()=>{}); }}
+            onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); const v=videoRef.current; if(!v) return; try { v.pause(); v.currentTime=0; } catch {} }}
             className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
-            aria-label="Toggle sound"
-            title="Sound"
+            aria-label="Stop"
+            title="Stop"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9v6h4l5 5V4L9 9H5z"/><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
           </button>
         </div>
 
