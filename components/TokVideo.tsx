@@ -35,12 +35,11 @@ function getUsername(p: ProfilesRelation): string | null {
   return p.username ?? null;
 }
 function ordinal(n: number) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
+  const s = ['th','st','nd','rd']; const v = n%100;
   // @ts-ignore
-  return s[(v - 20) % 10] || s[v] || s[0];
+  return s[(v-20)%10]||s[v]||s[0];
 }
-function formatEditorialDate(iso: string | null | undefined) {
+function formatEditorialDate(iso?: string | null) {
   if (!iso) return null;
   try {
     const d = new Date(iso);
@@ -48,9 +47,7 @@ function formatEditorialDate(iso: string | null | undefined) {
     const month = d.toLocaleString(undefined, { month: 'long' });
     const year = d.getFullYear();
     return `${day}${ordinal(day)} ${month}, ${year}`;
-  } catch {
-    return iso ?? null;
-  }
+  } catch { return iso ?? null; }
 }
 function shuffleInPlace<T>(arr: T[]) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -123,6 +120,7 @@ export default function TokVideoPage() {
 
   return (
     <div
+      id="tok-scroller"
       ref={containerRef}
       className="h-screen w-screen overflow-y-scroll"
       style={{
@@ -135,8 +133,8 @@ export default function TokVideoPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {items.map((it) => (
-        <VideoCard key={it.id} item={it} />
+      {items.map((it, idx) => (
+        <VideoCard key={it.id} item={it} forceFirstLoad={idx===0} />
       ))}
       {loading && (
         <div className="h-[25vh] flex items-center justify-center text-black/50">
@@ -148,7 +146,7 @@ export default function TokVideoPage() {
 }
 
 /* ===== Card a pantalla casi completa ===== */
-function VideoCard({ item }: { item: ClipRow }) {
+function VideoCard({ item, forceFirstLoad }: { item: ClipRow, forceFirstLoad?: boolean }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -156,61 +154,55 @@ function VideoCard({ item }: { item: ClipRow }) {
   const [showHint, setShowHint] = useState(true);
   const [shouldLoad, setShouldLoad] = useState(false);
 
-  // Visibilidad para play/pause
+  // Visibilidad para play/pause (root = contenedor con scroll)
   useEffect(() => {
     const node = videoRef.current;
+    const rootEl = document.getElementById('tok-scroller');
     if (!node) return;
     const obs = new IntersectionObserver(
       (entries) => {
         const e = entries[0];
         setIsVisible(e.isIntersecting && e.intersectionRatio >= 0.7);
       },
-      { threshold: [0, 0.7, 1] }
+      { root: rootEl, threshold: [0, 0.7, 1] }
     );
     obs.observe(node);
     return () => obs.unobserve(node);
   }, []);
 
-  // Decidir cuándo asignar el SRC (prioriza lo que está arriba/en viewport)
+  // Decidir cuándo asignar el SRC (root = contenedor con scroll)
   useEffect(() => {
     const node = sentinelRef.current;
+    const rootEl = document.getElementById('tok-scroller');
     if (!node) return;
     const io = new IntersectionObserver(
       (entries) => {
-        const e = entries[0];
-        if (e.isIntersecting) {
+        if (entries[0].isIntersecting) {
           setShouldLoad(true);
           io.disconnect();
         }
       },
-      { root: null, rootMargin: '300px 0px', threshold: 0.01 }
+      { root: rootEl, rootMargin: '300px 0px', threshold: 0.01 }
     );
     io.observe(node);
-    return () => io.disconnect();
-  }, []);
+
+    // Fallback para el primer ítem
+    let t:any;
+    if (forceFirstLoad) t = setTimeout(()=>setShouldLoad(true), 400);
+
+    return () => { io.disconnect(); if (t) clearTimeout(t); };
+  }, [forceFirstLoad]);
 
   // Autoplay con audio si el navegador lo permite
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-
     const tryPlay = async () => {
-      try {
-        v.muted = false;
-        await v.play();
-        setMuted(false);
-      } catch {
-        v.muted = true;
-        setMuted(true);
-        try { await v.play(); } catch {}
-      }
+      try { v.muted = false; await v.play(); setMuted(false); }
+      catch { v.muted = true; setMuted(true); try { await v.play(); } catch {} }
     };
-
-    if (isVisible) {
-      tryPlay();
-    } else {
-      try { v.pause(); v.currentTime = 0; } catch {}
-    }
+    if (isVisible) tryPlay();
+    else { try { v.pause(); v.currentTime = 0; } catch {} }
   }, [isVisible]);
 
   const username = getUsername(item.profiles);
@@ -218,22 +210,14 @@ function VideoCard({ item }: { item: ClipRow }) {
   const isConcert = (item.kind ?? 'concert') === 'concert';
   const primaryTitle = (isConcert && item.artist_name)
     ? item.artist_name
-    : (item.experience
-        ? item.experience.charAt(0).toUpperCase() + item.experience.slice(1)
-        : 'Event');
+    : (item.experience ? item.experience.charAt(0).toUpperCase() + item.experience.slice(1) : 'Event');
 
   const profileHref = username ? `/u/${username}` : `/u/${item.user_id ?? ''}`;
 
   return (
-    <section
-      className="relative h-screen w-screen flex items-center justify-center"
-      style={{ scrollSnapAlign: 'start' }}
-    >
-      {/* Sentinel para activar la carga del vídeo */}
+    <section className="relative h-screen w-screen flex items-center justify-center" style={{ scrollSnapAlign: 'start' }}>
       <div ref={sentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
-
       <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
-        {/* Caja del vídeo */}
         <Link href={profileHref} className="block" style={{ textDecoration: 'none' }}>
           <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)] relative">
             <video
@@ -243,10 +227,9 @@ function VideoCard({ item }: { item: ClipRow }) {
               className="w-full h-full object-cover"
               loop
               playsInline
-              preload="none"
+              preload="metadata"
               muted
             />
-            {/* Botón sonido por encima de cualquier overlay */}
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -264,9 +247,7 @@ function VideoCard({ item }: { item: ClipRow }) {
               title={muted ? 'Unmute' : 'Mute'}
             >
               {muted ? (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M5 9v6h4l5 5V4L9 9H5z" />
-                </svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9v6h4l5 5V4L9 9H5z" /></svg>
               ) : (
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M5 9v6h4l5 5V4L9 9H5z" />
@@ -275,8 +256,6 @@ function VideoCard({ item }: { item: ClipRow }) {
                 </svg>
               )}
             </button>
-
-            {/* Hint “Tap for sound” */}
             {showHint && muted && (
               <div className="absolute left-4 bottom-4 rounded-full bg-black/55 text-white/95 text-xs px-3 py-2 z-[50]">
                 Tap for sound
@@ -285,41 +264,18 @@ function VideoCard({ item }: { item: ClipRow }) {
           </div>
         </Link>
 
-        {/* Tarjeta editorial (no bold en el título) */}
         <Link href={profileHref} className="block no-underline">
           <div className="mt-4 md:mt-6 rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_10px_36px_rgba(0,0,0,0.08)]">
-            <div
-              className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
-              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}
-            >
+            <div className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black" style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}>
               {primaryTitle}
             </div>
-
             <div className="text-[1rem] md:text-[1.1rem] text-black/75 mt-1">
               {[item.city, item.country].filter(Boolean).join(', ')}
             </div>
-
-            {editorialDate && (
-              <div className="text-[0.98rem] text-black/65 mt-0.5">
-                {editorialDate}
-              </div>
-            )}
-
-            {item.venue && (
-              <div className="text-[0.98rem] text-black/65 mt-0.5">
-                {item.venue}
-              </div>
-            )}
-
-            {username && (
-              <div className="text-[0.95rem] text-black/55 mt-3">@{username}</div>
-            )}
-
-            {item.caption && (
-              <p className="text-[1rem] text-black/80 mt-3 leading-relaxed">
-                {item.caption}
-              </p>
-            )}
+            {editorialDate && <div className="text-[0.98rem] text-black/65 mt-0.5">{editorialDate}</div>}
+            {item.venue && <div className="text-[0.98rem] text-black/65 mt-0.5">{item.venue}</div>}
+            {username && <div className="text-[0.95rem] text-black/55 mt-3">@{username}</div>}
+            {item.caption && <p className="text-[1rem] text-black/80 mt-3 leading-relaxed">{item.caption}</p>}
           </div>
         </Link>
       </div>

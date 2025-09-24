@@ -100,24 +100,7 @@ export default function TokPage() {
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
-  // Infinite scroll
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      if (loading) return;
-      const { scrollTop, clientHeight, scrollHeight } = el;
-      if (scrollTop + clientHeight >= scrollHeight * 0.82) {
-        const next = page + 1;
-        setPage(next);
-        fetchPage(next);
-      }
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [page, loading, fetchPage]);
-
-  // Autoplay/pause según visibilidad (controla play/pause; el SRC se decide en cada Section)
+  // Autoplay/pause y focus en el clip visible
   useEffect(() => {
     const container = scrollerRef.current;
     if (!container) return;
@@ -126,18 +109,11 @@ export default function TokPage() {
         entries.forEach(async (e) => {
           const vid = e.target as HTMLVideoElement;
           if (e.isIntersecting && e.intersectionRatio >= 0.7) {
-            // Pausar el resto
-            videosRef.current.forEach(v => { if (v !== vid) { try { v.pause(); v.currentTime = 0; } catch {} } });
-            // Intentar reproducir con sonido; si falla → mute
-            try {
-              vid.muted = false;
-              await vid.play();
-            } catch {
-              vid.muted = true;
-              try { await vid.play(); } catch {}
-            }
+            videosRef.current.forEach(v => { if (v !== vid) { try { v.pause(); v.muted = true; v.currentTime = 0; } catch {} } });
+            try { vid.muted = false; await vid.play(); }
+            catch { vid.muted = true; try { await vid.play(); } catch {} }
           } else {
-            try { vid.pause(); } catch {}
+            try { vid.pause(); vid.muted = true; } catch {}
           }
         });
       },
@@ -147,7 +123,6 @@ export default function TokPage() {
     return () => io.disconnect();
   }, [items.length]);
 
-  // Limpieza del map cuando un vídeo se desmonta
   const registerVideo = useCallback((id: string, el: HTMLVideoElement | null) => {
     if (el) videosRef.current.set(id, el);
     else videosRef.current.delete(id);
@@ -155,6 +130,7 @@ export default function TokPage() {
 
   return (
     <div
+      id="tok-scroller"
       ref={scrollerRef}
       className="min-h-screen w-full overflow-y-auto"
       style={{
@@ -167,42 +143,38 @@ export default function TokPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {err && (
-        <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">
-          {err}
-        </div>
-      )}
+      {err && <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">{err}</div>}
+
       {!err && !loading && items.length === 0 && (
-        <div className="h-[20vh] flex items-center justify-center text-black/50 px-4">
-          No clips yet.
-        </div>
+        <div className="h-[20vh] flex items-center justify-center text-black/50 px-4">No clips yet.</div>
       )}
 
-      {items.map((clip) => (
+      {items.map((clip, idx) => (
         <Section
           key={clip.id}
           clip={clip}
           username={clip.user_id ? usernames[clip.user_id] ?? null : null}
           register={(el) => registerVideo(clip.id, el)}
+          forceFirstLoad={idx === 0}
         />
       ))}
 
-      {loading && (
-        <div className="h-[20vh] flex items-center justify-center text-black/50">Loading…</div>
-      )}
+      {loading && <div className="h-[20vh] flex items-center justify-center text-black/50">Loading…</div>}
     </div>
   );
 }
 
-/* ===== Sección: vídeo + tarjeta (cruzada), con fixes de SONIDO y carga diferida ===== */
+/* ===== Sección: vídeo + tarjeta ===== */
 function Section({
   clip,
   username,
   register,
+  forceFirstLoad,
 }: {
   clip: ClipRow;
   username: string | null;
   register: (el: HTMLVideoElement | null) => void;
+  forceFirstLoad?: boolean;
 }) {
   const localVidRef = useRef<HTMLVideoElement | null>(null);
   const loadSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -214,13 +186,14 @@ function Section({
     : (clip.experience ? clip.experience.charAt(0).toUpperCase() + clip.experience.slice(1) : 'Event');
   const place = [clip.city, clip.country].filter(Boolean).join(', ');
   const prettyDate = formatEditorialDate(clip.event_date);
-
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
 
-  // Decidir cuándo cargar el SRC (pre-carga ~300px antes)
+  // FIX: el observer usa como root el contenedor con id="tok-scroller"
   useEffect(() => {
     const node = loadSentinelRef.current;
     if (!node) return;
+
+    const rootEl = document.getElementById('tok-scroller');
     const io = new IntersectionObserver(
       (entries) => {
         const e = entries[0];
@@ -229,23 +202,25 @@ function Section({
           io.disconnect();
         }
       },
-      { root: null, rootMargin: '300px 0px', threshold: 0.01 }
+      { root: rootEl, rootMargin: '300px 0px', threshold: 0.01 }
     );
     io.observe(node);
-    return () => io.disconnect();
-  }, []);
+
+    // Fallback: fuerza el primer clip tras 400ms por si el IO tarda
+    let t: any;
+    if (forceFirstLoad) t = setTimeout(() => setShouldLoad(true), 400);
+
+    return () => { io.disconnect(); if (t) clearTimeout(t); };
+  }, [forceFirstLoad]);
 
   return (
     <section
       className="relative h-screen w-screen flex items-center justify-center"
       style={{ scrollSnapAlign: 'start' }}
     >
-      {/* Sentinel invisible para activar la carga del vídeo */}
       <div ref={loadSentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
 
-      {/* z-index ALTO para quedar por encima de la bottom bar y permitir click al perfil */}
       <div className="relative z-[99] w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
-        {/* VÍDEO casi full-screen. Click → perfil */}
         <Link href={profileHref} className="block no-underline">
           <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
             <video
@@ -255,19 +230,15 @@ function Section({
               className="w-full h-full object-cover"
               loop
               playsInline
-              preload="none"
-              // arrancamos en mute para cumplir autoplay en móviles;
-              // el observer de la página intentará desmutear y reproducir
+              preload="metadata"  /* poster siempre visible */
               muted
             />
-            {/* Botón de sonido con z-index por encima de la tarjeta */}
             <button
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 const v = localVidRef.current;
                 if (!v) return;
-                // flip mute, “jog” tiny jump para forzar refetch de audio en iOS
                 try { v.pause(); } catch {}
                 v.muted = !v.muted;
                 try { v.currentTime = Math.max(0, v.currentTime - 0.001); } catch {}
@@ -285,15 +256,11 @@ function Section({
           </div>
         </Link>
 
-        {/* TARJETA cruzando el borde inferior del vídeo. Click → perfil */}
         <Link href={profileHref} className="block no-underline">
           <div
             className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)] z-[40]"
           >
-            <div
-              className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
-              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}
-            >
+            <div className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black" style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}>
               {title}
             </div>
             <div className="text-[1rem] md:text-[1.1rem] text-black/75 mt-1">{place}</div>
