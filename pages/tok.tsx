@@ -90,8 +90,7 @@ export default function TokPage() {
     }
 
     const batch = (data as ClipRow[]) ?? [];
-    // ➜ orden aleatorio por sesión/carga
-    const randomized = shuffleInPlace([...batch]);
+    const randomized = shuffleInPlace([...batch]); // aleatorio por sesión
 
     setItems(prev => (pageIndex === 0 ? randomized : [...prev, ...randomized]));
 
@@ -120,7 +119,7 @@ export default function TokPage() {
     else videosRef.current.delete(id);
   }, []);
 
-  // ÚNICO vídeo activo + autoplay con sonido (si el navegador lo permite)
+  // ÚNICO vídeo activo; pausa al salir de foco
   useEffect(() => {
     const container = scrollerRef.current;
     if (!container) return;
@@ -133,32 +132,17 @@ export default function TokPage() {
           if (!id) continue;
 
           if (e.isIntersecting && e.intersectionRatio >= 0.7) {
-            // Marcar índice activo (para precarga del siguiente)
             const idxAttr = vid.getAttribute('data-index');
             if (idxAttr) setActiveIndex(parseInt(idxAttr, 10));
 
-            // Pausar/silenciar los demás
+            // pausar los demás
             videosRef.current.forEach((v, k) => {
-              if (k !== id) {
-                try { v.pause(); v.muted = true; v.currentTime = 0; } catch {}
-              }
+              if (k !== id) { try { v.pause(); v.muted = true; } catch {} }
             });
-
             activeIdRef.current = id;
-
-            try {
-              vid.muted = false; // intenta con sonido
-              vid.preload = 'auto';
-              await vid.play();
-            } catch {
-              // Fallback si el navegador bloquea: mute + play
-              vid.muted = true;
-              vid.preload = 'auto';
-              try { await vid.play(); } catch {}
-            }
           } else {
             if (activeIdRef.current === id) activeIdRef.current = null;
-            try { vid.pause(); vid.muted = true; vid.currentTime = 0; } catch {}
+            try { vid.pause(); vid.muted = true; } catch {}
           }
         }
       },
@@ -246,11 +230,8 @@ function Section({
   containerRef: React.MutableRefObject<HTMLDivElement | null>;
 }) {
   const localVidRef = useRef<HTMLVideoElement | null>(null);
-  const loadSentinelRef = useRef<HTMLDivElement | null>(null);
-  const [shouldLoad, setShouldLoad] = useState(false);
-
-  // overlay play/pause temporal
-  const [showOverlay, setShowOverlay] = useState<null | 'play' | 'pause'>(null);
+  const [shouldLoad, setShouldLoad] = useState(false); // sólo se pone el src al pulsar
+  const [showOverlay, setShowOverlay] = useState<null | 'play' | 'pause'>('play');
   const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isConcert = (clip.kind ?? 'concert') === 'concert';
@@ -261,71 +242,53 @@ function Section({
   const prettyDate = formatEditorialDate(clip.event_date);
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
 
-  // Precarga controlada: el sentinel usa como root el contenedor de scroll (no la ventana)
-  useEffect(() => {
-    const node = loadSentinelRef.current;
-    const rootEl = containerRef.current;
-    if (!node || !rootEl) return;
+  useEffect(() => () => { if (overlayTimer.current) clearTimeout(overlayTimer.current); }, []);
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setShouldLoad(true);
-          io.disconnect();
-        }
-      },
-      // precarga cuando está a ~40% de entrar al viewport del contenedor
-      { root: rootEl, rootMargin: '40% 0px', threshold: 0.01 }
-    );
-    io.observe(node);
-    return () => io.disconnect();
-  }, [containerRef]);
-
-  // Precargar también el siguiente al activo (para que no “tarde 5 min”)
-  useEffect(() => {
-    if (index === activeIndex + 1) setShouldLoad(true);
-  }, [activeIndex, index]);
-
-  // Limpiar overlay timer
-  useEffect(() => {
-    return () => { if (overlayTimer.current) clearTimeout(overlayTimer.current); };
-  }, []);
-
-  const handleTapToggle = () => {
+  const handleTap = () => {
     const v = localVidRef.current;
     if (!v) return;
-    try {
-      if (v.paused) {
-        v.muted = false;
-        v.play().catch(() => {
-          v.muted = true;
-          v.play().catch(()=>{});
+
+    // Si aún no hemos cargado, asignar src y reproducir
+    if (!shouldLoad) {
+      setShouldLoad(true);
+      // reproducir después del ciclo para asegurar que el src ya está
+      setTimeout(() => {
+        const vv = localVidRef.current;
+        if (!vv) return;
+        vv.muted = false;
+        vv.play().catch(() => {
+          vv.muted = true;
+          vv.play().catch(()=>{});
         });
-        setShowOverlay('play');
-      } else {
-        v.pause();
-        setShowOverlay('pause');
-      }
+      }, 0);
+      setShowOverlay('play');
       if (overlayTimer.current) clearTimeout(overlayTimer.current);
       overlayTimer.current = setTimeout(() => setShowOverlay(null), 700);
-    } catch {}
+      return;
+    }
+
+    // Si ya cargó, alternar play/pause
+    if (v.paused) {
+      v.muted = false;
+      v.play().catch(() => { v.muted = true; v.play().catch(()=>{}); });
+      setShowOverlay('play');
+    } else {
+      v.pause();
+      setShowOverlay('pause');
+    }
+    if (overlayTimer.current) clearTimeout(overlayTimer.current);
+    overlayTimer.current = setTimeout(() => setShowOverlay(null), 700);
   };
 
   return (
-    <section
-      className="relative h-screen w-screen flex items-center justify-center"
-      style={{ scrollSnapAlign: 'start' }}
-    >
-      {/* Sentinel invisible para activar la carga del vídeo */}
-      <div ref={loadSentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
-
+    <section className="relative h-screen w-screen flex items-center justify-center" style={{ scrollSnapAlign: 'start' }}>
       <div className="relative z-[99] w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
-        {/* VÍDEO */}
+        {/* VÍDEO (sin src hasta pulsar) */}
         <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
           <video
-            ref={(el) => { 
-              register(el); 
-              localVidRef.current = el; 
+            ref={(el) => {
+              register(el);
+              localVidRef.current = el;
               if (el) el.setAttribute('data-index', String(index));
             }}
             data-vid={dataVid}
@@ -334,14 +297,14 @@ function Section({
             className="w-full h-full object-cover"
             loop
             playsInline
-            preload={index === activeIndex ? 'auto' : 'metadata'}
+            preload={shouldLoad ? 'auto' : 'none'}
             muted
             // @ts-ignore – para iOS
             webkit-playsinline="true"
-            onClick={handleTapToggle}
+            onClick={handleTap}
           />
 
-          {/* Overlay tap feedback (play/pause) */}
+          {/* Overlay (Play/Pause) siempre visible al inicio */}
           {showOverlay && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[70]">
               <span
@@ -349,13 +312,9 @@ function Section({
                 style={{ boxShadow: '0 6px 24px rgba(0,0,0,0.28)' }}
               >
                 {showOverlay === 'play' ? (
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 ) : (
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
-                  </svg>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
                 )}
               </span>
             </div>
@@ -367,10 +326,7 @@ function Section({
           <div
             className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)] z-[40]"
           >
-            <div
-              className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black"
-              style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}
-            >
+            <div className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black" style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}>
               {title}
             </div>
             <div className="text-[1rem] md:text-[1.1rem] text-black/75 mt-1">{place}</div>

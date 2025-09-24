@@ -94,7 +94,7 @@ export default function TokVideoPage() {
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
-  // Único vídeo activo con intento de sonido auto
+  // Único vídeo activo: pausa al salir del foco
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -108,16 +108,13 @@ export default function TokVideoPage() {
         if (e.isIntersecting && e.intersectionRatio >= 0.7) {
           const idxAttr = vid.getAttribute('data-index');
           if (idxAttr) setActiveIndex(parseInt(idxAttr, 10));
-
           videosRef.current.forEach((v, k) => {
-            if (k !== id) { try { v.pause(); v.muted = true; v.currentTime = 0; } catch {} }
+            if (k !== id) { try { v.pause(); v.muted = true; } catch {} }
           });
           activeIdRef.current = id;
-          try { vid.muted = false; vid.preload = 'auto'; await vid.play(); }
-          catch { vid.muted = true; vid.preload = 'auto'; try { await vid.play(); } catch {} }
         } else {
           if (activeIdRef.current === id) activeIdRef.current = null;
-          try { vid.pause(); vid.muted = true; vid.currentTime = 0; } catch {}
+          try { vid.pause(); vid.muted = true; } catch {}
         }
       }
     }, { root: container, threshold: [0,0.7,1] });
@@ -191,42 +188,33 @@ function VideoCard({
   containerRef: React.MutableRefObject<HTMLDivElement | null>,
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const [shouldLoad, setShouldLoad] = useState(false);
-
-  // overlay play/pause temporal
-  const [showOverlay, setShowOverlay] = useState<null | 'play' | 'pause'>(null);
+  const [shouldLoad, setShouldLoad] = useState(false); // se pone src al pulsar
+  const [showOverlay, setShowOverlay] = useState<null | 'play' | 'pause'>('play');
   const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const node = sentinelRef.current;
-    const rootEl = containerRef.current;
-    if (!node || !rootEl) return;
-    const io = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) { setShouldLoad(true); io.disconnect(); }
-    }, { root: rootEl, rootMargin: '40% 0px', threshold: 0.01 });
-    io.observe(node);
-    return () => io.disconnect();
-  }, [containerRef]);
-
-  // precargar el siguiente al activo
-  useEffect(() => {
-    if (index === activeIndex + 1) setShouldLoad(true);
-  }, [activeIndex, index]);
-
-  useEffect(() => {
-    return () => { if (overlayTimer.current) clearTimeout(overlayTimer.current); };
-  }, []);
+  useEffect(() => () => { if (overlayTimer.current) clearTimeout(overlayTimer.current); }, []);
 
   const onTap = () => {
     const v = videoRef.current;
     if (!v) return;
+
+    if (!shouldLoad) {
+      setShouldLoad(true);
+      setTimeout(() => {
+        const vv = videoRef.current;
+        if (!vv) return;
+        vv.muted = false;
+        vv.play().catch(() => { vv.muted = true; vv.play().catch(()=>{}); });
+      }, 0);
+      setShowOverlay('play');
+      if (overlayTimer.current) clearTimeout(overlayTimer.current);
+      overlayTimer.current = setTimeout(() => setShowOverlay(null), 700);
+      return;
+    }
+
     if (v.paused) {
       v.muted = false;
-      v.play().catch(() => {
-        v.muted = true;
-        v.play().catch(()=>{});
-      });
+      v.play().catch(() => { v.muted = true; v.play().catch(()=>{}); });
       setShowOverlay('play');
     } else {
       v.pause();
@@ -244,7 +232,6 @@ function VideoCard({
 
   return (
     <section className="relative h-screen w-screen flex items-center justify-center" style={{ scrollSnapAlign: 'start' }}>
-      <div ref={sentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
       <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
         <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)] relative">
           <video
@@ -255,7 +242,7 @@ function VideoCard({
             className="w-full h-full object-cover"
             loop
             playsInline
-            preload={index === activeIndex ? 'auto' : 'metadata'}
+            preload={shouldLoad ? 'auto' : 'none'}
             muted
             // @ts-ignore
             webkit-playsinline="true"
