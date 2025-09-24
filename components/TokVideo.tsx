@@ -40,7 +40,15 @@ function formatEditorialDate(iso?: string | null) {
   const d = new Date(iso); const day = d.getDate();
   return `${day}${(['th','st','nd','rd'] as const)[(day%100-20)%10 as any]||(['th','st','nd','rd'] as const)[day as any]||'th'} ${d.toLocaleString(undefined,{month:'long'})}, ${d.getFullYear()}`;
 }
-function shuffleInPlace<T>(arr: T[]) { for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+function shuffleInPlace<T>(arr: T[]) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
 
 /* ===== Página ===== */
 export default function TokVideoPage() {
@@ -52,6 +60,7 @@ export default function TokVideoPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number>(0);
 
   // Refs para control único vídeo
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -74,7 +83,6 @@ export default function TokVideoPage() {
 
     if (data) {
       const rows = shuffleInPlace([...(data as ClipRow[])]);
-
       if (pageIndex === 0 && id) {
         const idx = rows.findIndex(d => d.id === id);
         if (idx > 0) { const selected = rows[idx]; rows.splice(idx, 1); rows.unshift(selected); }
@@ -95,13 +103,18 @@ export default function TokVideoPage() {
       for (const e of entries) {
         const vid = e.target as HTMLVideoElement;
         const id = vid.dataset.vid as string;
+        if (!id) continue;
+
         if (e.isIntersecting && e.intersectionRatio >= 0.7) {
+          const idxAttr = vid.getAttribute('data-index');
+          if (idxAttr) setActiveIndex(parseInt(idxAttr, 10));
+
           videosRef.current.forEach((v, k) => {
             if (k !== id) { try { v.pause(); v.muted = true; v.currentTime = 0; } catch {} }
           });
           activeIdRef.current = id;
-          try { vid.muted = false; await vid.play(); }
-          catch { vid.muted = true; try { await vid.play(); } catch {} }
+          try { vid.muted = false; vid.preload = 'auto'; await vid.play(); }
+          catch { vid.muted = true; vid.preload = 'auto'; try { await vid.play(); } catch {} }
         } else {
           if (activeIdRef.current === id) activeIdRef.current = null;
           try { vid.pause(); vid.muted = true; vid.currentTime = 0; } catch {}
@@ -150,8 +163,15 @@ export default function TokVideoPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {items.map((it) => (
-        <VideoCard key={it.id} item={it} register={(el)=>registerVideo(it.id, el)} />
+      {items.map((it, idx) => (
+        <VideoCard
+          key={it.id}
+          index={idx}
+          activeIndex={activeIndex}
+          item={it}
+          register={(el)=>registerVideo(it.id, el)}
+          containerRef={containerRef}
+        />
       ))}
       {loading && (
         <div className="h-[25vh] flex items-center justify-center text-black/50">Loading…</div>
@@ -161,31 +181,60 @@ export default function TokVideoPage() {
 }
 
 /* ===== Card ===== */
-function VideoCard({ item, register }: { item: ClipRow, register: (el: HTMLVideoElement|null)=>void }) {
+function VideoCard({
+  item, register, index, activeIndex, containerRef,
+}: {
+  item: ClipRow,
+  register: (el: HTMLVideoElement|null)=>void,
+  index: number,
+  activeIndex: number,
+  containerRef: React.MutableRefObject<HTMLDivElement | null>,
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
-  const [showPlay, setShowPlay] = useState(false);
+
+  // overlay play/pause temporal
+  const [showOverlay, setShowOverlay] = useState<null | 'play' | 'pause'>(null);
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const node = sentinelRef.current;
-    if (!node) return;
+    const rootEl = containerRef.current;
+    if (!node || !rootEl) return;
     const io = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) { setShouldLoad(true); io.disconnect(); }
-    }, { root: null, rootMargin: '300px 0px', threshold: 0.01 });
+    }, { root: rootEl, rootMargin: '40% 0px', threshold: 0.01 });
     io.observe(node);
     return () => io.disconnect();
-  }, []);
+  }, [containerRef]);
+
+  // precargar el siguiente al activo
+  useEffect(() => {
+    if (index === activeIndex + 1) setShouldLoad(true);
+  }, [activeIndex, index]);
 
   useEffect(() => {
+    return () => { if (overlayTimer.current) clearTimeout(overlayTimer.current); };
+  }, []);
+
+  const onTap = () => {
     const v = videoRef.current;
     if (!v) return;
-    const onPlay = () => setShowPlay(false);
-    const onPause = () => setShowPlay(true);
-    v.addEventListener('play', onPlay);
-    v.addEventListener('pause', onPause);
-    return () => { v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause); };
-  }, [shouldLoad]);
+    if (v.paused) {
+      v.muted = false;
+      v.play().catch(() => {
+        v.muted = true;
+        v.play().catch(()=>{});
+      });
+      setShowOverlay('play');
+    } else {
+      v.pause();
+      setShowOverlay('pause');
+    }
+    if (overlayTimer.current) clearTimeout(overlayTimer.current);
+    overlayTimer.current = setTimeout(() => setShowOverlay(null), 700);
+  };
 
   const username = getUsername(item.profiles);
   const isConcert = (item.kind ?? 'concert') === 'concert';
@@ -199,39 +248,30 @@ function VideoCard({ item, register }: { item: ClipRow, register: (el: HTMLVideo
       <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
         <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)] relative">
           <video
-            ref={(el)=>{ register(el); videoRef.current=el; }}
+            ref={(el)=>{ register(el); videoRef.current=el; if (el) el.setAttribute('data-index', String(index)); }}
             data-vid={item.id}
             src={shouldLoad ? (item.video_url ?? undefined) : undefined}
             poster={item.poster_url ?? undefined}
             className="w-full h-full object-cover"
             loop
             playsInline
-            preload="none"
+            preload={index === activeIndex ? 'auto' : 'metadata'}
             muted
             // @ts-ignore
             webkit-playsinline="true"
+            onClick={onTap}
           />
-          {showPlay && (
-            <button
-              onClick={() => { if (!videoRef.current) return; videoRef.current.muted = false; videoRef.current.play().catch(()=>{}); }}
-              className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
-              aria-label="Play"
-              title="Play"
-            >
+          {showOverlay && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[70]">
               <span className="w-16 h-16 rounded-full bg-black/55 text-white flex items-center justify-center" style={{ boxShadow:'0 6px 24px rgba(0,0,0,0.28)' }}>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                {showOverlay === 'play' ? (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                ) : (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+                )}
               </span>
-            </button>
+            </div>
           )}
-          {/* Botón Stop */}
-          <button
-            onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); const v=videoRef.current; if(!v) return; try { v.pause(); v.currentTime=0; } catch {} }}
-            className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
-            aria-label="Stop"
-            title="Stop"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-          </button>
         </div>
 
         <Link href={profileHref} className="block no-underline">

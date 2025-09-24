@@ -47,7 +47,9 @@ function formatEditorialDate(iso: string | null | undefined) {
 function shuffleInPlace<T>(arr: T[]) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
   }
   return arr;
 }
@@ -64,6 +66,7 @@ export default function TokPage() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const activeIdRef = useRef<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number>(0);
 
   const fetchPage = useCallback(async (pageIndex: number) => {
     setLoading(true);
@@ -87,7 +90,7 @@ export default function TokPage() {
     }
 
     const batch = (data as ClipRow[]) ?? [];
-    // ➜ orden aleatorio cada vez que entras/cargas
+    // ➜ orden aleatorio por sesión/carga
     const randomized = shuffleInPlace([...batch]);
 
     setItems(prev => (pageIndex === 0 ? randomized : [...prev, ...randomized]));
@@ -130,7 +133,11 @@ export default function TokPage() {
           if (!id) continue;
 
           if (e.isIntersecting && e.intersectionRatio >= 0.7) {
-            // Desactivar todos los demás
+            // Marcar índice activo (para precarga del siguiente)
+            const idxAttr = vid.getAttribute('data-index');
+            if (idxAttr) setActiveIndex(parseInt(idxAttr, 10));
+
+            // Pausar/silenciar los demás
             videosRef.current.forEach((v, k) => {
               if (k !== id) {
                 try { v.pause(); v.muted = true; v.currentTime = 0; } catch {}
@@ -141,10 +148,12 @@ export default function TokPage() {
 
             try {
               vid.muted = false; // intenta con sonido
+              vid.preload = 'auto';
               await vid.play();
             } catch {
-              // Fallback si el navegador bloquea: lo dejamos mute y probamos
+              // Fallback si el navegador bloquea: mute + play
               vid.muted = true;
+              vid.preload = 'auto';
               try { await vid.play(); } catch {}
             }
           } else {
@@ -198,13 +207,16 @@ export default function TokPage() {
         <div className="h-[20vh] flex items-center justify-center text-black/50 px-4">No clips yet.</div>
       )}
 
-      {items.map((clip) => (
+      {items.map((clip, idx) => (
         <Section
           key={clip.id}
+          index={idx}
+          activeIndex={activeIndex}
           clip={clip}
           username={clip.user_id ? usernames[clip.user_id] ?? null : null}
           register={(el) => registerVideo(clip.id, el)}
           dataVid={clip.id}
+          containerRef={scrollerRef}
         />
       ))}
 
@@ -217,20 +229,29 @@ export default function TokPage() {
 
 /* ===== Sección: vídeo + tarjeta ===== */
 function Section({
+  index,
+  activeIndex,
   clip,
   username,
   register,
   dataVid,
+  containerRef,
 }: {
+  index: number;
+  activeIndex: number;
   clip: ClipRow;
   username: string | null;
   register: (el: HTMLVideoElement | null) => void;
   dataVid: string;
+  containerRef: React.MutableRefObject<HTMLDivElement | null>;
 }) {
   const localVidRef = useRef<HTMLVideoElement | null>(null);
   const loadSentinelRef = useRef<HTMLDivElement | null>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
-  const [pausedByBlock, setPausedByBlock] = useState(false); // muestra botón Play
+
+  // overlay play/pause temporal
+  const [showOverlay, setShowOverlay] = useState<null | 'play' | 'pause'>(null);
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isConcert = (clip.kind ?? 'concert') === 'concert';
   const title = isConcert && clip.artist_name
@@ -240,37 +261,55 @@ function Section({
   const prettyDate = formatEditorialDate(clip.event_date);
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
 
-  // Decidir cuándo cargar el SRC (pre-carga ~300px antes)
+  // Precarga controlada: el sentinel usa como root el contenedor de scroll (no la ventana)
   useEffect(() => {
     const node = loadSentinelRef.current;
-    if (!node) return;
+    const rootEl = containerRef.current;
+    if (!node || !rootEl) return;
+
     const io = new IntersectionObserver(
       (entries) => {
-        const e = entries[0];
-        if (e.isIntersecting) {
+        if (entries[0].isIntersecting) {
           setShouldLoad(true);
           io.disconnect();
         }
       },
-      { root: null, rootMargin: '300px 0px', threshold: 0.01 }
+      // precarga cuando está a ~40% de entrar al viewport del contenedor
+      { root: rootEl, rootMargin: '40% 0px', threshold: 0.01 }
     );
     io.observe(node);
     return () => io.disconnect();
+  }, [containerRef]);
+
+  // Precargar también el siguiente al activo (para que no “tarde 5 min”)
+  useEffect(() => {
+    if (index === activeIndex + 1) setShouldLoad(true);
+  }, [activeIndex, index]);
+
+  // Limpiar overlay timer
+  useEffect(() => {
+    return () => { if (overlayTimer.current) clearTimeout(overlayTimer.current); };
   }, []);
 
-  // Mostrar/ocultar botón play central según evento
-  useEffect(() => {
+  const handleTapToggle = () => {
     const v = localVidRef.current;
     if (!v) return;
-    const onPlay = () => setPausedByBlock(false);
-    const onPause = () => setPausedByBlock(true);
-    v.addEventListener('play', onPlay);
-    v.addEventListener('pause', onPause);
-    return () => {
-      v.removeEventListener('play', onPlay);
-      v.removeEventListener('pause', onPause);
-    };
-  }, [shouldLoad]);
+    try {
+      if (v.paused) {
+        v.muted = false;
+        v.play().catch(() => {
+          v.muted = true;
+          v.play().catch(()=>{});
+        });
+        setShowOverlay('play');
+      } else {
+        v.pause();
+        setShowOverlay('pause');
+      }
+      if (overlayTimer.current) clearTimeout(overlayTimer.current);
+      overlayTimer.current = setTimeout(() => setShowOverlay(null), 700);
+    } catch {}
+  };
 
   return (
     <section
@@ -284,61 +323,43 @@ function Section({
         {/* VÍDEO */}
         <div className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)]">
           <video
-            ref={(el) => { register(el); localVidRef.current = el; }}
+            ref={(el) => { 
+              register(el); 
+              localVidRef.current = el; 
+              if (el) el.setAttribute('data-index', String(index));
+            }}
             data-vid={dataVid}
             src={shouldLoad ? (clip.video_url ?? undefined) : undefined}
             poster={clip.poster_url ?? undefined}
             className="w-full h-full object-cover"
             loop
             playsInline
-            preload="none"
+            preload={index === activeIndex ? 'auto' : 'metadata'}
             muted
             // @ts-ignore – para iOS
             webkit-playsinline="true"
+            onClick={handleTapToggle}
           />
 
-          {/* Botón central Play */}
-          {pausedByBlock && (
-            <button
-              onClick={() => {
-                const v = localVidRef.current;
-                if (!v) return;
-                v.muted = false;
-                v.play().catch(() => {});
-              }}
-              className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
-              aria-label="Play"
-              title="Play"
-              style={{ backdropFilter: 'none' }}
-            >
+          {/* Overlay tap feedback (play/pause) */}
+          {showOverlay && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[70]">
               <span
                 className="w-16 h-16 rounded-full bg-black/55 text-white flex items-center justify-center"
                 style={{ boxShadow: '0 6px 24px rgba(0,0,0,0.28)' }}
               >
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+                {showOverlay === 'play' ? (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                ) : (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+                  </svg>
+                )}
               </span>
-            </button>
+            </div>
           )}
-
-          {/* Botón Stop (pausar y resetear) */}
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const v = localVidRef.current;
-              if (!v) return;
-              try { v.pause(); v.currentTime = 0; } catch {}
-            }}
-            className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
-            aria-label="Stop"
-            title="Stop"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-          </button>
         </div>
 
         {/* TARJETA (link al perfil) */}
