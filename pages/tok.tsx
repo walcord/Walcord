@@ -26,23 +26,16 @@ type Profile = { id: string; username: string | null };
 const PAGE_SIZE = 10;
 
 /* ===== Utils ===== */
-function ordinal(n: number) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  // @ts-ignore
-  return s[(v - 20) % 10] || s[v] || s[0];
-}
-function formatEditorialDate(iso: string | null | undefined) {
+function ordinal(n: number) { const s=['th','st','nd','rd']; const v=n%100; /* @ts-ignore */ return s[(v-20)%10]||s[v]||s[0]; }
+function formatEditorialDate(iso?: string | null) {
   if (!iso) return null;
-  try {
-    const d = new Date(iso);
-    const day = d.getDate();
-    const month = d.toLocaleString(undefined, { month: 'long' });
-    const year = d.getFullYear();
-    return `${day}${ordinal(day)} ${month}, ${year}`;
-  } catch {
-    return iso ?? null;
-  }
+  try { const d=new Date(iso); const day=d.getDate(); const month=d.toLocaleString(undefined,{month:'long'}); const year=d.getFullYear(); return `${day}${ordinal(day)} ${month}, ${year}`; }
+  catch { return iso ?? null; }
+}
+function seededShuffle<T>(arr: T[], seed: number) {
+  const a=[...arr]; let s=seed>>>0;
+  for (let i=a.length-1;i>0;i--){ s^=s<<13; s^=s>>>17; s^=s<<5; const j=Math.abs(s)%(i+1); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
 }
 
 /* ===== Página: feed vertical ===== */
@@ -57,11 +50,23 @@ export default function TokPage() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
+  // Semilla por sesión → orden diferente cada vez que entras
+  const [seed] = useState<number>(() => {
+    if (typeof window === 'undefined') return Date.now() & 0xffffffff;
+    if (!sessionStorage.getItem('tokSeed')) {
+      const r = (crypto.getRandomValues(new Uint32Array(1))[0]) >>> 0;
+      sessionStorage.setItem('tokSeed', String(r));
+      return r;
+    }
+    return Number(sessionStorage.getItem('tokSeed')) >>> 0;
+  });
+
   const fetchPage = useCallback(async (pageIndex: number) => {
     setLoading(true);
     setErr(null);
     const from = pageIndex * PAGE_SIZE;
 
+    // SIN .order(): nosotros barajamos para orden aleatorio real
     const { data, error } = await supabase
       .from('clips')
       .select(`
@@ -69,7 +74,6 @@ export default function TokPage() {
         artist_name, venue, city, country, event_date,
         duration_seconds, created_at, kind, experience
       `)
-      .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) {
@@ -78,7 +82,7 @@ export default function TokPage() {
       return;
     }
 
-    const batch = (data as ClipRow[]) ?? [];
+    const batch = seededShuffle((data as ClipRow[]) ?? [], seed + pageIndex * 131);
     setItems(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
 
     // usernames aparte
@@ -96,7 +100,7 @@ export default function TokPage() {
     }
 
     setLoading(false);
-  }, [supabase, usernames]);
+  }, [supabase, usernames, seed]);
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
@@ -106,20 +110,9 @@ export default function TokPage() {
     else videosRef.current.delete(id);
   }, []);
 
-  // Pausar TODOS menos el indicado (cuando tocas Play en uno)
-  const pauseOthers = useCallback((id: string) => {
-    videosRef.current.forEach((v, k) => {
-      if (k !== id) {
-        try { v.pause(); v.muted = true; v.currentTime = 0; } catch {}
-      }
-    });
-  }, []);
-
-  // Al salir del viewport, pausar siempre (sin mezclar audio)
+  // Pausar TODOS los que salen del viewport (no audio mezclado)
   useEffect(() => {
-    const container = scrollerRef.current;
-    if (!container) return;
-
+    const container = scrollerRef.current; if (!container) return;
     const io = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         const vid = e.target as HTMLVideoElement;
@@ -128,22 +121,18 @@ export default function TokPage() {
         }
       });
     }, { root: container, threshold: [0, 0.7, 1] });
-
     videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
   }, [items.length]);
 
   // Infinite scroll
   useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
+    const el = scrollerRef.current; if (!el) return;
     const onScroll = () => {
       if (loading) return;
       const { scrollTop, clientHeight, scrollHeight } = el;
       if (scrollTop + clientHeight >= scrollHeight * 0.82) {
-        const next = page + 1;
-        setPage(next);
-        fetchPage(next);
+        const next = page + 1; setPage(next); fetchPage(next);
       }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
@@ -165,15 +154,9 @@ export default function TokPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {err && (
-        <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">
-          {err}
-        </div>
-      )}
+      {err && <div className="h-[20vh] flex items-center justify-center text-red-600 px-4">{err}</div>}
       {!err && !loading && items.length === 0 && (
-        <div className="h-[20vh] flex items-center justify-center text-black/50 px-4">
-          No clips yet.
-        </div>
+        <div className="h-[20vh] flex items-center justify-center text-black/50 px-4">No clips yet.</div>
       )}
 
       {items.map((clip, idx) => (
@@ -182,95 +165,77 @@ export default function TokPage() {
           clip={clip}
           username={clip.user_id ? usernames[clip.user_id] ?? null : null}
           register={(el) => registerVideo(clip.id, el)}
-          pauseOthers={() => pauseOthers(clip.id)}
-          forceFirstLoad={idx === 0}
+          eagerLevel={idx < 3 ? (idx + 1) as 1|2|3 : 0}
+          pauseOthers={(id) => {
+            videosRef.current.forEach((v, k) => {
+              if (k !== id) { try { v.pause(); v.muted = true; v.currentTime = 0; } catch {} }
+            });
+          }}
         />
       ))}
 
-      {loading && (
-        <div className="h-[20vh] flex items-center justify-center text-black/50">Loading…</div>
-      )}
+      {loading && <div className="h-[20vh] flex items-center justify-center text-black/50">Loading…</div>}
     </div>
   );
 }
 
-/* ===== Sección: vídeo + tarjeta — Play/Pause tipo TikTok ===== */
+/* ===== Sección: vídeo + tarjeta — Play/Pause + carga rápida ===== */
 function Section({
   clip,
   username,
   register,
   pauseOthers,
-  forceFirstLoad,
+  eagerLevel,
 }: {
   clip: ClipRow;
   username: string | null;
   register: (el: HTMLVideoElement | null) => void;
-  pauseOthers: () => void;
-  forceFirstLoad?: boolean;
+  pauseOthers: (id: string) => void;
+  /** 0 lazy | 1 primer vídeo (preload auto) | 2/3 metadata */
+  eagerLevel: 0 | 1 | 2 | 3;
 }) {
-  const localVidRef = useRef<HTMLVideoElement | null>(null);
-  const loadSentinelRef = useRef<HTMLDivElement | null>(null);
-  const [shouldLoad, setShouldLoad] = useState(false);
+  const vidRef = useRef<HTMLVideoElement | null>(null);
+  const sentRef = useRef<HTMLDivElement | null>(null);
+  const [shouldLoad, setShouldLoad] = useState(eagerLevel > 0);
   const [loaded, setLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const isConcert = (clip.kind ?? 'concert') === 'concert';
-  const title = isConcert && clip.artist_name
-    ? clip.artist_name
-    : (clip.experience ? clip.experience.charAt(0).toUpperCase() + clip.experience.slice(1) : 'Event');
+  const title = isConcert && clip.artist_name ? clip.artist_name : (clip.experience ? clip.experience.charAt(0).toUpperCase()+clip.experience.slice(1) : 'Event');
   const place = [clip.city, clip.country].filter(Boolean).join(', ');
   const prettyDate = formatEditorialDate(clip.event_date);
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
 
-  // Carga diferida: root = contenedor con scroll
+  // Lazy: se prepara 600px antes de entrar para que no tarde
   useEffect(() => {
-    const node = loadSentinelRef.current;
-    if (!node) return;
-
-    const rootEl = document.getElementById('tok-scroller');
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) { setShouldLoad(true); io.disconnect(); }
-      },
-      { root: rootEl, rootMargin: '300px 0px', threshold: 0.01 }
-    );
+    if (eagerLevel > 0) return;
+    const node = sentRef.current; const rootEl = document.getElementById('tok-scroller'); if (!node) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) { setShouldLoad(true); io.disconnect(); }
+    }, { root: rootEl, rootMargin: '600px 0px', threshold: 0.01 });
     io.observe(node);
+    return () => io.disconnect();
+  }, [eagerLevel]);
 
-    // Fallback para el primer clip (por si el IO tarda)
-    let t: any;
-    if (forceFirstLoad) t = setTimeout(() => setShouldLoad(true), 200);
-
-    return () => { io.disconnect(); if (t) clearTimeout(t); };
-  }, [forceFirstLoad]);
-
-  // Eventos del video
+  // Eventos del vídeo
   useEffect(() => {
-    const v = localVidRef.current;
-    if (!v) return;
+    const v = vidRef.current; if (!v) return;
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
-    const onLoadedData = () => setLoaded(true);
+    const onLoaded = () => setLoaded(true);
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);
-    v.addEventListener('loadeddata', onLoadedData);
-    return () => {
-      v.removeEventListener('play', onPlay);
-      v.removeEventListener('pause', onPause);
-      v.removeEventListener('loadeddata', onLoadedData);
-    };
+    v.addEventListener('loadeddata', onLoaded);
+    return () => { v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause); v.removeEventListener('loadeddata', onLoaded); };
   }, [shouldLoad]);
 
   const poster = clip.poster_url || undefined;
+  const preloadAttr = eagerLevel === 1 ? 'auto' : 'metadata';
 
   return (
-    <section
-      className="relative h-screen w-screen flex items-center justify-center"
-      style={{ scrollSnapAlign: 'start' }}
-    >
-      <div ref={loadSentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
-
+    <section className="relative h-screen w-screen flex items-center justify-center" style={{ scrollSnapAlign: 'start' }}>
+      <div ref={sentRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
       <div className="relative z-[99] w-full max-w-[1100px] px-3 sm:px-5 pb-[110px]">
-        {/* Contenedor con fondo = poster (garantiza imagen siempre visible) */}
         <div
           className="relative w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden shadow-[0_22px_90px_rgba(0,0,0,0.22)]"
           style={{
@@ -281,60 +246,43 @@ function Section({
           }}
         >
           <video
-            ref={(el) => { register(el); localVidRef.current = el; }}
+            ref={(el) => { register(el); vidRef.current = el; }}
             className="w-full h-full object-cover transition-opacity duration-200"
             style={{ opacity: loaded ? 1 : 0.01 }}
             loop
             playsInline
             // @ts-ignore
             webkit-playsinline="true"
-            preload="metadata"
             muted
             poster={poster}
+            preload={preloadAttr as any}
             src={shouldLoad ? (clip.video_url ?? undefined) : undefined}
           />
 
-          {/* Botón central Play/Pause */}
+          {/* Botón central Play/Pause (play instantáneo) */}
           <button
             onClick={() => {
-              const v = localVidRef.current;
-              if (!v) return;
-              // Asegurar que la fuente está lista (play inmediato)
-              if (!shouldLoad && clip.video_url) {
-                // Forzamos src y pedimos play en el mismo gesto
-                v.src = clip.video_url;
-              }
+              const v = vidRef.current; if (!v) return;
+              if (!shouldLoad && clip.video_url) { v.src = clip.video_url; setShouldLoad(true); }
               try {
-                if (v.paused) {
-                  pauseOthers();         // Parar cualquier otro antes
-                  v.muted = false;       // usuario ha interactuado -> audio permitido
-                  v.play().catch(()=>{});
-                } else {
-                  v.pause();
-                }
+                if (v.paused) { pauseOthers(clip.id); v.muted = false; v.play().catch(()=>{}); }
+                else { v.pause(); }
               } catch {}
             }}
             className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
             aria-label={isPlaying ? 'Pause' : 'Play'}
             title={isPlaying ? 'Pause' : 'Play'}
-            style={{ background: 'transparent' }}
           >
-            <span
-              className="w-16 h-16 rounded-full bg-black/55 text-white flex items-center justify-center"
-              style={{ boxShadow: '0 6px 24px rgba(0,0,0,0.28)' }}
-            >
+            <span className="w-16 h-16 rounded-full bg-black/55 text-white flex items-center justify-center" style={{ boxShadow:'0 6px 24px rgba(0,0,0,0.28)' }}>
               {isPlaying ? (
-                // Pause icon
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
               ) : (
-                // Play icon
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               )}
             </span>
           </button>
         </div>
 
-        {/* Tarjeta (link al perfil) */}
         <Link href={profileHref} className="block no-underline">
           <div
             className="absolute left-1/2 -translate-x-1/2 bottom-[-28px] w-[calc(100%-24px)] md:w-[78%] rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)] z-[40]"
