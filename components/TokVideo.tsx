@@ -34,11 +34,7 @@ function getUsername(p: ProfilesRelation): string | null {
   if (Array.isArray(p)) return p[0]?.username ?? null;
   return p.username ?? null;
 }
-function ordinal(n: number) {
-  const s = ['th','st','nd','rd']; const v = n%100;
-  // @ts-ignore
-  return s[(v-20)%10]||s[v]||s[0];
-}
+function ordinal(n: number) { const s = ['th','st','nd','rd']; const v = n%100; /* @ts-ignore */ return s[(v-20)%10]||s[v]||s[0]; }
 function formatEditorialDate(iso?: string | null) {
   if (!iso) return null;
   try {
@@ -49,13 +45,7 @@ function formatEditorialDate(iso?: string | null) {
     return `${day}${ordinal(day)} ${month}, ${year}`;
   } catch { return iso ?? null; }
 }
-function shuffleInPlace<T>(arr: T[]) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
+function shuffleInPlace<T>(arr: T[]) { for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
 
 /* ===== Página ===== */
 export default function TokVideoPage() {
@@ -67,6 +57,7 @@ export default function TokVideoPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
   const fetchPage = useCallback(async (pageIndex: number) => {
     setLoading(true);
@@ -88,11 +79,7 @@ export default function TokVideoPage() {
 
       if (pageIndex === 0 && id) {
         const idx = rows.findIndex(d => d.id === id);
-        if (idx > 0) {
-          const selected = rows[idx];
-          rows.splice(idx, 1);
-          rows.unshift(selected);
-        }
+        if (idx > 0) { const selected = rows[idx]; rows.splice(idx, 1); rows.unshift(selected); }
       }
       setItems(prev => (pageIndex === 0 ? rows : [...prev, ...rows]));
     }
@@ -100,6 +87,28 @@ export default function TokVideoPage() {
   }, [supabase, id]);
 
   useEffect(() => { fetchPage(0); }, [fetchPage]);
+
+  // Registrar vídeos
+  const registerVideo = (id: string, el: HTMLVideoElement | null) => {
+    if (el) videosRef.current.set(id, el);
+    else videosRef.current.delete(id);
+  };
+
+  // Pausar los que salen del viewport
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        const vid = e.target as HTMLVideoElement;
+        if (!e.isIntersecting || e.intersectionRatio < 0.7) {
+          try { vid.pause(); vid.muted = true; vid.currentTime = 0; } catch {}
+        }
+      });
+    }, { root: container, threshold: [0,0.7,1] });
+    videosRef.current.forEach(v => io.observe(v));
+    return () => io.disconnect();
+  }, [items.length]);
 
   // infinite scroll + scroll-snap vertical
   useEffect(() => {
@@ -118,6 +127,15 @@ export default function TokVideoPage() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
+  // Pausar todos menos uno (cuando se pulsa Play)
+  const pauseOthers = (id: string) => {
+    videosRef.current.forEach((v, k) => {
+      if (k !== id) {
+        try { v.pause(); v.muted = true; v.currentTime = 0; } catch {}
+      }
+    });
+  };
+
   return (
     <div
       id="tok-scroller"
@@ -134,7 +152,13 @@ export default function TokVideoPage() {
       }}
     >
       {items.map((it, idx) => (
-        <VideoCard key={it.id} item={it} forceFirstLoad={idx===0} />
+        <VideoCard
+          key={it.id}
+          item={it}
+          register={(el)=>registerVideo(it.id, el)}
+          pauseOthers={() => pauseOthers(it.id)}
+          forceFirstLoad={idx===0}
+        />
       ))}
       {loading && (
         <div className="h-[25vh] flex items-center justify-center text-black/50">
@@ -146,133 +170,133 @@ export default function TokVideoPage() {
 }
 
 /* ===== Card a pantalla casi completa ===== */
-function VideoCard({ item, forceFirstLoad }: { item: ClipRow, forceFirstLoad?: boolean }) {
+function VideoCard({
+  item, register, pauseOthers, forceFirstLoad
+}: {
+  item: ClipRow;
+  register: (el: HTMLVideoElement | null) => void;
+  pauseOthers: () => void;
+  forceFirstLoad?: boolean;
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  const [muted, setMuted] = useState(true);
-  const [showHint, setShowHint] = useState(true);
   const [shouldLoad, setShouldLoad] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  // Visibilidad para play/pause (root = contenedor con scroll)
-  useEffect(() => {
-    const node = videoRef.current;
-    const rootEl = document.getElementById('tok-scroller');
-    if (!node) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const e = entries[0];
-        setIsVisible(e.isIntersecting && e.intersectionRatio >= 0.7);
-      },
-      { root: rootEl, threshold: [0, 0.7, 1] }
-    );
-    obs.observe(node);
-    return () => obs.unobserve(node);
-  }, []);
-
-  // Decidir cuándo asignar el SRC (root = contenedor con scroll)
+  // Carga diferida (root = contenedor)
   useEffect(() => {
     const node = sentinelRef.current;
     const rootEl = document.getElementById('tok-scroller');
     if (!node) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setShouldLoad(true);
-          io.disconnect();
-        }
-      },
-      { root: rootEl, rootMargin: '300px 0px', threshold: 0.01 }
-    );
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) { setShouldLoad(true); io.disconnect(); }
+    }, { root: rootEl, rootMargin: '300px 0px', threshold: 0.01 });
     io.observe(node);
 
-    // Fallback para el primer ítem
     let t:any;
-    if (forceFirstLoad) t = setTimeout(()=>setShouldLoad(true), 400);
+    if (forceFirstLoad) t = setTimeout(()=>setShouldLoad(true), 200);
 
     return () => { io.disconnect(); if (t) clearTimeout(t); };
   }, [forceFirstLoad]);
 
-  // Autoplay con audio si el navegador lo permite
+  // Eventos del vídeo
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const tryPlay = async () => {
-      try { v.muted = false; await v.play(); setMuted(false); }
-      catch { v.muted = true; setMuted(true); try { await v.play(); } catch {} }
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onLoadedData = () => setLoaded(true);
+    v.addEventListener('play', onPlay);
+    v.addEventListener('pause', onPause);
+    v.addEventListener('loadeddata', onLoadedData);
+    return () => {
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('pause', onPause);
+      v.removeEventListener('loadeddata', onLoadedData);
     };
-    if (isVisible) tryPlay();
-    else { try { v.pause(); v.currentTime = 0; } catch {} }
-  }, [isVisible]);
+  }, [shouldLoad]);
 
   const username = getUsername(item.profiles);
-  const editorialDate = formatEditorialDate(item.event_date);
+  const poster = item.poster_url || undefined;
   const isConcert = (item.kind ?? 'concert') === 'concert';
   const primaryTitle = (isConcert && item.artist_name)
     ? item.artist_name
     : (item.experience ? item.experience.charAt(0).toUpperCase() + item.experience.slice(1) : 'Event');
-
   const profileHref = username ? `/u/${username}` : `/u/${item.user_id ?? ''}`;
 
   return (
-    <section className="relative h-screen w-screen flex items-center justify-center" style={{ scrollSnapAlign: 'start' }}>
+    <section
+      className="relative h-screen w-screen flex items-center justify-center"
+      style={{ scrollSnapAlign: 'start' }}
+    >
       <div ref={sentinelRef} className="absolute top-0 left-0 w-px h-px opacity-0" />
+
       <div className="relative w-full max-w-[1100px] px-3 sm:px-5">
-        <Link href={profileHref} className="block" style={{ textDecoration: 'none' }}>
-          <div className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden bg-black/95 shadow-[0_22px_90px_rgba(0,0,0,0.22)] relative">
-            <video
-              ref={videoRef}
-              src={shouldLoad ? (item.video_url ?? undefined) : undefined}
-              poster={item.poster_url ?? undefined}
-              className="w-full h-full object-cover"
-              loop
-              playsInline
-              preload="metadata"
-              muted
-            />
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const v = videoRef.current;
-                if (!v) return;
-                v.muted = !v.muted;
-                setMuted(v.muted);
-                setShowHint(false);
-                if (v.paused) { v.play().catch(()=>{}); }
-                try { v.currentTime = Math.max(0, v.currentTime - 0.001); } catch {}
-              }}
-              className="absolute right-4 bottom-4 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur z-[60]"
-              aria-label={muted ? 'Unmute' : 'Mute'}
-              title={muted ? 'Unmute' : 'Mute'}
-            >
-              {muted ? (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9v6h4l5 5V4L9 9H5z" /></svg>
+        <div
+          className="w-full h-[78vh] md:h-[82vh] rounded-[32px] overflow-hidden shadow-[0_22px_90px_rgba(0,0,0,0.22)] relative"
+          style={{
+            backgroundImage: poster ? `url(${poster})` : undefined,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundColor: poster ? undefined : '#111',
+          }}
+        >
+          <video
+            ref={(el)=>{ register(el); videoRef.current=el; }}
+            className="w-full h-full object-cover transition-opacity duration-200"
+            style={{ opacity: loaded ? 1 : 0.01 }}
+            loop
+            playsInline
+            // @ts-ignore
+            webkit-playsinline="true"
+            preload="metadata"
+            muted
+            poster={poster}
+            src={shouldLoad ? (item.video_url ?? undefined) : undefined}
+          />
+
+          {/* Botón central Play/Pause */}
+          <button
+            onClick={() => {
+              const v = videoRef.current;
+              if (!v) return;
+              if (!shouldLoad && item.video_url) { v.src = item.video_url; } // fuente inmediata
+              try {
+                if (v.paused) {
+                  pauseOthers();
+                  v.muted = false;
+                  v.play().catch(()=>{});
+                } else {
+                  v.pause();
+                }
+              } catch {}
+            }}
+            className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            <span className="w-16 h-16 rounded-full bg-black/55 text-white flex items-center justify-center" style={{ boxShadow:'0 6px 24px rgba(0,0,0,0.28)' }}>
+              {isPlaying ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
               ) : (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M5 9v6h4l5 5V4L9 9H5z" />
-                  <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03z" />
-                  <path d="M19 12c0 3.04-1.72 5.64-4.24 6.93l.76 1.85C18.09 19.72 20 16.09 20 12s-1.91-7.72-4.48-8.78l-.76 1.85C17.28 6.36 19 8.96 19 12z"/>
-                </svg>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
               )}
-            </button>
-            {showHint && muted && (
-              <div className="absolute left-4 bottom-4 rounded-full bg-black/55 text-white/95 text-xs px-3 py-2 z-[50]">
-                Tap for sound
-              </div>
-            )}
-          </div>
-        </Link>
+            </span>
+          </button>
+        </div>
 
         <Link href={profileHref} className="block no-underline">
           <div className="mt-4 md:mt-6 rounded-3xl border border-black/10 bg-white/95 backdrop-blur px-6 py-5 md:px-7 md:py-6 shadow-[0_10px_36px_rgba(0,0,0,0.08)]">
-            <div className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black" style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400 }}>
+            <div className="text-[1.9rem] md:text-[2.2rem] leading-tight text-black" style={{ fontFamily:'Times New Roman, serif', fontWeight:400 }}>
               {primaryTitle}
             </div>
             <div className="text-[1rem] md:text-[1.1rem] text-black/75 mt-1">
               {[item.city, item.country].filter(Boolean).join(', ')}
             </div>
-            {editorialDate && <div className="text-[0.98rem] text-black/65 mt-0.5">{editorialDate}</div>}
+            {formatEditorialDate(item.event_date) && (
+              <div className="text-[0.98rem] text-black/65 mt-0.5">{formatEditorialDate(item.event_date)}</div>
+            )}
             {item.venue && <div className="text-[0.98rem] text-black/65 mt-0.5">{item.venue}</div>}
             {username && <div className="text-[0.95rem] text-black/55 mt-3">@{username}</div>}
             {item.caption && <p className="text-[1rem] text-black/80 mt-3 leading-relaxed">{item.caption}</p>}
