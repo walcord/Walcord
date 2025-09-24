@@ -100,7 +100,12 @@ function ArtistSearch({ picked, onPick, onClear }: { picked: Artist | null; onPi
     const t = setTimeout(async () => {
       const s = q.trim();
       if (s.length < 2) return setRes([]);
-      const { data } = await supabase.from("artists").select("id,name,image_url").ilike("name", `%${s}%`).order("name", { ascending: true }).limit(12);
+      const { data } = await supabase
+        .from("artists")
+        .select("id,name,image_url")
+        .ilike("name", `%${s}%`)
+        .order("name", { ascending: true })
+        .limit(12);
       setRes((data as Artist[]) || []);
     }, 220);
     return () => clearTimeout(t);
@@ -159,7 +164,7 @@ function NowTouringRibbon() {
       // tomamos conciertos/experiencias de esa gente
       const { data: concerts } = await supabase
         .from("concerts")
-        .select("id,user_id,artist_id,city,country_code,city,event_date,tour_name,caption,created_at,post_type,experience")
+        .select("id,user_id,artist_id,city,country_code,event_date,tour_name,caption,created_at,post_type,experience")
         .in("user_id", Array.from(ids))
         .order("event_date", { ascending: false })
         .limit(60);
@@ -454,13 +459,14 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
   const [done, setDone] = useState(false);
   const PAGE = 10;
 
-  useEffect(() => { setRows([]); setPage(0); setDone(false); }, [opts.scope, opts.artistId]);
+  // reset también cuando el user.id cambia (para Friends)
+  useEffect(() => { setRows([]); setPage(0); setDone(false); }, [opts.scope, opts.artistId, user?.id]);
 
   const fetchPage = async (pageIndex: number) => {
     // usuarios permitidos en FRIENDS: YO + seguidos + amistades
     let allowedUserIds: string[] | null = null;
     if (opts.scope === "friends") {
-      if (!user?.id) return { data: [] as Row[] };
+      if (!user?.id) return { data: [] as Row[] }; // importante: no marcamos done aquí
       const [fo, frA, frB] = await Promise.all([
         supabase.from("follows").select("following_id").eq("follower_id", user.id),
         supabase.from("friendships").select("receiver_id").eq("requester_id", user.id).eq("status", "accepted"),
@@ -473,11 +479,11 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
       allowedUserIds = Array.from(ids);
     }
 
-    // 1) Concerts/Experiences (página)
+    // En Friends queremos "lo más reciente" → created_at DESC
     let cq = supabase
       .from("concerts")
       .select("id,user_id,artist_id,city,country_code,event_date,tour_name,caption,created_at,post_type,experience")
-      .order(opts.scope === "for-you" ? "created_at" : "event_date", { ascending: false })
+      .order("created_at", { ascending: false })
       .range(pageIndex * PAGE, pageIndex * PAGE + PAGE - 1);
 
     if (allowedUserIds) cq = cq.in("user_id", allowedUserIds);
@@ -539,7 +545,7 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
       artist_name: aById[c.artist_id] ?? null,
       tour: c.tour_name ?? null,
       city: c.city ?? null,
-      country: c.country_code ?? null,
+      country: c.country_code ?? null, // <- usamos country_code en el select
       year: c.event_date ? new Date(c.event_date).getFullYear() : null,
       event_date: c.event_date ?? null,
       last_photo_at: lastPhotoAt[c.id] || c.created_at || null,
@@ -565,6 +571,8 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
 
   useEffect(() => {
     (async () => {
+      // espera a tener user.id en Friends para la primera página
+      if (opts.scope === "friends" && !user?.id) return;
       if (done) return;
       const { data } = await fetchPage(page);
       setRows(prev => {
@@ -572,9 +580,9 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
         [...prev, ...data].forEach(r => map.set(r.concert_id, r));
         return Array.from(map.values());
       });
-      if (data.length < 10) setDone(true);
+      if (data.length < PAGE) setDone(true);
     })();
-  }, [page, done]); // eslint-disable-line
+  }, [page, done, opts.scope, user?.id]); // deps clave
 
   return { rows, loadMore: () => setPage((p) => p + 1), done };
 }

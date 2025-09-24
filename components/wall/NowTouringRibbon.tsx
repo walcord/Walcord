@@ -1,12 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
 import Link from "next/link";
 
 type RibbonItem = {
   concert_id: string;
-  artist_id: string | null;
   artist_name: string | null;
   tour: string | null;
   city: string | null;
@@ -14,157 +13,117 @@ type RibbonItem = {
   year: number | null;
   username: string | null;
   full_name: string | null;
-  created_at: string;
 };
 
 export default function NowTouringRibbon() {
   const supabase = useSupabaseClient();
   const user = useUser();
   const [items, setItems] = useState<RibbonItem[]>([]);
-  const visibleIdsRef = useRef<string[] | null>(null);
+  const [visibleCount, setVisibleCount] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
 
-  /** Tú + seguidos + amistades aceptadas (ambos sentidos). */
-  const getVisibleUserIds = async (): Promise<string[]> => {
+  /** === MISMA FUNCIÓN QUE USA EL FEED (yo + seguidos + amistades aceptadas) === */
+  const getAllowedUserIds = async (): Promise<string[]> => {
     if (!user?.id) return [];
-    if (visibleIdsRef.current) return visibleIdsRef.current;
-
-    const [followsRes, frA, frB] = await Promise.all([
+    const [fo, frA, frB] = await Promise.all([
       supabase.from("follows").select("following_id").eq("follower_id", user.id),
-      supabase
-        .from("friendships")
-        .select("receiver_id")
-        .eq("requester_id", user.id)
-        .eq("status", "accepted"),
-      supabase
-        .from("friendships")
-        .select("requester_id")
-        .eq("receiver_id", user.id)
-        .eq("status", "accepted"),
+      supabase.from("friendships").select("receiver_id").eq("requester_id", user.id).eq("status", "accepted"),
+      supabase.from("friendships").select("requester_id").eq("receiver_id", user.id).eq("status", "accepted"),
     ]);
-
     const ids = new Set<string>([user.id]);
-    (followsRes.data || []).forEach((r: any) => ids.add(r.following_id));
+    (fo.data || []).forEach((r: any) => ids.add(r.following_id));
     (frA.data || []).forEach((r: any) => ids.add(r.receiver_id));
     (frB.data || []).forEach((r: any) => ids.add(r.requester_id));
-
-    visibleIdsRef.current = Array.from(ids);
-    return visibleIdsRef.current;
+    return Array.from(ids);
   };
 
   useEffect(() => {
-    let mounted = true;
-    visibleIdsRef.current = null; // reset si cambia el usuario
-
     (async () => {
-      const ids = await getVisibleUserIds();
-      if (ids.length === 0) {
-        if (mounted) setItems([]);
+      // 👉 Espera a tener sesión para no “congelar” en 0 ids
+      if (!user?.id) return;
+      setLoading(true);
+
+      const allowed = await getAllowedUserIds();
+      setVisibleCount(allowed.length); // 👈 lo verás pintado debajo para verificar
+
+      if (allowed.length === 0) {
+        setItems([]);
+        setLoading(false);
         return;
       }
 
-      // ✅ Solo fotos de tus seguidos/amigos/tú
-      const { data: ph, error } = await supabase
-        .from("concert_photos")
-        .select("id, user_id, concert_id, created_at")
-        .in("user_id", ids)
-        .order("created_at", { ascending: false })
-        .limit(24);
+      // Posts de tus seguidos (no depende de fotos)
+      const { data: concerts, error } = await supabase
+        .from("concerts")
+        .select("id,user_id,artist_id,city,country,country_code,year,event_date,tour_name,created_at,post_type,experience")
+        .in("user_id", allowed)
+        .order("event_date", { ascending: false }) // cambia a created_at si prefieres “publicado más reciente”
+        .limit(60);
 
-      if (error || !ph?.length) {
-        if (mounted) setItems([]);
+      if (error || !concerts?.length) {
+        setItems([]);
+        setLoading(false);
         return;
       }
 
-      const concertIds = [...new Set(ph.map((x) => x.concert_id))];
-      const userIds = [...new Set(ph.map((x) => x.user_id))];
+      const userIds = [...new Set(concerts.map((c: any) => c.user_id))];
+      const artistIds = [...new Set(concerts.map((c: any) => c.artist_id).filter(Boolean))] as string[];
 
-      const [{ data: concerts }, { data: users }] = await Promise.all([
-        supabase
-          .from("concerts")
-          .select("id, artist_name, tour, city, country, year")
-          .in("id", concertIds),
-        supabase
-          .from("profiles")
-          .select("id, username, full_name")
-          .in("id", userIds),
+      const [{ data: profiles }, { data: artists }] = await Promise.all([
+        supabase.from("profiles").select("id,username,full_name").in("id", userIds),
+        artistIds.length ? supabase.from("artists").select("id,name").in("id", artistIds) : Promise.resolve({ data: [] as any[] }),
       ]);
 
-      const artistNames = [
-        ...new Set(
-          (concerts ?? []).map((c: any) => c.artist_name).filter(Boolean)
-        ),
-      ] as string[];
-      const { data: artists } = artistNames.length
-        ? await supabase
-            .from("artists")
-            .select("id, name")
-            .in("name", artistNames)
-        : { data: [] as any[] };
+      const uById = Object.fromEntries((profiles || []).map((u: any) => [u.id, u]));
+      const aById = Object.fromEntries((artists || []).map((a: any) => [a.id, a.name]));
 
-      const idByName = Object.fromEntries(
-        (artists ?? []).map((a: any) => [a.name, a.id])
-      );
-      const cById = Object.fromEntries(
-        (concerts ?? []).map((c: any) => [c.id, c])
-      );
-      const uById = Object.fromEntries(
-        (users ?? []).map((u: any) => [u.id, u])
-      );
+      const built: RibbonItem[] = concerts.map((c: any) => {
+        const u = uById[c.user_id] || {};
+        const country = c.country ?? c.country_code ?? null;
+        const year = typeof c.year === "number" && c.year ? c.year : (c.event_date ? new Date(c.event_date).getFullYear() : null);
+        const artistName =
+          c.post_type === "experience" && c.experience
+            ? `${String(c.experience).charAt(0).toUpperCase()}${String(c.experience).slice(1)}`
+            : (aById[c.artist_id] ?? null);
 
-      // 1 item por concierto (evita duplicados)
-      const seen = new Set<string>();
-      const built: RibbonItem[] = [];
-      for (const p of ph) {
-        if (seen.has(p.concert_id)) continue;
-        seen.add(p.concert_id);
-
-        const c = cById[p.concert_id] || {};
-        const u = uById[p.user_id] || {};
-        built.push({
-          concert_id: p.concert_id,
-          artist_id: idByName[c.artist_name] ?? null,
-          artist_name: c.artist_name ?? null,
-          tour: c.tour ?? null,
+        return {
+          concert_id: c.id,
+          artist_name: artistName || "Concert",
+          tour: c.tour_name ?? null,
           city: c.city ?? null,
-          country: c.country ?? null,
-          year: c.year ?? null,
+          country,
+          year,
           username: u.username ?? null,
           full_name: u.full_name ?? null,
-          created_at: p.created_at,
-        });
-      }
+        };
+      });
 
-      if (mounted) setItems(built);
+      setItems(built);
+      setLoading(false);
     })();
-
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, supabase]);
 
   const stream = useMemo(() => {
     return items.map((it) => {
       const who = it.full_name || it.username || "—";
-      const place =
-        it.city && it.country
-          ? `${it.city}, ${it.country}`
-          : it.city || it.country || "";
+      const place = it.city && it.country ? `${it.city}, ${it.country}` : it.city || it.country || "";
       const when = it.year ? ` (${it.year})` : "";
-      const artist = it.artist_name || "—";
       const tour = it.tour ? ` — ${it.tour}` : "";
-      // Enlace al perfil real del artista por ID
-      const href = it.artist_id ? `/artist/${it.artist_id}` : "#";
-      const text = `${who} went to ${artist}${tour}${
-        place ? ` in ${place}` : ""
-      }${when}`;
-      return { text, href };
+      return { text: `${who} went to ${it.artist_name}${tour}${place ? ` in ${place}` : ""}${when}`, href: `/post/${it.concert_id}` };
     });
   }, [items]);
 
-  if (stream.length === 0) {
+  // Muestra contador de ids visibles para depurar (quítalo luego)
+  const Debug = () => (
+    <div className="px-4 pt-1 pb-0 text-[11px] text-neutral-500">
+      visible users: <span className="font-mono">{visibleCount}</span>
+    </div>
+  );
+
+  if (loading || stream.length === 0) {
     return (
       <div className="w-full overflow-hidden rounded-2xl border border-neutral-200">
+        <Debug />
         <div className="px-4 py-3 text-sm text-neutral-600">
           Your friends’ concerts will appear here soon.
         </div>
@@ -174,32 +133,20 @@ export default function NowTouringRibbon() {
 
   return (
     <div className="w-full rounded-2xl border border-neutral-200 overflow-hidden">
+      <Debug />
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-white to-transparent" />
         <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent" />
-        <div className="w-full overflow-hidden">
-          <div className="flex gap-8 animate-[ticker_40s_linear_infinite] whitespace-nowrap px-4 py-3 text-sm">
-            {stream.concat(stream).map((row, i) => (
-              <Link
-                key={i}
-                href={row.href}
-                className="text-black hover:text-[#1F48AF] transition"
-              >
-                {row.text}
-              </Link>
-            ))}
-          </div>
+        <div className="flex gap-8 animate-[ticker_40s_linear_infinite] whitespace-nowrap px-4 py-3 text-sm">
+          {stream.concat(stream).map((row, i) => (
+            <Link key={i} href={row.href} className="text-black hover:text-[#1F48AF] transition">
+              {row.text}
+            </Link>
+          ))}
         </div>
       </div>
       <style jsx>{`
-        @keyframes ticker {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
-        }
+        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
       `}</style>
     </div>
   );

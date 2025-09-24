@@ -34,6 +34,20 @@ const MAX_PHOTOS = 6;
 const MAX_VIDEOS = 1;
 const MAX_VIDEO_SECONDS = 15;
 
+/** Mensajes */
+const ONE_VIDEO_MSG = 'Only one video is allowed (15 seconds or less).';
+const MAX_PHOTOS_MSG = 'Maximum six photos.';
+const VIDEO_TOO_LONG_MSG = 'The video must be 15 seconds or less.';
+const COULD_NOT_READ_VIDEO_MSG = 'Could not read video duration.';
+
+/** (Opcional) Pretty label para snake_case (p.ej. "jazz_club" -> "Jazz Club") */
+function toDisplayExperience(v?: string | null) {
+  return (v || '')
+    .split('_')
+    .map(s => (s ? s[0].toUpperCase() + s.slice(1) : s))
+    .join(' ');
+}
+
 /** === Helpers de Storage (subida directa + URL pública) === */
 async function uploadDirect(bucket: string, path: string, file: File) {
   const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
@@ -135,47 +149,49 @@ export default function NewPostPage() {
     }, 200);
   }, [artistQ, postType]);
 
-  // Añadir ficheros (valida duración del vídeo ≤ 15 s)
+  /** Añadir ficheros (permite mezcla; valida 1 vídeo ≤ 15s y hasta 6 fotos) */
   const addIncomingFiles = async (incoming: FileList | null) => {
     if (!incoming?.length) return;
 
-    const incomingImages: File[] = [];
-    const incomingVideos: File[] = [];
+    const newImages: File[] = [];
+    const newVideos: File[] = [];
 
     for (const f of Array.from(incoming)) {
-      if (f.type.startsWith('image/')) incomingImages.push(f);
-      else if (f.type.startsWith('video/')) incomingVideos.push(f);
+      if (f.type.startsWith('image/')) newImages.push(f);
+      else if (f.type.startsWith('video/')) newVideos.push(f);
     }
 
-    if (incomingVideos.length > 1) alert('only one video is allowed');
-    const pickedVideo = incomingVideos[0] || null;
-
-    if (pickedVideo) {
+    // Vídeo: solo 1 y ≤15s, y no repetir si ya hay uno
+    if (newVideos.length) {
+      if (newVideos.length > 1) {
+        alert(ONE_VIDEO_MSG);
+        return;
+      }
+      if (files.some(f => f.kind === 'video')) {
+        alert(ONE_VIDEO_MSG);
+        return;
+      }
+      const pickedVideo = newVideos[0];
       try {
         const secs = await readVideoDurationSec(pickedVideo);
         if (secs > MAX_VIDEO_SECONDS + 0.01) {
-          alert('the video must be 15 seconds or less');
-        } else {
-          setFiles(prev => {
-            const currentVid = prev.find(x => x.kind === 'video');
-            if (currentVid) {
-              alert('only one video is allowed');
-              return prev;
-            }
-            return [...prev, { file: pickedVideo, kind: 'video' }];
-          });
+          alert(VIDEO_TOO_LONG_MSG);
+          return;
         }
       } catch {
-        alert('could not read video duration');
+        alert(COULD_NOT_READ_VIDEO_MSG);
+        return;
       }
+      setFiles(prev => [...prev, { file: pickedVideo, kind: 'video' }]);
     }
 
-    if (incomingImages.length) {
+    // Fotos: hasta 6 en total
+    if (newImages.length) {
       setFiles(prev => {
-        const imgs = prev.filter(x => x.kind === 'image');
-        const room = Math.max(0, MAX_PHOTOS - imgs.length);
-        const toAdd = incomingImages.slice(0, room).map(f => ({ file: f, kind: 'image' as const }));
-        if (incomingImages.length > room) alert('maximum six photos');
+        const currentImages = prev.filter(x => x.kind === 'image').length;
+        const room = Math.max(0, MAX_PHOTOS - currentImages);
+        const toAdd = newImages.slice(0, room).map(f => ({ file: f, kind: 'image' as const }));
+        if (newImages.length > room) alert(MAX_PHOTOS_MSG);
         return [...prev, ...toAdd];
       });
     }
@@ -197,23 +213,27 @@ export default function NewPostPage() {
 
   // Submit
   const onSubmit = async () => {
+    // Validaciones de campos obligatorios
     if (postType === 'concert' && !artist) return alert('Please select artist');
     if (postType === 'experience' && !experience) return alert('Please select an experience type');
     if (!countryCode) return alert('Please select country');
     if (!city.trim()) return alert('Please type city');
     if (!dateStr) return alert('Please select date');
-    if (imageCount < 1 && !videoFile) return alert('Please add at least 1 photo or a video');
-    if (imageCount > MAX_PHOTOS) return alert('maximum six photos');
+    if (imageCount < 1 && !videoFile) return alert('Please add photos and/or a video');
 
+    const isOnlyVideo = !!videoFile && imageCount === 0;
+    const hasPhotos = imageCount > 0;
+
+    // Si hay vídeo, validar duración de nuevo
     if (videoFile) {
       try {
         const secs = await readVideoDurationSec(videoFile);
         if (secs > MAX_VIDEO_SECONDS + 0.01) {
-          alert('the video must be 15 seconds or less');
+          alert(VIDEO_TOO_LONG_MSG);
           return;
         }
       } catch {
-        alert('could not read video duration');
+        alert(COULD_NOT_READ_VIDEO_MSG);
         return;
       }
     }
@@ -227,80 +247,95 @@ export default function NewPostPage() {
       const userId = authData?.user?.id;
       if (!userId) throw new Error('Not authenticated');
 
-      // 1) Inserta en concerts
-      const concertInsert: Record<string, any> = {
-        user_id: userId,
-        artist_id: postType === 'concert' ? artist?.id : null,
-        country_code: countryCode,
-        city: city.trim(),
-        event_date: dateStr,
-        tour_name: tourName.trim() || null,
-        caption: caption.trim() || null,
-        post_type: postType,
-        experience: postType === 'experience' ? experience : null,
-      };
-
-      const { data: concertIns, error: concertErr } = await supabase
-        .from('concerts')
-        .insert(concertInsert)
-        .select('id')
-        .single();
-      if (concertErr) throw new Error(`No se pudo crear el concierto: ${concertErr.message}`);
-      const concertId: string = (concertIns as any).id;
-
-      // 2) Sube IMÁGENES → concert_media
-      if (imageCount) {
-        const images = files.filter(f => f.kind === 'image').slice(0, MAX_PHOTOS);
-        const uploads: string[] = [];
-
-        for (const m of images) {
-          const ext = (m.file.name.split('.').pop() || 'jpg').toLowerCase();
-          const baseName = m.file.name.replace(/[^\w.\-]+/g, '_').replace(/\.[a-z0-9]{2,4}$/i, '');
-          const path = `${concertId}/${Date.now()}_${Math.random().toString(36).slice(2)}_${baseName}.${ext}`;
-
-          const { path: storedPath } = await uploadDirect('concert_media', path, m.file);
-          const url = getPublicUrl('concert_media', storedPath);
-          uploads.push(url);
-        }
-
-        if (uploads.length) {
-          const payload = uploads.map((url) => ({ concert_id: concertId, url, media_type: 'image' }));
-          const { error: mediaErr } = await supabase.from('concert_media').insert(payload);
-          if (mediaErr) throw new Error(`No se pudieron guardar las imágenes: ${mediaErr.message}`);
-        }
-      }
-
-      // 3) Sube VÍDEO (si hay) → clips (bucket público)
-      if (videoFile) {
-        const ext = (videoFile.name.split('.').pop() || 'mp4').toLowerCase();
-        const base = `user_${userId}/${concertId}`;
-        const videoPath = `${base}/video_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-
-        const { path: storedPath } = await uploadDirect('clips', videoPath, videoFile);
+      if (isOnlyVideo) {
+        // === SOLO VÍDEO → clips
+        const ext = (videoFile!.name.split('.').pop() || 'mp4').toLowerCase();
+        const base = `user_${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const videoPath = `${base}/video.${ext}`;
+        const { path: storedPath } = await uploadDirect('clips', videoPath, videoFile!);
         const video_url = getPublicUrl('clips', storedPath);
 
-        const poster_url = null;
+        const { error: clipsErr } = await supabase.from('clips').insert([{
+          user_id: userId,
+          video_url,
+          poster_url: null,
+          caption: caption || null,
+          artist_name: postType === 'concert' ? (artist?.name || null) : null,
+          venue: tourName || null,
+          city: city || null,
+          country: countryCode || null,
+          event_date: dateStr || null,
+          kind: postType,                // 'concert' | 'experience'
+          experience: postType === 'experience' ? experience : null,
+        }]);
+        if (clipsErr) throw new Error(`No se pudo registrar el vídeo en clips: ${clipsErr.message}`);
 
-        const { error: clipsErr } = await supabase.from('clips').insert([
-          {
+      } else {
+        // === HAY FOTOS (con o sin vídeo) → concerts + concert_media; si también hay vídeo, además clips
+        const { data: concertIns, error: concertErr } = await supabase
+          .from('concerts')
+          .insert({
+            user_id: userId,
+            artist_id: postType === 'concert' ? artist?.id : null,
+            country_code: countryCode,
+            city: city.trim(),
+            event_date: dateStr,
+            tour_name: tourName.trim() || null,
+            caption: caption.trim() || null,
+            post_type: postType,
+            experience: postType === 'experience' ? experience : null,
+          })
+          .select('id')
+          .single();
+        if (concertErr) throw new Error(`No se pudo crear el concierto: ${concertErr.message}`);
+        const concertId: string = (concertIns as any).id;
+
+        // Subir fotos → concert_media
+        if (hasPhotos) {
+          const images = files.filter(f => f.kind === 'image').slice(0, MAX_PHOTOS);
+          const uploads: string[] = [];
+          for (const m of images) {
+            const ext = (m.file.name.split('.').pop() || 'jpg').toLowerCase();
+            const baseName = m.file.name.replace(/[^\w.\-]+/g, '_').replace(/\.[a-z0-9]{2,4}$/i, '');
+            const path = `${concertId}/${Date.now()}_${Math.random().toString(36).slice(2)}_${baseName}.${ext}`;
+            const { path: storedPath } = await uploadDirect('concert_media', path, m.file);
+            uploads.push(getPublicUrl('concert_media', storedPath));
+          }
+          if (uploads.length) {
+            const payload = uploads.map((url) => ({ concert_id: concertId, url, media_type: 'image' }));
+            const { error: mediaErr } = await supabase.from('concert_media').insert(payload);
+            if (mediaErr) throw new Error(`No se pudieron guardar las imágenes: ${mediaErr.message}`);
+          }
+        }
+
+        // Si además hay vídeo, también guardarlo en clips
+        if (videoFile) {
+          const ext = (videoFile.name.split('.').pop() || 'mp4').toLowerCase();
+          const base = `user_${userId}/${concertId}`;
+          const videoPath = `${base}/video_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+          const { path: storedPath } = await uploadDirect('clips', videoPath, videoFile);
+          const video_url = getPublicUrl('clips', storedPath);
+
+          const { error: clipsErr } = await supabase.from('clips').insert([{
             user_id: userId,
             video_url,
-            poster_url,
+            poster_url: null,
             caption: caption || null,
-            artist_name: postType === 'concert' ? artist?.name || null : null,
+            artist_name: postType === 'concert' ? (artist?.name || null) : null,
             venue: tourName || null,
             city: city || null,
             country: countryCode || null,
             event_date: dateStr || null,
             kind: postType,
             experience: postType === 'experience' ? experience : null,
-          },
-        ]);
-        if (clipsErr) throw new Error(`No se pudo registrar el vídeo en clips: ${clipsErr.message}`);
+          }]);
+          if (clipsErr) throw new Error(`No se pudo registrar el vídeo en clips: ${clipsErr.message}`);
+        }
       }
 
-      // Reset
-      setDone(postType === 'concert' ? 'Concert shared' : 'Experience shared');
+      setDone('Shared');
+
+      // Reset UI
       setArtist(null);
       setArtistQ('');
       setArtistResults([]);
@@ -312,12 +347,19 @@ export default function NewPostPage() {
       setFiles([]);
       setExperience('');
       window.scrollTo({ top: 0, behavior: 'smooth' });
+
     } catch (e: any) {
       alert(e?.message ?? 'Error');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const canPublish =
+    !submitting &&
+    ((postType === 'concert' && !!artist) || (postType === 'experience' && !!experience)) &&
+    !!countryCode && !!city.trim() && !!dateStr &&
+    (imageCount > 0 || !!videoFile);
 
   return (
     <div className="min-h-screen bg-white">
@@ -345,7 +387,7 @@ export default function NewPostPage() {
                 style={{ fontFamily: '"Times New Roman", Times, serif', fontWeight: 400 }}>
               Share your experience
             </h1>
-            {/* Selector principal (separado del título) */}
+            {/* Selector principal */}
             <div className="mt-3">
               <div className="inline-flex rounded-2xl border border-neutral-200 overflow-hidden">
                 <button
@@ -522,7 +564,7 @@ export default function NewPostPage() {
                 />
               </div>
 
-              {/* Caption */}
+              {/* Caption (oculto por ahora) */}
               <div className="hidden">
                 <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                   Caption (optional)
@@ -565,6 +607,11 @@ export default function NewPostPage() {
                   className="block w-full text-sm text-neutral-700 file:mr-3 file:rounded-xl file:border-0 file:bg-[#1F48AF] file:px-4 file:py-2 file:text-white file:shadow-sm hover:file:brightness-110"
                   style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
                 />
+                {/* Nota de ayuda (mezcla permitida) */}
+                <p className="mt-2 text-xs text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
+                  You can upload up to six photos and one video (15s max).
+                </p>
+
                 {files.length ? (
                   <>
                     <div className="mt-3 flex items-center justify-between">
@@ -616,15 +663,7 @@ export default function NewPostPage() {
             <div className="mt-2 flex items-center gap-3">
               <button
                 onClick={onSubmit}
-                disabled={
-                  submitting ||
-                  (postType === 'concert' && !artist) ||
-                  (postType === 'experience' && !experience) ||
-                  !countryCode ||
-                  !city.trim() ||
-                  !dateStr ||
-                  (imageCount < 1 && !videoFile)
-                }
+                disabled={!canPublish}
                 className="rounded-xl bg-[#1F48AF] px-6 py-3 text-white shadow-sm transition hover:shadow disabled:opacity-40"
                 style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
               >
