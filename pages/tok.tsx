@@ -26,15 +26,30 @@ type Profile = { id: string; username: string | null };
 const PAGE_SIZE = 10;
 
 /* ===== Utils ===== */
-function ordinal(n: number) { const s=['th','st','nd','rd']; const v=n%100; /* @ts-ignore */ return s[(v-20)%10]||s[v]||s[0]; }
+function ordinal(n: number) {
+  const s = ['th','st','nd','rd']; const v = n % 100; // inglés editorial
+  // @ts-ignore
+  return s[(v-20)%10] || s[v] || s[0];
+}
 function formatEditorialDate(iso?: string | null) {
   if (!iso) return null;
-  try { const d=new Date(iso); const day=d.getDate(); const month=d.toLocaleString(undefined,{month:'long'}); const year=d.getFullYear(); return `${day}${ordinal(day)} ${month}, ${year}`; }
-  catch { return iso ?? null; }
+  try {
+    const d = new Date(iso);
+    const day = d.getDate();
+    const month = d.toLocaleString(undefined,{month:'long'});
+    const year = d.getFullYear();
+    return `${day}${ordinal(day)} ${month}, ${year}`;
+  } catch {
+    return iso ?? null;
+  }
 }
 function seededShuffle<T>(arr: T[], seed: number) {
-  const a=[...arr]; let s=seed>>>0;
-  for (let i=a.length-1;i>0;i--){ s^=s<<13; s^=s>>>17; s^=s<<5; const j=Math.abs(s)%(i+1); [a[i],a[j]]=[a[j],a[i]]; }
+  const a=[...arr]; let s = seed >>> 0;
+  for (let i=a.length-1;i>0;i--){
+    s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+    const j = Math.abs(s) % (i+1);
+    [a[i],a[j]]=[a[j],a[i]];
+  }
   return a;
 }
 
@@ -50,15 +65,11 @@ export default function TokPage() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
-  // Semilla por sesión → orden diferente cada vez que entras
+  // Mezcla distinta en cada carga de la página
   const [seed] = useState<number>(() => {
     if (typeof window === 'undefined') return Date.now() & 0xffffffff;
-    if (!sessionStorage.getItem('tokSeed')) {
-      const r = (crypto.getRandomValues(new Uint32Array(1))[0]) >>> 0;
-      sessionStorage.setItem('tokSeed', String(r));
-      return r;
-    }
-    return Number(sessionStorage.getItem('tokSeed')) >>> 0;
+    const r = (crypto.getRandomValues(new Uint32Array(1))[0]) >>> 0;
+    return r;
   });
 
   const fetchPage = useCallback(async (pageIndex: number) => {
@@ -66,7 +77,7 @@ export default function TokPage() {
     setErr(null);
     const from = pageIndex * PAGE_SIZE;
 
-    // SIN .order(): nosotros barajamos para orden aleatorio real
+    // Sin order; se baraja en cliente para aleatorio real
     const { data, error } = await supabase
       .from('clips')
       .select(`
@@ -85,7 +96,7 @@ export default function TokPage() {
     const batch = seededShuffle((data as ClipRow[]) ?? [], seed + pageIndex * 131);
     setItems(prev => (pageIndex === 0 ? batch : [...prev, ...batch]));
 
-    // usernames aparte
+    // Fetch de usernames
     const ids = Array.from(new Set(batch.map(b => b.user_id).filter(Boolean) as string[]))
       .filter(id => !(id in usernames));
     if (ids.length) {
@@ -110,20 +121,34 @@ export default function TokPage() {
     else videosRef.current.delete(id);
   }, []);
 
-  // Pausar TODOS los que salen del viewport (no audio mezclado)
+  // Autopause fuera de viewport + reinicio
   useEffect(() => {
     const container = scrollerRef.current; if (!container) return;
     const io = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         const vid = e.target as HTMLVideoElement;
-        if (!e.isIntersecting || e.intersectionRatio < 0.7) {
-          try { vid.pause(); vid.muted = true; vid.currentTime = 0; } catch {}
+        if (e.isIntersecting && e.intersectionRatio >= 0.9) {
+          // Autoplay silenciado (políticas móviles)
+          try { vid.muted = true; vid.play().catch(()=>{}); } catch {}
+        } else {
+          try { vid.pause(); vid.currentTime = 0; } catch {}
         }
       });
-    }, { root: container, threshold: [0, 0.7, 1] });
+    }, { root: container, threshold: [0, 0.9, 1] });
     videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
   }, [items.length]);
+
+  // Visibilidad de pestaña → pausar
+  useEffect(() => {
+    const handler = () => {
+      if (document.hidden) {
+        videosRef.current.forEach(v => { try { v.pause(); } catch {} });
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
 
   // Infinite scroll
   useEffect(() => {
@@ -148,6 +173,7 @@ export default function TokPage() {
         background: '#FFFFFF',
         scrollSnapType: 'y mandatory',
         WebkitOverflowScrolling: 'touch',
+        overscrollBehaviorY: 'contain',
         fontFamily: "Roboto, system-ui, -apple-system, 'Segoe UI'",
         fontWeight: 300,
         paddingTop: 'env(safe-area-inset-top)',
@@ -165,10 +191,10 @@ export default function TokPage() {
           clip={clip}
           username={clip.user_id ? usernames[clip.user_id] ?? null : null}
           register={(el) => registerVideo(clip.id, el)}
-          eagerLevel={idx < 3 ? (idx + 1) as 1|2|3 : 0}
+          eagerLevel={idx < 1 ? 1 : (idx < 3 ? (idx + 1) as 2|3 : 0)}
           pauseOthers={(id) => {
             videosRef.current.forEach((v, k) => {
-              if (k !== id) { try { v.pause(); v.muted = true; v.currentTime = 0; } catch {} }
+              if (k !== id) { try { v.pause(); v.currentTime = 0; } catch {} }
             });
           }}
         />
@@ -179,19 +205,15 @@ export default function TokPage() {
   );
 }
 
-/* ===== Sección: vídeo + tarjeta — Play/Pause + carga rápida ===== */
+/* ===== Sección vídeo + tarjeta ===== */
 function Section({
-  clip,
-  username,
-  register,
-  pauseOthers,
-  eagerLevel,
+  clip, username, register, pauseOthers, eagerLevel,
 }: {
   clip: ClipRow;
   username: string | null;
   register: (el: HTMLVideoElement | null) => void;
   pauseOthers: (id: string) => void;
-  /** 0 lazy | 1 primer vídeo (preload auto) | 2/3 metadata */
+  /** 0: lazy (sin src) | 1: primer vídeo (preload auto) | 2/3: metadata */
   eagerLevel: 0 | 1 | 2 | 3;
 }) {
   const vidRef = useRef<HTMLVideoElement | null>(null);
@@ -201,18 +223,19 @@ function Section({
   const [isPlaying, setIsPlaying] = useState(false);
 
   const isConcert = (clip.kind ?? 'concert') === 'concert';
-  const title = isConcert && clip.artist_name ? clip.artist_name : (clip.experience ? clip.experience.charAt(0).toUpperCase()+clip.experience.slice(1) : 'Event');
+  const title = isConcert && clip.artist_name ? clip.artist_name :
+    (clip.experience ? clip.experience.charAt(0).toUpperCase()+clip.experience.slice(1) : 'Event');
   const place = [clip.city, clip.country].filter(Boolean).join(', ');
   const prettyDate = formatEditorialDate(clip.event_date);
   const profileHref = username ? `/u/${username}` : `/u/${clip.user_id ?? ''}`;
 
-  // Lazy: se prepara 600px antes de entrar para que no tarde
+  // Lazy: preparar 800px antes → tiempo a buffer
   useEffect(() => {
     if (eagerLevel > 0) return;
     const node = sentRef.current; const rootEl = document.getElementById('tok-scroller'); if (!node) return;
     const io = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) { setShouldLoad(true); io.disconnect(); }
-    }, { root: rootEl, rootMargin: '600px 0px', threshold: 0.01 });
+    }, { root: rootEl, rootMargin: '800px 0px', threshold: 0.01 });
     io.observe(node);
     return () => io.disconnect();
   }, [eagerLevel]);
@@ -230,7 +253,7 @@ function Section({
   }, [shouldLoad]);
 
   const poster = clip.poster_url || undefined;
-  const preloadAttr = eagerLevel === 1 ? 'auto' : 'metadata';
+  const preloadAttr = eagerLevel === 1 ? 'auto' : (eagerLevel ? 'metadata' : 'none');
 
   return (
     <section className="relative h-screen w-screen flex items-center justify-center" style={{ scrollSnapAlign: 'start' }}>
@@ -254,19 +277,27 @@ function Section({
             // @ts-ignore
             webkit-playsinline="true"
             muted
+            autoPlay
+            disablePictureInPicture
+            controls={false}
             poster={poster}
             preload={preloadAttr as any}
             src={shouldLoad ? (clip.video_url ?? undefined) : undefined}
           />
 
-          {/* Botón central Play/Pause (play instantáneo) */}
+          {/* Botón central: unmute/play-pause */}
           <button
             onClick={() => {
               const v = vidRef.current; if (!v) return;
               if (!shouldLoad && clip.video_url) { v.src = clip.video_url; setShouldLoad(true); }
               try {
-                if (v.paused) { pauseOthers(clip.id); v.muted = false; v.play().catch(()=>{}); }
-                else { v.pause(); }
+                if (v.paused) {
+                  pauseOthers(clip.id);
+                  v.muted = false;
+                  v.play().catch(()=>{ /* ignorar */ });
+                } else {
+                  v.pause();
+                }
               } catch {}
             }}
             className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"

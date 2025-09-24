@@ -19,10 +19,19 @@ type ClipRow = {
 const PAGE_SIZE = 10;
 
 /* ===== Utils ===== */
-function getUsername(p: ProfilesRelation): string | null { return !p ? null : Array.isArray(p) ? p[0]?.username ?? null : p.username ?? null; }
+function getUsername(p: ProfilesRelation): string | null {
+  return !p ? null : Array.isArray(p) ? p[0]?.username ?? null : p.username ?? null;
+}
 function ordinal(n:number){const s=['th','st','nd','rd'];const v=n%100; /* @ts-ignore */ return s[(v-20)%10]||s[v]||s[0];}
-function formatEditorialDate(iso?:string|null){ if(!iso)return null; try{const d=new Date(iso);const day=d.getDate();return `${day}${ordinal(day)} ${d.toLocaleString(undefined,{month:'long'})}, ${d.getFullYear()}`;}catch{return iso??null;} }
-function seededShuffle<T>(arr:T[], seed:number){ const a=[...arr]; let s=seed>>>0; for(let i=a.length-1;i>0;i--){ s^=s<<13; s^=s>>>17; s^=s<<5; const j=Math.abs(s)%(i+1); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function formatEditorialDate(iso?:string|null){
+  if(!iso)return null;
+  try{const d=new Date(iso);const day=d.getDate();return `${day}${ordinal(day)} ${d.toLocaleString(undefined,{month:'long'})}, ${d.getFullYear()}`;}catch{return iso??null;}
+}
+function seededShuffle<T>(arr:T[], seed:number){
+  const a=[...arr]; let s=seed>>>0;
+  for(let i=a.length-1;i>0;i--){ s^=s<<13; s^=s>>>17; s^=s<<5; const j=Math.abs(s)%(i+1); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
 
 /* ===== Página ===== */
 export default function TokVideoPage() {
@@ -35,14 +44,12 @@ export default function TokVideoPage() {
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+
+  // Aleatorio en cada carga
   const [seed] = useState<number>(() => {
     if (typeof window === 'undefined') return Date.now() & 0xffffffff;
-    if (!sessionStorage.getItem('tokSeed')) {
-      const r=(crypto.getRandomValues(new Uint32Array(1))[0])>>>0;
-      sessionStorage.setItem('tokSeed', String(r));
-      return r;
-    }
-    return Number(sessionStorage.getItem('tokSeed'))>>>0;
+    const r=(crypto.getRandomValues(new Uint32Array(1))[0])>>>0;
+    return r;
   });
 
   const fetchPage = useCallback(async (pageIndex: number) => {
@@ -73,14 +80,23 @@ export default function TokVideoPage() {
   useEffect(() => { fetchPage(0); }, [fetchPage]);
 
   // Registrar
-  const registerVideo = (id: string, el: HTMLVideoElement | null) => { if (el) videosRef.current.set(id, el); else videosRef.current.delete(id); };
+  const registerVideo = (id: string, el: HTMLVideoElement | null) => {
+    if (el) videosRef.current.set(id, el); else videosRef.current.delete(id);
+  };
 
-  // Pausar fuera del viewport
+  // Autoplay/Pausa por visibilidad
   useEffect(() => {
     const container = containerRef.current; if (!container) return;
     const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => { const vid=e.target as HTMLVideoElement; if (!e.isIntersecting || e.intersectionRatio<0.7){ try{vid.pause(); vid.muted=true; vid.currentTime=0;}catch{}} });
-    }, { root: container, threshold:[0,0.7,1] });
+      entries.forEach(e => {
+        const vid = e.target as HTMLVideoElement;
+        if (e.isIntersecting && e.intersectionRatio >= 0.9) {
+          try { vid.muted = true; vid.play().catch(()=>{}); } catch {}
+        } else {
+          try { vid.pause(); vid.currentTime = 0; } catch {}
+        }
+      });
+    }, { root: container, threshold:[0,0.9,1] });
     videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
   }, [items.length]);
@@ -97,8 +113,15 @@ export default function TokVideoPage() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [page, loading, fetchPage]);
 
+  // Pestaña oculta → pausar
+  useEffect(() => {
+    const handler = () => { if (document.hidden) videosRef.current.forEach(v=>{ try{ v.pause(); }catch{} }); };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
+
   const pauseOthers = (id: string) => {
-    videosRef.current.forEach((v, k) => { if (k !== id) { try{ v.pause(); v.muted = true; v.currentTime = 0; } catch{} } });
+    videosRef.current.forEach((v, k) => { if (k !== id) { try{ v.pause(); v.currentTime = 0; } catch{} } });
   };
 
   return (
@@ -110,6 +133,7 @@ export default function TokVideoPage() {
         background: '#FFFFFF',
         scrollSnapType: 'y mandatory',
         WebkitOverflowScrolling: 'touch',
+        overscrollBehaviorY: 'contain',
         fontFamily: "Roboto, system-ui, -apple-system, 'Segoe UI'",
         fontWeight: 300,
         paddingTop: 'env(safe-area-inset-top)',
@@ -122,7 +146,7 @@ export default function TokVideoPage() {
           item={it}
           register={(el)=>registerVideo(it.id, el)}
           pauseOthers={() => pauseOthers(it.id)}
-          eagerLevel={idx < 3 ? (idx + 1) as 1|2|3 : 0}
+          eagerLevel={idx < 1 ? 1 : (idx < 3 ? (idx + 1) as 2|3 : 0)}
         />
       ))}
       {loading && <div className="h-[25vh] flex items-center justify-center text-black/50">Loading…</div>}
@@ -148,7 +172,7 @@ function VideoCard({
     const node = sentinelRef.current; const rootEl = document.getElementById('tok-scroller'); if (!node) return;
     const io = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) { setShouldLoad(true); io.disconnect(); }
-    }, { root: rootEl, rootMargin: '600px 0px', threshold: 0.01 });
+    }, { root: rootEl, rootMargin: '800px 0px', threshold: 0.01 });
     io.observe(node);
     return () => io.disconnect();
   }, [eagerLevel]);
@@ -167,9 +191,10 @@ function VideoCard({
   const username = getUsername(item.profiles);
   const poster = item.poster_url || undefined;
   const isConcert = (item.kind ?? 'concert') === 'concert';
-  const primaryTitle = isConcert && item.artist_name ? item.artist_name : (item.experience ? item.experience.charAt(0).toUpperCase()+item.experience.slice(1) : 'Event');
+  const primaryTitle = isConcert && item.artist_name ? item.artist_name :
+    (item.experience ? item.experience.charAt(0).toUpperCase()+item.experience.slice(1) : 'Event');
   const profileHref = username ? `/u/${username}` : `/u/${item.user_id ?? ''}`;
-  const preloadAttr = eagerLevel === 1 ? 'auto' : 'metadata';
+  const preloadAttr = eagerLevel === 1 ? 'auto' : (eagerLevel ? 'metadata' : 'none');
 
   return (
     <section className="relative h-screen w-screen flex items-center justify-center" style={{ scrollSnapAlign: 'start' }}>
@@ -193,6 +218,9 @@ function VideoCard({
             // @ts-ignore
             webkit-playsinline="true"
             muted
+            autoPlay
+            disablePictureInPicture
+            controls={false}
             poster={poster}
             preload={preloadAttr as any}
             src={shouldLoad ? (item.video_url ?? undefined) : undefined}
@@ -201,7 +229,10 @@ function VideoCard({
             onClick={() => {
               const v = videoRef.current; if (!v) return;
               if (!shouldLoad && item.video_url) { v.src = item.video_url; setShouldLoad(true); }
-              try { if (v.paused) { pauseOthers(); v.muted = false; v.play().catch(()=>{}); } else { v.pause(); } } catch {}
+              try {
+                if (v.paused) { pauseOthers(); v.muted = false; v.play().catch(()=>{}); }
+                else { v.pause(); }
+              } catch {}
             }}
             className="absolute inset-0 w-full h-full flex items-center justify-center z-[70]"
             aria-label={isPlaying ? 'Pause' : 'Play'}
