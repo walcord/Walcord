@@ -224,7 +224,8 @@ export default function NewPostPage() {
     const isOnlyVideo = !!videoFile && imageCount === 0;
     const hasPhotos = imageCount > 0;
 
-    // Si hay vídeo, validar duración de nuevo
+    // Si hay vídeo, leemos y fijamos duración UNA VEZ (para guardar en clips)
+    let videoDurationSec: number | null = null;
     if (videoFile) {
       try {
         const secs = await readVideoDurationSec(videoFile);
@@ -232,6 +233,7 @@ export default function NewPostPage() {
           alert(VIDEO_TOO_LONG_MSG);
           return;
         }
+        videoDurationSec = Math.round(secs);
       } catch {
         alert(COULD_NOT_READ_VIDEO_MSG);
         return;
@@ -265,7 +267,8 @@ export default function NewPostPage() {
           city: city || null,
           country: countryCode || null,
           event_date: dateStr || null,
-          kind: postType,                // 'concert' | 'experience'
+          duration_seconds: videoDurationSec, // ⬅️ NUEVO
+          kind: postType,                // 'concert' | 'experience' (enum clip_kind)
           experience: postType === 'experience' ? experience : null,
         }]);
         if (clipsErr) throw new Error(`No se pudo registrar el vídeo en clips: ${clipsErr.message}`);
@@ -326,6 +329,7 @@ export default function NewPostPage() {
             city: city || null,
             country: countryCode || null,
             event_date: dateStr || null,
+            duration_seconds: videoDurationSec, // ⬅️ NUEVO
             kind: postType,
             experience: postType === 'experience' ? experience : null,
           }]);
@@ -524,7 +528,7 @@ export default function NewPostPage() {
 
               {/* City */}
               <div className="mb-5 sm:mb-6">
-                <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
+                <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial', fontWeight: 300 }}>
                   City
                 </label>
                 <input
