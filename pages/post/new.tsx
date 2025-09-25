@@ -40,27 +40,6 @@ const MAX_PHOTOS_MSG = 'Maximum six photos.';
 const VIDEO_TOO_LONG_MSG = 'The video must be 15 seconds or less.';
 const COULD_NOT_READ_VIDEO_MSG = 'Could not read video duration.';
 
-/** (Opcional) Pretty label para snake_case (p.ej. "jazz_club" -> "Jazz Club") */
-function toDisplayExperience(v?: string | null) {
-  return (v || '')
-    .split('_')
-    .map(s => (s ? s[0].toUpperCase() + s.slice(1) : s))
-    .join(' ');
-}
-
-/** === Helpers de Storage (subida directa + URL pública) === */
-async function uploadDirect(bucket: string, path: string, file: File) {
-  const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
-    contentType: file.type || 'application/octet-stream',
-    upsert: false,
-  });
-  if (error) throw new Error(`Upload to ${bucket} failed: ${error.message}`);
-  return { path: data?.path || path };
-}
-function getPublicUrl(bucket: string, path: string) {
-  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-}
-
 /** Lee duración del vídeo en segundos usando <video> */
 function readVideoDurationSec(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -79,6 +58,19 @@ function readVideoDurationSec(file: File): Promise<number> {
     };
     v.src = url;
   });
+}
+
+/** === Helpers de Storage (subida directa + URL pública) === */
+async function uploadDirect(bucket: string, path: string, file: File) {
+  const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
+    contentType: file.type || 'application/octet-stream',
+    upsert: false,
+  });
+  if (error) throw new Error(`Upload to ${bucket} failed: ${error.message}`);
+  return { path: data?.path || path };
+}
+function getPublicUrl(bucket: string, path: string) {
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
 export default function NewPostPage() {
@@ -267,8 +259,8 @@ export default function NewPostPage() {
           city: city || null,
           country: countryCode || null,
           event_date: dateStr || null,
-          duration_seconds: videoDurationSec, // ⬅️ NUEVO
-          kind: postType,                // 'concert' | 'experience' (enum clip_kind)
+          duration_seconds: videoDurationSec, // <-- CLAVE PARA EL FEED
+          kind: postType,                // 'concert' | 'experience'
           experience: postType === 'experience' ? experience : null,
         }]);
         if (clipsErr) throw new Error(`No se pudo registrar el vídeo en clips: ${clipsErr.message}`);
@@ -329,7 +321,7 @@ export default function NewPostPage() {
             city: city || null,
             country: countryCode || null,
             event_date: dateStr || null,
-            duration_seconds: videoDurationSec, // ⬅️ NUEVO
+            duration_seconds: videoDurationSec, // <-- CLAVE PARA EL FEED
             kind: postType,
             experience: postType === 'experience' ? experience : null,
           }]);
