@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
 
@@ -59,6 +59,12 @@ export default function ConcertViewer() {
   const [iLike, setILike] = useState<boolean>(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [commentText, setCommentText] = useState('');
+
+  // ===== LIGHTBOX estado =====
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const touchDeltaX = useRef<number>(0);
 
   useEffect(() => {
     if (!id) return;
@@ -189,6 +195,67 @@ export default function ConcertViewer() {
     location.hash = 'comments';
   };
 
+  // ===== LIGHTBOX helpers =====
+  const imageList = useMemo(() => media.filter((m) => m.type === 'image'), [media]);
+
+  const openLightbox = (idx: number) => {
+    setLightboxIndex(idx);
+    setLightboxOpen(true);
+  };
+
+  const closeLightbox = () => setLightboxOpen(false);
+
+  const prevImage = () => {
+    if (!imageList.length) return;
+    setLightboxIndex((i) => (i - 1 + imageList.length) % imageList.length);
+  };
+
+  const nextImage = () => {
+    if (!imageList.length) return;
+    setLightboxIndex((i) => (i + 1) % imageList.length);
+  };
+
+  // Bloquear scroll de fondo cuando el lightbox está abierto
+  useEffect(() => {
+    if (lightboxOpen) {
+      const original = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = original;
+      };
+    }
+  }, [lightboxOpen]);
+
+  // Navegación con teclado (para web)
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') prevImage();
+      if (e.key === 'ArrowRight') nextImage();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxOpen]);
+
+  // Gestos táctiles
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchDeltaX.current = 0;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current == null) return;
+    touchDeltaX.current = e.touches[0].clientX - touchStartX.current;
+  };
+  const onTouchEnd = () => {
+    const dx = touchDeltaX.current;
+    touchStartX.current = null;
+    touchDeltaX.current = 0;
+    const threshold = 50; // px
+    if (dx > threshold) prevImage();
+    else if (dx < -threshold) nextImage();
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* ===== BANNER ===== */}
@@ -225,16 +292,28 @@ export default function ConcertViewer() {
         ) : media.length > 0 ? (
           <section className="mt-5">
             <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
-              {media.map((m) => (
-                <div key={m.id} className="rounded-2xl overflow-hidden flex justify-center items-center bg-black/5">
-                  {m.type === 'image' ? (
-                    <img
-                      src={m.url}
-                      alt="concert-media"
-                      className="object-contain max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] rounded-2xl"
-                      loading="lazy"
-                    />
-                  ) : (
+              {media.map((m, idx) => {
+                if (m.type === 'image') {
+                  // índice relativo de imagenes (para abrir en el slide correcto)
+                  const imgIndex = imageList.findIndex((im) => im.id === m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => openLightbox(Math.max(0, imgIndex))}
+                      className="rounded-2xl overflow-hidden bg-black/5 focus:outline-none focus:ring-2 focus:ring-[#1F48AF]"
+                      aria-label="Expand image"
+                    >
+                      <img
+                        src={m.url}
+                        alt="concert-media"
+                        className="object-contain max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] rounded-2xl"
+                        loading="lazy"
+                      />
+                    </button>
+                  );
+                }
+                return (
+                  <div key={m.id} className="rounded-2xl overflow-hidden flex justify-center items-center bg-black/5">
                     <video
                       src={m.url}
                       controls
@@ -245,9 +324,9 @@ export default function ConcertViewer() {
                       className="object-contain max-w-[200px] sm:max-w-[260px] max-h-[200px] sm:max-h-[260px] rounded-2xl"
                       controlsList="nodownload noplaybackrate"
                     />
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </section>
         ) : (
@@ -307,6 +386,90 @@ export default function ConcertViewer() {
           )}
         </section>
       </main>
+
+      {/* ===== LIGHTBOX ===== */}
+      {lightboxOpen && imageList.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center"
+          onClick={closeLightbox}
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Contenedor central para mantener todo lejos de los bordes superior/inferior */}
+          <div
+            className="relative w-full h-full flex items-center justify-center"
+            style={{
+              paddingTop: 'max(calc(env(safe-area-inset-top) + 32px), 32px)',
+              paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 32px), 32px)',
+              paddingLeft: '24px',
+              paddingRight: '24px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
+            {/* Imagen centrada, editorial */}
+            <img
+              key={imageList[lightboxIndex].id}
+              src={imageList[lightboxIndex].url}
+              alt={`media-${lightboxIndex + 1}`}
+              className="max-w-[92vw] max-h-[76vh] object-contain rounded-2xl shadow-2xl"
+              draggable={false}
+            />
+
+            {/* Botón Close, centrado arriba (sin tocar bordes del teléfono) */}
+            <button
+              onClick={closeLightbox}
+              aria-label="Close"
+              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/95 hover:bg-white px-4 py-2 text-[13px] shadow-sm"
+              style={{ top: 'calc(env(safe-area-inset-top) + 24px)' }}
+            >
+              Close
+            </button>
+
+            {/* Controles laterales (centrados verticalmente, sin invadir top/bottom) */}
+            {imageList.length > 1 && (
+              <>
+                <button
+                  onClick={prevImage}
+                  aria-label="Previous image"
+                  className="absolute rounded-full bg-white/90 hover:bg-white px-3 py-3 text-black shadow-sm active:scale-95"
+                  style={{ left: '28px' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+
+                <button
+                  onClick={nextImage}
+                  aria-label="Next image"
+                  className="absolute rounded-full bg-white/90 hover:bg-white px-3 py-3 text-black shadow-sm active:scale-95"
+                  style={{ right: '28px' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+
+                {/* Indicadores centrados (lejos de bordes inferior/superior) */}
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 flex gap-1.5 rounded-full bg-white/90 px-3 py-1"
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 24px)' }}
+                >
+                  {imageList.map((_, i) => (
+                    <span
+                      key={i}
+                      className={`inline-block rounded-full ${i === lightboxIndex ? 'w-2.5 h-2.5' : 'w-1.5 h-1.5'} bg-black`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

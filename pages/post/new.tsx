@@ -10,24 +10,28 @@ type MediaFile = { file: File; kind: 'image' | 'video' };
 
 type PostType = 'concert' | 'experience';
 type Experience =
-  | 'opera'
-  | 'musical'
-  | 'ballet'
-  | 'jazz_club'
-  | 'festival'
-  | 'recital'
-  | 'orchestra'
-  | 'club_party';
+  | 'Opera'
+  | 'Musical'
+  | 'Ballet'
+  | 'Jazz Club'
+  | 'Festival'
+  | 'Recital'
+  | 'Orchestra'
+  | 'Theatre'
+  | 'Club Party'
+  | 'Karaoke';
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
-  { value: 'opera',       label: 'Opera' },
-  { value: 'musical',     label: 'Musical' },
-  { value: 'ballet',      label: 'Ballet' },
-  { value: 'jazz_club',   label: 'Jazz Club' },
-  { value: 'festival',    label: 'Festival' },
-  { value: 'recital',     label: 'Recital' },
-  { value: 'orchestra',   label: 'Orchestra' },
-  { value: 'club_party',  label: 'Club Party' },
+  { value: 'Opera',       label: 'Opera' },
+  { value: 'Musical',     label: 'Musical' },
+  { value: 'Ballet',      label: 'Ballet' },
+  { value: 'Jazz Club',   label: 'Jazz Club' },
+  { value: 'Festival',    label: 'Festival' },
+  { value: 'Recital',     label: 'Recital' },
+  { value: 'Orchestra',   label: 'Orchestra' },
+  { value: 'Theatre',     label: 'Theatre' },
+  { value: 'Club Party',  label: 'Club Party' },
+  { value: 'Karaoke',     label: 'Karaoke' },
 ];
 
 const MAX_PHOTOS = 6;
