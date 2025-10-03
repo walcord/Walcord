@@ -12,26 +12,30 @@ type PostType = 'concert' | 'experience';
 type Experience =
   | 'Opera'
   | 'Musical'
+  | 'Dance'
   | 'Ballet'
   | 'Jazz Club'
   | 'Festival'
   | 'Recital'
+  | 'Home Sounds'
   | 'Orchestra'
   | 'Theatre'
   | 'Club Party'
   | 'Karaoke';
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
-  { value: 'Opera',       label: 'Opera' },
-  { value: 'Musical',     label: 'Musical' },
-  { value: 'Ballet',      label: 'Ballet' },
-  { value: 'Jazz Club',   label: 'Jazz Club' },
-  { value: 'Festival',    label: 'Festival' },
-  { value: 'Recital',     label: 'Recital' },
-  { value: 'Orchestra',   label: 'Orchestra' },
-  { value: 'Theatre',     label: 'Theatre' },
-  { value: 'Club Party',  label: 'Club Party' },
-  { value: 'Karaoke',     label: 'Karaoke' },
+  { value: 'Opera',           label: 'Opera' },
+  { value: 'Musical',         label: 'Musical' },
+  { value: 'Dance', label: 'Dance' },
+  { value: 'Ballet',          label: 'Ballet' },
+  { value: 'Jazz Club',       label: 'Jazz Club' },
+  { value: 'Festival',        label: 'Festival' },
+  { value: 'Recital',         label: 'Recital' },
+  { value: 'Home Sounds',     label: 'Home Sounds' },
+  { value: 'Orchestra',       label: 'Orchestra' },
+  { value: 'Theatre',         label: 'Theatre' },
+  { value: 'Club Party',      label: 'Club Party' },
+  { value: 'Karaoke',         label: 'Karaoke' },
 ];
 
 const MAX_PHOTOS = 6;
