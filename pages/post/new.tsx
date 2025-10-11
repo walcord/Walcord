@@ -26,7 +26,7 @@ type Experience =
 const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
   { value: 'Opera',           label: 'Opera' },
   { value: 'Musical',         label: 'Musical' },
-  { value: 'Dance', label: 'Dance' },
+  { value: 'Dance',           label: 'Dance' },
   { value: 'Ballet',          label: 'Ballet' },
   { value: 'Jazz Club',       label: 'Jazz Club' },
   { value: 'Festival',        label: 'Festival' },
@@ -47,6 +47,7 @@ const ONE_VIDEO_MSG = 'Only one video is allowed (15 seconds or less).';
 const MAX_PHOTOS_MSG = 'Maximum six photos.';
 const VIDEO_TOO_LONG_MSG = 'The video must be 15 seconds or less.';
 const COULD_NOT_READ_VIDEO_MSG = 'Could not read video duration.';
+const LIMIT_REACHED_MSG = 'Limit reached. Remove some files to add more.';
 
 /** Lee duración del vídeo en segundos usando <video> */
 function readVideoDurationSec(file: File): Promise<number> {
@@ -91,7 +92,11 @@ export default function NewPostPage() {
   const [artistResults, setArtistResults] = useState<ArtistItem[]>([]);
   const [artistSearching, setArtistSearching] = useState(false);
   const [artist, setArtist] = useState<ArtistItem | null>(null);
+  const [artistError, setArtistError] = useState<string>(''); // ⚠️ solo opciones existentes
   const artistDebouncer = useRef<TimeoutId | null>(null);
+
+  // Flag para evitar que onBlur borre el valor mientras se hace clic en la opción
+  const isPickingOptionRef = useRef(false);
 
   // ===== Ubicación/fecha/caption
   const [countries, setCountries] = useState<CountryItem[]>([]);
@@ -106,6 +111,10 @@ export default function NewPostPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+
+  // Refs para inputs separados (mejor UX + límites “desde el picker”)
+  const imagesInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
 
   // Cargar países
   useEffect(() => {
@@ -125,6 +134,7 @@ export default function NewPostPage() {
       setArtistQ('');
       setArtistResults([]);
       setArtistSearching(false);
+      setArtistError('');
       return;
     }
     const term = artistQ.trim();
@@ -142,17 +152,26 @@ export default function NewPostPage() {
           .select('id, name')
           .ilike('name', `%${term}%`)
           .limit(25);
-        if (!error) setArtistResults((data as ArtistItem[]) || []);
+        if (!error) {
+          setArtistResults((data as ArtistItem[]) || []);
+          setArtistError(''); // limpiar error al recibir resultados
+        }
       } finally {
         setArtistSearching(false);
       }
     }, 200);
   }, [artistQ, postType]);
 
-  /** Añadir ficheros (permite mezcla; valida 1 vídeo ≤ 15s y hasta 6 fotos) */
+  /** Util: limpia el valor de un input file para permitir re-selección */
+  const resetInput = (ref: React.RefObject<HTMLInputElement>) => {
+    if (ref.current) ref.current.value = '';
+  };
+
+  /** Añadir ficheros: función genérica para DnD (mezcla) */
   const addIncomingFiles = async (incoming: FileList | null) => {
     if (!incoming?.length) return;
 
+    // Split por tipo
     const newImages: File[] = [];
     const newVideos: File[] = [];
 
@@ -161,7 +180,7 @@ export default function NewPostPage() {
       else if (f.type.startsWith('video/')) newVideos.push(f);
     }
 
-    // Vídeo: solo 1 y ≤15s, y no repetir si ya hay uno
+    // === Vídeos ===
     if (newVideos.length) {
       if (newVideos.length > 1) {
         alert(ONE_VIDEO_MSG);
@@ -185,7 +204,7 @@ export default function NewPostPage() {
       setFiles(prev => [...prev, { file: pickedVideo, kind: 'video' }]);
     }
 
-    // Fotos: hasta 6 en total
+    // === Imágenes ===
     if (newImages.length) {
       setFiles(prev => {
         const currentImages = prev.filter(x => x.kind === 'image').length;
@@ -195,6 +214,54 @@ export default function NewPostPage() {
         return [...prev, ...toAdd];
       });
     }
+  };
+
+  /** Picker exclusivo para imágenes (mejor feedback de límites) */
+  const onPickImages = async (list: FileList | null) => {
+    if (!list?.length) return;
+    const imgs = Array.from(list).filter(f => f.type.startsWith('image/'));
+    setFiles(prev => {
+      const currentImages = prev.filter(x => x.kind === 'image').length;
+      const room = Math.max(0, MAX_PHOTOS - currentImages);
+      if (room <= 0) {
+        alert(LIMIT_REACHED_MSG);
+        resetInput(imagesInputRef);
+        return prev;
+      }
+      const toAdd = imgs.slice(0, room).map(file => ({ file, kind: 'image' as const }));
+      if (imgs.length > room) alert(MAX_PHOTOS_MSG);
+      resetInput(imagesInputRef);
+      return [...prev, ...toAdd];
+    });
+  };
+
+  /** Picker exclusivo para vídeo (valida duración y único) */
+  const onPickVideo = async (list: FileList | null) => {
+    if (!list?.length) return;
+    const picked = list[0];
+    if (!picked.type.startsWith('video/')) {
+      resetInput(videoInputRef);
+      return;
+    }
+    if (files.some(f => f.kind === 'video')) {
+      alert(ONE_VIDEO_MSG);
+      resetInput(videoInputRef);
+      return;
+    }
+    try {
+      const secs = await readVideoDurationSec(picked);
+      if (secs > MAX_VIDEO_SECONDS + 0.01) {
+        alert(VIDEO_TOO_LONG_MSG);
+        resetInput(videoInputRef);
+        return;
+      }
+    } catch {
+      alert(COULD_NOT_READ_VIDEO_MSG);
+      resetInput(videoInputRef);
+      return;
+    }
+    setFiles(prev => [...prev, { file: picked, kind: 'video' }]);
+    resetInput(videoInputRef);
   };
 
   const removeFileAt = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
@@ -214,7 +281,10 @@ export default function NewPostPage() {
   // Submit
   const onSubmit = async () => {
     // Validaciones de campos obligatorios
-    if (postType === 'concert' && !artist) return alert('Please select artist');
+    if (postType === 'concert' && !artist) {
+      setArtistError('Please choose an existing artist from the list.');
+      return alert('Please select artist');
+    }
     if (postType === 'experience' && !experience) return alert('Please select an experience type');
     if (!countryCode) return alert('Please select country');
     if (!city.trim()) return alert('Please type city');
@@ -224,7 +294,7 @@ export default function NewPostPage() {
     const isOnlyVideo = !!videoFile && imageCount === 0;
     const hasPhotos = imageCount > 0;
 
-    // Si hay vídeo, leemos y fijamos duración UNA VEZ (para guardar en clips)
+    // Si hay vídeo, validar duración justo antes de subir
     let videoDurationSec: number | null = null;
     if (videoFile) {
       try {
@@ -350,6 +420,7 @@ export default function NewPostPage() {
       setCaption('');
       setFiles([]);
       setExperience('');
+      setArtistError('');
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
     } catch (e: any) {
@@ -396,7 +467,7 @@ export default function NewPostPage() {
               <div className="inline-flex rounded-2xl border border-neutral-200 overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => setPostType('concert')}
+                  onClick={() => { setPostType('concert'); setArtistError(''); }}
                   className={`px-4 py-2 text-sm ${postType === 'concert' ? 'bg-[#1F48AF] text-white' : 'bg-white text-black'}`}
                   style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
                 >
@@ -404,7 +475,7 @@ export default function NewPostPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPostType('experience')}
+                  onClick={() => { setPostType('experience'); setArtistError(''); }}
                   className={`px-4 py-2 text-sm border-l border-neutral-200 ${postType === 'experience' ? 'bg-[#1F48AF] text-white' : 'bg-white text-black'}`}
                   style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
                 >
@@ -430,7 +501,7 @@ export default function NewPostPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => setArtist(null)}
+                        onClick={() => { setArtist(null); setArtistError(''); }}
                         className="text-sm text-[#1F48AF] hover:underline"
                         style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
                       >
@@ -445,13 +516,43 @@ export default function NewPostPage() {
                       <div className="mt-2 relative">
                         <input
                           value={artistQ}
-                          onChange={(e) => setArtistQ(e.target.value)}
+                          onChange={(e) => { setArtistQ(e.target.value); setArtistError(''); }}
+                          onBlur={() => {
+                            // ⚠️ Evitar limpiar si el blur viene de hacer click en una opción
+                            if (isPickingOptionRef.current) return;
+                            if (!artist && artistQ.trim()) {
+                              setArtistQ('');
+                              setArtistError('Please choose an existing artist from the list.');
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (artistResults.length > 0) {
+                                const pick = artistResults[0];
+                                setArtist(pick);
+                                setArtistQ('');
+                                setArtistResults([]);
+                                setArtistError('');
+                              } else {
+                                setArtistError('No artists found. Only existing artists can be selected.');
+                              }
+                            }
+                          }}
                           placeholder="Search artist name…"
                           className="w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm italic"
                           style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
                         />
                         {(artistSearching || artistResults.length > 0) && (
-                          <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-xl max-h-[320px] overflow-y-auto">
+                          <div
+                            className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-xl max-h-[320px] overflow-y-auto"
+                            // Activa flag en mousedown para que se ejecute antes que el blur
+                            onMouseDown={() => { isPickingOptionRef.current = true; }}
+                            onMouseUp={() => { 
+                              // liberar el flag justo después de seleccionar
+                              setTimeout(() => { isPickingOptionRef.current = false; }, 0);
+                            }}
+                          >
                             {artistSearching && (
                               <div className="px-4 py-3 text-sm text-neutral-500" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                                 Searching…
@@ -461,7 +562,12 @@ export default function NewPostPage() {
                               artistResults.map((r) => (
                                 <button
                                   key={r.id}
-                                  onClick={() => { setArtist(r); setArtistQ(''); setArtistResults([]); }}
+                                  onClick={() => {
+                                    setArtist(r);
+                                    setArtistQ('');
+                                    setArtistResults([]);
+                                    setArtistError('');
+                                  }}
                                   className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 transition"
                                 >
                                   <div className="min-w-0">
@@ -473,10 +579,15 @@ export default function NewPostPage() {
                               ))}
                             {!artistSearching && artistResults.length === 0 && artistQ.trim().length >= 2 && (
                               <div className="px-4 py-3 text-sm text-neutral-500" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
-                                No artists found.
+                                No artists found. Only existing artists can be selected.
                               </div>
                             )}
                           </div>
+                        )}
+                        {artistError && (
+                          <p className="mt-2 text-xs text-red-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
+                            {artistError}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -589,6 +700,8 @@ export default function NewPostPage() {
               <label className="block text-xs uppercase tracking-widest text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
                 Photos and videos
               </label>
+
+              {/* Zona DnD (mantiene validaciones) */}
               <div
                 onDragEnter={() => setIsDragging(true)}
                 onDragLeave={() => setIsDragging(false)}
@@ -603,40 +716,87 @@ export default function NewPostPage() {
                   isDragging ? 'border-[#1F48AF] ring-2 ring-[#1F48AF]/40' : 'border-neutral-300',
                 ].join(' ')}
               >
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,video/*"
-                  onChange={async (e) => await addIncomingFiles(e.target.files)}
-                  className="block w-full text-sm text-neutral-700 file:mr-3 file:rounded-xl file:border-0 file:bg-[#1F48AF] file:px-4 file:py-2 file:text-white file:shadow-sm hover:file:brightness-110"
-                  style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-                />
-                {/* Nota de ayuda (mezcla permitida) */}
-                <p className="mt-2 text-xs text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
-                  You can upload up to six photos and one video (15s max).
-                </p>
+                {/* Controles separados: imágenes y vídeo */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={imagesInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => onPickImages(e.target.files)}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (imageCount >= MAX_PHOTOS) {
+                        alert(LIMIT_REACHED_MSG);
+                        return;
+                      }
+                      imagesInputRef.current?.click();
+                    }}
+                    disabled={imageCount >= MAX_PHOTOS}
+                    className="text-sm rounded-xl bg-[#1F48AF] px-4 py-2 text-white shadow-sm transition hover:shadow disabled:opacity-40"
+                    style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
+                  >
+                    {imageCount >= MAX_PHOTOS ? 'Max photos reached' : 'Add photos'}
+                  </button>
 
-                {files.length ? (
-                  <>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-sm text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
-                        {imageCount}/{MAX_PHOTOS} photos · {videoFile ? 1 : 0}/{MAX_VIDEOS} video
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setFiles([])}
-                        className="text-sm text-[#1F48AF] hover:underline"
-                        style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="mt-2 text-xs text-neutral-500 italic" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
-                    Drag & drop images or a video, or choose files.
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/*"
+                    onChange={(e) => onPickVideo(e.target.files)}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (videoFile) {
+                        alert(ONE_VIDEO_MSG);
+                        return;
+                      }
+                      videoInputRef.current?.click();
+                    }}
+                    disabled={!!videoFile}
+                    className="text-sm rounded-xl bg-black px-4 py-2 text-white shadow-sm transition hover:shadow disabled:opacity-40"
+                    style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
+                  >
+                    {videoFile ? 'Video added' : 'Add 1 video (≤15s)'}
+                  </button>
+
+                  {!!files.length && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFiles([]);
+                        resetInput(imagesInputRef);
+                        resetInput(videoInputRef);
+                      }}
+                      className="text-sm text-[#1F48AF] hover:underline ml-auto"
+                      style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+
+                {/* Nota de ayuda y contador */}
+                <p className="mt-2 text-xs text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
+                  You can upload up to six photos and one video (15s max). Non-compliant files will be rejected automatically.
+                </p>
+                <span className="mt-1 inline-block text-xs text-neutral-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
+                  {imageCount}/{MAX_PHOTOS} photos · {videoFile ? 1 : 0}/{MAX_VIDEOS} video
+                </span>
+
+                {/* Estado vacío para DnD */}
+                {!files.length && (
+                  <p className="mt-2 text-xs text-neutral-500 italic" style={{ fontFamily: 'Roboto, Arial', fontWeight: 300 }}>
+                    Drag & drop images or a video, or use the buttons above.
                   </p>
                 )}
+
+                {/* Previews */}
                 {previews.length > 0 && (
                   <div className="mt-4 grid grid-cols-3 gap-2">
                     {previews.map((p, i) => (
@@ -674,7 +834,7 @@ export default function NewPostPage() {
                 {submitting ? 'Publishing…' : 'Publish'}
               </button>
               {done && (
-                <span className="text-sm text-green-600" style={{ fontFamily: 'Roboto, Arial, sans-serif', fontWeight: 300 }}>
+                <span className="text-sm text-green-600" style={{ fontFamily: 'Roboto, Arial', fontWeight: 300 }}>
                   {done}
                 </span>
               )}
