@@ -65,6 +65,7 @@ export default function TokPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(true);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -78,9 +79,12 @@ export default function TokPage() {
 
   const fetchPage = useCallback(
     async (pageIndex: number) => {
+      if (loading) return;
       setLoading(true);
       setErr(null);
+
       const from = pageIndex * PAGE_SIZE;
+      const to = from + PAGE_SIZE; // ← pedimos PAGE_SIZE+1 para detectar si hay más
 
       const { data, error } = await supabase
         .from('clips')
@@ -91,8 +95,8 @@ export default function TokPage() {
         duration_seconds, created_at, kind, experience
       `
         )
-        .order('created_at', { ascending: false }) // ✅ Orden estable
-        .range(from, from + PAGE_SIZE - 1);
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
       if (error) {
         setErr(error.message);
@@ -100,10 +104,15 @@ export default function TokPage() {
         return;
       }
 
-      const batch = seededShuffle((data as ClipRow[]) ?? [], seed + pageIndex * 131);
+      const rows = (data as ClipRow[]) ?? [];
+      const more = rows.length > PAGE_SIZE;
+      setHasMore(more);
+      const pageChunk = rows.slice(0, PAGE_SIZE);
+      const batch = seededShuffle(pageChunk, seed + pageIndex * 131);
+
       setItems((prev) => (pageIndex === 0 ? batch : [...prev, ...batch]));
 
-      // Fetch de usernames
+      // Fetch de usernames (solo de este chunk)
       const ids = Array.from(
         new Set(batch.map((b) => b.user_id).filter(Boolean) as string[])
       ).filter((id) => !(id in usernames));
@@ -122,10 +131,11 @@ export default function TokPage() {
 
       setLoading(false);
     },
-    [supabase, usernames, seed]
+    [supabase, usernames, seed, loading]
   );
 
   useEffect(() => {
+    setPage(0);
     fetchPage(0);
   }, [fetchPage]);
 
@@ -177,12 +187,12 @@ export default function TokPage() {
     return () => document.removeEventListener('visibilitychange', handler);
   }, []);
 
-  // Infinite scroll
+  // Infinite scroll (opcional, se mantiene) + control de hasMore
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     const onScroll = () => {
-      if (loading) return;
+      if (loading || !hasMore) return;
       const { scrollTop, clientHeight, scrollHeight } = el;
       if (scrollTop + clientHeight >= scrollHeight * 0.82) {
         const next = page + 1;
@@ -192,7 +202,7 @@ export default function TokPage() {
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [page, loading, fetchPage]);
+  }, [page, loading, fetchPage, hasMore]);
 
   return (
     <div
@@ -242,8 +252,25 @@ export default function TokPage() {
       ))}
 
       {loading && (
-        <div className="h-[20vh] flex items-center justify-center text-black/50">
+        <div className="h-[12vh] flex items-center justify-center text-black/50">
           Loading…
+        </div>
+      )}
+
+      {!loading && hasMore && (
+        <div className="w-full flex items-center justify-center py-6">
+          <button
+            onClick={() => {
+              const next = page + 1;
+              setPage(next);
+              fetchPage(next);
+            }}
+            className="px-5 py-2 rounded-full border border-black/15 bg-white hover:bg-black/5 transition text-sm"
+            aria-label="Load more videos"
+            title="Load more"
+          >
+            Load more
+          </button>
         </div>
       )}
     </div>

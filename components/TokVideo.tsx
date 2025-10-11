@@ -42,6 +42,7 @@ export default function TokVideoPage() {
   const [items, setItems] = useState<ClipRow[]>([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState<boolean>(true);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
@@ -53,8 +54,11 @@ export default function TokVideoPage() {
   });
 
   const fetchPage = useCallback(async (pageIndex: number) => {
+    if (loading) return;
     setLoading(true);
+
     const from = pageIndex * PAGE_SIZE;
+    const to = from + PAGE_SIZE; // ← pedimos PAGE_SIZE+1 para saber si hay más
 
     const { data } = await supabase
       .from('clips')
@@ -64,20 +68,27 @@ export default function TokVideoPage() {
         kind, experience,
         profiles:profiles(username)
       `)
-      .range(from, from + PAGE_SIZE - 1);
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (data) {
-      let rows = seededShuffle([...data] as ClipRow[], seed + pageIndex * 97);
+      const rows = [...(data as ClipRow[])];
+      const more = rows.length > PAGE_SIZE;
+      setHasMore(more);
+      const pageChunk = rows.slice(0, PAGE_SIZE);
+
+      let shuffled = seededShuffle(pageChunk, seed + pageIndex * 97);
+
       if (pageIndex === 0 && id) {
-        const idx = rows.findIndex(d => d.id === id);
-        if (idx > 0) { const selected = rows[idx]; rows.splice(idx, 1); rows.unshift(selected); }
+        const idx = shuffled.findIndex(d => d.id === id);
+        if (idx > 0) { const selected = shuffled[idx]; shuffled.splice(idx, 1); shuffled.unshift(selected); }
       }
-      setItems(prev => (pageIndex === 0 ? rows : [...prev, ...rows]));
+      setItems(prev => (pageIndex === 0 ? shuffled : [...prev, ...shuffled]));
     }
     setLoading(false);
-  }, [supabase, id, seed]);
+  }, [supabase, id, seed, loading]);
 
-  useEffect(() => { fetchPage(0); }, [fetchPage]);
+  useEffect(() => { setPage(0); fetchPage(0); }, [fetchPage]);
 
   // Registrar
   const registerVideo = (id: string, el: HTMLVideoElement | null) => {
@@ -101,17 +112,17 @@ export default function TokVideoPage() {
     return () => io.disconnect();
   }, [items.length]);
 
-  // Infinite
+  // Infinite (opcional) + control de hasMore
   useEffect(() => {
     const el = containerRef.current; if (!el) return;
     const onScroll = () => {
-      if (loading) return;
+      if (loading || !hasMore) return;
       const { scrollTop, clientHeight, scrollHeight } = el;
       if (scrollTop + clientHeight >= scrollHeight * 0.82) { const next=page+1; setPage(next); fetchPage(next); }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [page, loading, fetchPage]);
+  }, [page, loading, fetchPage, hasMore]);
 
   // Pestaña oculta → pausar
   useEffect(() => {
@@ -149,7 +160,25 @@ export default function TokVideoPage() {
           eagerLevel={idx < 1 ? 1 : (idx < 3 ? (idx + 1) as 2|3 : 0)}
         />
       ))}
-      {loading && <div className="h-[25vh] flex items-center justify-center text-black/50">Loading…</div>}
+
+      {loading && <div className="h-[12vh] flex items-center justify-center text-black/50">Loading…</div>}
+
+      {!loading && hasMore && (
+        <div className="w-full flex items-center justify-center py-6">
+          <button
+            onClick={() => {
+              const next = page + 1;
+              setPage(next);
+              fetchPage(next);
+            }}
+            className="px-5 py-2 rounded-full border border-black/15 bg-white hover:bg-black/5 transition text-sm"
+            aria-label="Load more videos"
+            title="Load more"
+          >
+            Load more
+          </button>
+        </div>
+      )}
     </div>
   );
 }
