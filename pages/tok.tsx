@@ -23,7 +23,7 @@ type ClipRow = {
 };
 type Profile = { id: string; username: string | null };
 
-const PAGE_SIZE = 10;
+type FollowersCountRow = { profile_id: string; followers_count: number | null };
 
 /* ===== Utils ===== */
 function ordinal(n: number) {
@@ -62,10 +62,9 @@ export default function TokPage() {
   const supabase = createClientComponentClient();
   const [items, setItems] = useState<ClipRow[]>([]);
   const [usernames, setUsernames] = useState<Record<string, string | null>>({});
-  const [page, setPage] = useState(0);
+  const [followers, setFollowers] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState<boolean>(true);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -77,67 +76,79 @@ export default function TokPage() {
     return r;
   });
 
-  const fetchPage = useCallback(
-    async (pageIndex: number) => {
-      if (loading) return;
-      setLoading(true);
-      setErr(null);
+  const fetchAll = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    setErr(null);
 
-      const from = pageIndex * PAGE_SIZE;
-      const to = from + PAGE_SIZE; // ← pedimos PAGE_SIZE+1 para detectar si hay más
-
-      const { data, error } = await supabase
-        .from('clips')
-        .select(
-          `
+    // 1) Traer TODOS los clips
+    const { data, error } = await supabase
+      .from('clips')
+      .select(
+        `
         id, user_id, video_url, poster_url, caption,
         artist_name, venue, city, country, event_date,
         duration_seconds, created_at, kind, experience
       `
-        )
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      )
+      .order('created_at', { ascending: false });
 
-      if (error) {
-        setErr(error.message);
-        setLoading(false);
-        return;
-      }
-
-      const rows = (data as ClipRow[]) ?? [];
-      const more = rows.length > PAGE_SIZE;
-      setHasMore(more);
-      const pageChunk = rows.slice(0, PAGE_SIZE);
-      const batch = seededShuffle(pageChunk, seed + pageIndex * 131);
-
-      setItems((prev) => (pageIndex === 0 ? batch : [...prev, ...batch]));
-
-      // Fetch de usernames (solo de este chunk)
-      const ids = Array.from(
-        new Set(batch.map((b) => b.user_id).filter(Boolean) as string[])
-      ).filter((id) => !(id in usernames));
-      if (ids.length) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, username')
-          .in('id', ids)
-          .limit(1000);
-        const map: Record<string, string | null> = {};
-        (profs as Profile[] | null)?.forEach((p) => {
-          map[p.id] = p.username ?? null;
-        });
-        setUsernames((prev) => ({ ...prev, ...map }));
-      }
-
+    if (error) {
+      setErr(error.message);
       setLoading(false);
-    },
-    [supabase, usernames, seed, loading]
-  );
+      return;
+    }
+
+    const rows = (data as ClipRow[]) ?? [];
+
+    // 2) Cargar usernames + followers_count de los dueños
+    const userIds = Array.from(
+      new Set(rows.map((r) => r.user_id).filter(Boolean) as string[])
+    );
+
+    if (userIds.length) {
+      const [{ data: profs }, { data: counts }] = await Promise.all([
+        supabase.from('profiles').select('id, username').in('id', userIds),
+        supabase
+          .from('profile_follow_counts')
+          .select('profile_id, followers_count')
+          .in('profile_id', userIds),
+      ]);
+
+      const nameMap: Record<string, string | null> = {};
+      (profs as Profile[] | null)?.forEach((p) => {
+        nameMap[p.id] = p.username ?? null;
+      });
+      setUsernames(nameMap);
+
+      const followMap: Record<string, number> = {};
+      (counts as FollowersCountRow[] | null)?.forEach((c) => {
+        followMap[c.profile_id] = Number(c.followers_count ?? 0);
+      });
+      setFollowers(followMap);
+
+      // 3) Desordenar con semilla y luego ordenar por seguidores (desc) usando el índice barajado de desempate
+      const shuffled = seededShuffle(rows, seed).map((item, idx) => ({
+        item,
+        rndIndex: idx,
+        followers: followMap[item.user_id ?? ''] ?? 0,
+      }));
+      shuffled.sort((a, b) => {
+        if (b.followers !== a.followers) return b.followers - a.followers;
+        return a.rndIndex - b.rndIndex; // desempate estable aleatorio
+      });
+      setItems(shuffled.map((x) => x.item));
+    } else {
+      // No hay usuarios (caso raro) → solo desordenar
+      setItems(seededShuffle(rows, seed));
+    }
+
+    setLoading(false);
+  }, [supabase, seed, loading]);
 
   useEffect(() => {
-    setPage(0);
-    fetchPage(0);
-  }, [fetchPage]);
+    fetchAll();
+  }, [fetchAll]);
 
   // Registrar / desregistrar vídeos
   const registerVideo = useCallback((id: string, el: HTMLVideoElement | null) => {
@@ -187,23 +198,6 @@ export default function TokPage() {
     return () => document.removeEventListener('visibilitychange', handler);
   }, []);
 
-  // Infinite scroll (opcional, se mantiene) + control de hasMore
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      if (loading || !hasMore) return;
-      const { scrollTop, clientHeight, scrollHeight } = el;
-      if (scrollTop + clientHeight >= scrollHeight * 0.82) {
-        const next = page + 1;
-        setPage(next);
-        fetchPage(next);
-      }
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [page, loading, fetchPage, hasMore]);
-
   return (
     <div
       id="tok-scroller"
@@ -231,13 +225,13 @@ export default function TokPage() {
         </div>
       )}
 
-      {items.map((clip, idx) => (
+      {items.map((clip) => (
         <Section
           key={clip.id}
           clip={clip}
           username={clip.user_id ? usernames[clip.user_id] ?? null : null}
           register={(el) => registerVideo(clip.id, el)}
-          eagerLevel={idx < 1 ? 1 : idx < 3 ? ((idx + 1) as 2 | 3) : 0}
+          eagerLevel={0}
           pauseOthers={(id) => {
             videosRef.current.forEach((v, k) => {
               if (k !== id) {
@@ -254,23 +248,6 @@ export default function TokPage() {
       {loading && (
         <div className="h-[12vh] flex items-center justify-center text-black/50">
           Loading…
-        </div>
-      )}
-
-      {!loading && hasMore && (
-        <div className="w-full flex items-center justify-center py-6">
-          <button
-            onClick={() => {
-              const next = page + 1;
-              setPage(next);
-              fetchPage(next);
-            }}
-            className="px-5 py-2 rounded-full border border-black/15 bg-white hover:bg-black/5 transition text-sm"
-            aria-label="Load more videos"
-            title="Load more"
-          >
-            Load more
-          </button>
         </div>
       )}
     </div>

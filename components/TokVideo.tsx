@@ -16,7 +16,7 @@ type ClipRow = {
   created_at: string | null; kind?: 'concert'|'experience'|string|null; experience?: 'ballet'|'opera'|'club'|string|null;
   profiles: ProfilesRelation;
 };
-const PAGE_SIZE = 10;
+type FollowersCountRow = { profile_id: string; followers_count: number | null };
 
 /* ===== Utils ===== */
 function getUsername(p: ProfilesRelation): string | null {
@@ -40,9 +40,7 @@ export default function TokVideoPage() {
   const { id } = router.query as { id?: string };
 
   const [items, setItems] = useState<ClipRow[]>([]);
-  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState<boolean>(true);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
@@ -53,13 +51,11 @@ export default function TokVideoPage() {
     return r;
   });
 
-  const fetchPage = useCallback(async (pageIndex: number) => {
+  const fetchAll = useCallback(async () => {
     if (loading) return;
     setLoading(true);
 
-    const from = pageIndex * PAGE_SIZE;
-    const to = from + PAGE_SIZE; // ← pedimos PAGE_SIZE+1 para saber si hay más
-
+    // 1) Traer TODOS los clips con username
     const { data } = await supabase
       .from('clips')
       .select(`
@@ -68,27 +64,51 @@ export default function TokVideoPage() {
         kind, experience,
         profiles:profiles(username)
       `)
-      .order('created_at', { ascending: false })
-      .range(from, to);
+      .order('created_at', { ascending: false });
 
-    if (data) {
-      const rows = [...(data as ClipRow[])];
-      const more = rows.length > PAGE_SIZE;
-      setHasMore(more);
-      const pageChunk = rows.slice(0, PAGE_SIZE);
+    const rows = (data as ClipRow[] | null) ?? [];
 
-      let shuffled = seededShuffle(pageChunk, seed + pageIndex * 97);
-
-      if (pageIndex === 0 && id) {
-        const idx = shuffled.findIndex(d => d.id === id);
-        if (idx > 0) { const selected = shuffled[idx]; shuffled.splice(idx, 1); shuffled.unshift(selected); }
-      }
-      setItems(prev => (pageIndex === 0 ? shuffled : [...prev, ...shuffled]));
+    // 2) Follower counts
+    const userIds = Array.from(new Set(rows.map(r => r.user_id).filter(Boolean) as string[]));
+    let followMap: Record<string, number> = {};
+    if (userIds.length) {
+      const { data: counts } = await supabase
+        .from('profile_follow_counts')
+        .select('profile_id, followers_count')
+        .in('profile_id', userIds);
+      (counts as FollowersCountRow[] | null)?.forEach(c => {
+        followMap[c.profile_id] = Number(c.followers_count ?? 0);
+      });
     }
+
+    // 3) Barajar y priorizar por seguidores (desc) con desempate aleatorio
+    const shuffled = seededShuffle(rows, seed).map((item, idx) => ({
+      item,
+      rndIndex: idx,
+      followers: followMap[item.user_id ?? ''] ?? 0,
+    }));
+    shuffled.sort((a, b) => {
+      if (b.followers !== a.followers) return b.followers - a.followers;
+      return a.rndIndex - b.rndIndex;
+    });
+
+    let ordered = shuffled.map(x => x.item);
+
+    // 4) Si se accede con /tok/[id], poner ese primero
+    if (id) {
+      const idx = ordered.findIndex(d => d.id === id);
+      if (idx > 0) {
+        const sel = ordered[idx];
+        ordered.splice(idx, 1);
+        ordered.unshift(sel);
+      }
+    }
+
+    setItems(ordered);
     setLoading(false);
   }, [supabase, id, seed, loading]);
 
-  useEffect(() => { setPage(0); fetchPage(0); }, [fetchPage]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // Registrar
   const registerVideo = (id: string, el: HTMLVideoElement | null) => {
@@ -111,18 +131,6 @@ export default function TokVideoPage() {
     videosRef.current.forEach(v => io.observe(v));
     return () => io.disconnect();
   }, [items.length]);
-
-  // Infinite (opcional) + control de hasMore
-  useEffect(() => {
-    const el = containerRef.current; if (!el) return;
-    const onScroll = () => {
-      if (loading || !hasMore) return;
-      const { scrollTop, clientHeight, scrollHeight } = el;
-      if (scrollTop + clientHeight >= scrollHeight * 0.82) { const next=page+1; setPage(next); fetchPage(next); }
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [page, loading, fetchPage, hasMore]);
 
   // Pestaña oculta → pausar
   useEffect(() => {
@@ -151,34 +159,17 @@ export default function TokVideoPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {items.map((it, idx) => (
+      {items.map((it) => (
         <VideoCard
           key={it.id}
           item={it}
           register={(el)=>registerVideo(it.id, el)}
           pauseOthers={() => pauseOthers(it.id)}
-          eagerLevel={idx < 1 ? 1 : (idx < 3 ? (idx + 1) as 2|3 : 0)}
+          eagerLevel={0}
         />
       ))}
 
       {loading && <div className="h-[12vh] flex items-center justify-center text-black/50">Loading…</div>}
-
-      {!loading && hasMore && (
-        <div className="w-full flex items-center justify-center py-6">
-          <button
-            onClick={() => {
-              const next = page + 1;
-              setPage(next);
-              fetchPage(next);
-            }}
-            className="px-5 py-2 rounded-full border border-black/15 bg-white hover:bg-black/5 transition text-sm"
-            aria-label="Load more videos"
-            title="Load more"
-          >
-            Load more
-          </button>
-        </div>
-      )}
     </div>
   );
 }
