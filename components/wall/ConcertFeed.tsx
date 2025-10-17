@@ -284,7 +284,27 @@ export default function ConcertFeed({
         _author: p.user_id ? profilesMap[p.user_id] : undefined,
       }));
 
-      setList((prev) => [...prev, ...finalRows]);
+      // 🔒 MERGE + REORDENAR SIEMPRE
+      setList((prev) => {
+        const map = new Map<string, ExtendedConcertPost>();
+        [...prev, ...finalRows].forEach((r) => map.set(r.concert_id, r));
+        const arr = Array.from(map.values());
+
+        if (mode === "for-you") {
+          // General: por likes desc y desempate por fecha (created_at)
+          arr.sort((a, b) => {
+            const dl = (b.like_count ?? 0) - (a.like_count ?? 0);
+            if (dl !== 0) return dl;
+            return (b.created_at || "").localeCompare(a.created_at || "");
+          });
+        } else {
+          // Otras pestañas: reciente primero por created_at
+          arr.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+        }
+
+        return arr;
+      });
+
       setPage((p) => p + 1);
       if (!filtered.length) setDone(true);
       setLoadedOnce(true);

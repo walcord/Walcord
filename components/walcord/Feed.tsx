@@ -994,10 +994,22 @@ const ConcertFeed: React.FC<{
     const concertIds = Object.keys(firstByConcert);
     if (!concertIds.length) return [];
 
-    const { data: concerts } = await supabase
-      .from("concerts")
-      .select("id, artist_name, tour, city, country, year")
-      .in("id", concertIds);
+    const [{ data: concerts }, { data: countsData }] = await Promise.all([
+      supabase
+        .from("concerts")
+        .select("id, artist_name, tour, city, country, year")
+        .in("id", concertIds),
+      // obtenemos like_count desde la vista agregada si existe
+      supabase
+        .from("v_concert_posts")
+        .select("concert_id, like_count")
+        .in("concert_id", concertIds),
+    ]);
+
+    const likeMap: Record<string, number> = {};
+    (countsData || []).forEach((r: any) => {
+      likeMap[r.concert_id] = r.like_count ?? 0;
+    });
 
     const cById = Object.fromEntries((concerts ?? []).map((c: any) => [c.id, c]));
 
@@ -1014,7 +1026,7 @@ const ConcertFeed: React.FC<{
         country: meta.country ?? null,
         year: meta.year ?? null,
         image_urls: urls,
-        like_count: 0,
+        like_count: likeMap[cid] ?? 0,
         comment_count: 0,
         created_at: firstByConcert[cid].last_at,
         user_id: firstByConcert[cid].user_id,
@@ -1030,12 +1042,11 @@ const ConcertFeed: React.FC<{
       );
     }
 
+    // ORDEN GLOBAL: más likes primero; empate por fecha
     posts.sort((x, y) => {
-      if (mode === "for-you") {
-        const lx = x.like_count ?? 0;
-        const ly = y.like_count ?? 0;
-        if (ly !== lx) return ly - lx;
-      }
+      const lx = x.like_count ?? 0;
+      const ly = y.like_count ?? 0;
+      if (ly !== lx) return ly - lx;
       return x.created_at > y.created_at ? -1 : 1;
     });
 
@@ -1056,13 +1067,10 @@ const ConcertFeed: React.FC<{
           "user_id, concert_id, artist_name, tour, city, country, year, anchor_photo_id, image_urls, like_count, comment_count, last_photo_at"
         );
 
-      if (mode === "for-you") {
-        q = q
-          .order("like_count", { ascending: false, nullsFirst: false })
-          .order("last_photo_at", { ascending: false });
-      } else {
-        q = q.order("last_photo_at", { ascending: false });
-      }
+      // ORDEN GLOBAL: SIEMPRE por likes desc; desempate por fecha
+      q = q
+        .order("like_count", { ascending: false, nullsFirst: false })
+        .order("last_photo_at", { ascending: false });
 
       q = q.range(page * 8, page * 8 + 8 - 1);
 
@@ -1426,6 +1434,7 @@ export default function FeedPage() {
           "viewer_id, post_id, author_id, created_at, caption, image_urls, username, avatar_url, record_id, record_title, artist_name, record_vibe_color, record_cover_color"
         )
         .eq("viewer_id", user.id)
+        // MANTENEMOS order por fecha para la ventana, pero luego reordenamos por likes
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -1450,15 +1459,24 @@ export default function FeedPage() {
           record_cover_color: p.record_cover_color ?? null,
         })) ?? [];
 
-      if (feedScope === "foryou" && normalized.length) {
+      if (normalized.length) {
         const ids = normalized.map((n) => n.id);
         const { data: countsRes } = await supabase
           .from("v_posts_counts")
           .select("post_id, like_count")
           .in("post_id", ids);
+
         const likeMap: Record<string, number> = {};
-        (countsRes || []).forEach((r: any) => (likeMap[r.post_id] = r.like_count ?? 0));
-        normalized = normalized.sort((a, b) => (likeMap[b.id] || 0) - (likeMap[a.id] || 0));
+        (countsRes || []).forEach((r: any) => {
+          likeMap[r.post_id] = r.like_count ?? 0;
+        });
+
+        normalized = normalized.sort((a, b) => {
+          const lb = likeMap[b.id] || 0;
+          const la = likeMap[a.id] || 0;
+          if (lb !== la) return lb - la; // más likes primero
+          return a.created_at < b.created_at ? 1 : -1; // desempate por fecha
+        });
       }
 
       setMemories((prev) => (reset ? normalized : [...prev, ...normalized]));
@@ -1575,7 +1593,7 @@ export default function FeedPage() {
 
   const CommentBox: React.FC<{ postId: string }> = ({ postId }) => {
     const [text, setText] = useState("");
-    const [sending, setSending] = useState(false);
+       const [sending, setSending] = useState(false);
     const onSend = async () => {
       if (!user || !text.trim()) return;
       setSending(true);

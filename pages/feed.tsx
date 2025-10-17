@@ -557,7 +557,7 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
       experience: c.experience ?? null,
     }));
 
-    // Orden en "General": por likes desc, después fecha concierto desc
+    // 🔒 Orden en "General": por likes desc, después fecha concierto desc
     if (opts.scope === "for-you") {
       data.sort((a, b) => {
         const dl = (b.like_count ?? 0) - (a.like_count ?? 0);
@@ -578,7 +578,16 @@ function useConcertFeed(opts: { scope: "for-you" | "friends"; artistId?: string 
       setRows(prev => {
         const map = new Map<string, Row>();
         [...prev, ...data].forEach(r => map.set(r.concert_id, r));
-        return Array.from(map.values());
+        const arr = Array.from(map.values());
+        // 🔒 Reordenar SIEMPRE tras merge para mantener el orden por likes
+        if (opts.scope === "for-you") {
+          arr.sort((a, b) => {
+            const dl = (b.like_count ?? 0) - (a.like_count ?? 0);
+            if (dl !== 0) return dl;
+            return (b.event_date || "").localeCompare(a.event_date || "");
+          });
+        }
+        return arr;
       });
       if (data.length < PAGE) setDone(true);
     })();
