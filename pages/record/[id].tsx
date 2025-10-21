@@ -54,6 +54,33 @@ const Modal = ({
   )
 }
 
+type Profile = {
+  id: string
+  full_name: string | null
+  username: string | null
+}
+
+type Thought = {
+  id: string
+  user_id: string
+  target_type: "record" | "artist" | "track"
+  target_id: string
+  body: string
+  created_at: string
+  profile?: Profile
+  likes_count?: number
+  comments_count?: number
+  liked_by_me?: boolean
+}
+
+type ThoughtComment = {
+  id: string
+  user_id: string
+  body: string
+  created_at: string
+  profile?: Profile
+}
+
 export default function RecordProfile() {
   const router = useRouter()
   const { id } = router.query
@@ -80,6 +107,18 @@ export default function RecordProfile() {
     }
     return true
   }
+
+  // ────────────────────────────────────────────────
+  // STATE: Listener Takes embebido en este record
+  // ────────────────────────────────────────────────
+  const [takesLoading, setTakesLoading] = useState<boolean>(true)
+  const [takes, setTakes] = useState<Thought[]>([])
+  const [takeBody, setTakeBody] = useState<string>("")
+  const [takePosting, setTakePosting] = useState<boolean>(false)
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
+  const [commentsMap, setCommentsMap] = useState<Record<string, ThoughtComment[]>>({})
+  const [replyFor, setReplyFor] = useState<string | null>(null)
+  const [replyBody, setReplyBody] = useState<string>("")
 
   useEffect(() => {
     const syncUser = async () => {
@@ -139,12 +178,13 @@ export default function RecordProfile() {
         if (userRate) setUserRating(userRate.rate)
       }
 
-      // Amigos sin incluir al usuario actual
       const friendsWithoutMe = (friendsData || []).filter((f: any) => f.user_id !== u?.id)
 
       setRecord({ ...recordData, artist: artistData })
       setFriends(friendsWithoutMe || [])
       setAverageRate(avg)
+
+      await loadTakes(recordId, u?.id || null)
     }
 
     fetchAll()
@@ -172,6 +212,202 @@ export default function RecordProfile() {
         ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
         : null
     setAverageRate(avg)
+  }
+
+  // ────────────────────────────────────────────────
+  // LÓGICA Listener Takes (filtrado al recordId)
+  // ────────────────────────────────────────────────
+  const loadTakes = async (recId: string, myId: string | null) => {
+    setTakesLoading(true)
+    const { data: recs, error } = await supabase
+      .from("recommendations")
+      .select("id, user_id, target_type, target_id, body, created_at")
+      .eq("target_type", "record")
+      .eq("target_id", recId)
+      .order("created_at", { ascending: false })
+      .limit(200)
+
+    if (error) {
+      setTakes([])
+      setTakesLoading(false)
+      return
+    }
+
+    // Perfiles
+    const userIds = Array.from(new Set((recs || []).map((r) => r.user_id)))
+    let profiles: Record<string, Profile> = {}
+    if (userIds.length) {
+      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", userIds)
+      ;(profs || []).forEach((p: any) => (profiles[p.id] = p))
+    }
+
+    // Métricas likes/comments
+    const ids = (recs || []).map((r) => r.id)
+    const likesCount: Record<string, number> = {}
+    const commentsCount: Record<string, number> = {}
+    const likedSet = new Set<string>()
+
+    if (ids.length) {
+      const { data: likes } = await supabase
+        .from("recommendation_likes")
+        .select("recommendation_id")
+        .in("recommendation_id", ids as any)
+      ;(likes || []).forEach((row: any) => {
+        const k = String(row.recommendation_id)
+        likesCount[k] = (likesCount[k] || 0) + 1
+      })
+
+      const { data: comments } = await supabase
+        .from("recommendation_comments")
+        .select("recommendation_id")
+        .in("recommendation_id", ids as any)
+      ;(comments || []).forEach((row: any) => {
+        const k = String(row.recommendation_id)
+        commentsCount[k] = (commentsCount[k] || 0) + 1
+      })
+
+      if (myId) {
+        const { data: myLikes } = await supabase
+          .from("recommendation_likes")
+          .select("recommendation_id")
+          .in("recommendation_id", ids as any)
+          .eq("user_id", myId)
+        ;(myLikes || []).forEach((row: any) => likedSet.add(row.recommendation_id))
+      }
+    }
+
+    const mapped: Thought[] = (recs || []).map((r: any) => ({
+      ...r,
+      profile: profiles[r.user_id],
+      likes_count: likesCount[String(r.id)] ?? 0,
+      comments_count: commentsCount[String(r.id)] ?? 0,
+      liked_by_me: likedSet.has(r.id),
+    }))
+
+    setTakes(mapped)
+    setTakesLoading(false)
+  }
+
+  const postTake = async () => {
+    if (!recordId) return
+    if (!requireAuth("Sign in to share your take")) return
+    const bodyClean = takeBody.trim()
+    if (bodyClean.length === 0 || bodyClean.length > 280) return
+    if (!userId) return
+
+    setTakePosting(true)
+    const tmpId = `tmp_${Date.now()}`
+    const optimistic: Thought = {
+      id: tmpId,
+      user_id: userId,
+      target_type: "record",
+      target_id: recordId,
+      body: bodyClean,
+      created_at: new Date().toISOString(),
+      profile: { id: userId, full_name: "—", username: null },
+      likes_count: 0,
+      comments_count: 0,
+      liked_by_me: false,
+    }
+    setTakes((prev) => [optimistic, ...prev])
+
+    const { data, error } = await supabase
+      .from("recommendations")
+      .insert({
+        user_id: userId,
+        target_type: "record",
+        target_id: recordId,
+        body: bodyClean,
+      })
+      .select("id")
+      .single()
+
+    if (error) {
+      setTakes((prev) => prev.filter((it) => it.id !== tmpId))
+      alert(`Error posting: ${error.message}`)
+    } else {
+      setTakes((prev) => prev.map((it) => (it.id === tmpId ? { ...it, id: data.id } : it)))
+    }
+
+    setTakePosting(false)
+    setTakeBody("")
+  }
+
+  const toggleLike = async (rec: Thought) => {
+    if (!requireAuth("Sign in to like")) return
+    if (!userId) return
+
+    if (rec.liked_by_me) {
+      await supabase.from("recommendation_likes").delete().match({ recommendation_id: rec.id, user_id: userId })
+      setTakes((prev) =>
+        prev.map((it) =>
+          it.id === rec.id ? { ...it, liked_by_me: false, likes_count: Math.max(0, (it.likes_count || 0) - 1) } : it
+        )
+      )
+    } else {
+      await supabase.from("recommendation_likes").insert({ recommendation_id: rec.id, user_id: userId })
+      setTakes((prev) =>
+        prev.map((it) => (it.id === rec.id ? { ...it, liked_by_me: true, likes_count: (it.likes_count || 0) + 1 } : it))
+      )
+    }
+  }
+
+  const loadComments = async (id: string) => {
+    const { data, error } = await supabase
+      .from("recommendation_comments")
+      .select("id, user_id, body, created_at")
+      .eq("recommendation_id", id)
+      .order("created_at", { ascending: true })
+    if (error) return
+
+    const uids = Array.from(new Set((data || []).map((c) => c.user_id)))
+    let pmap: Record<string, Profile> = {}
+    if (uids.length) {
+      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", uids)
+      ;(profs || []).forEach((p: any) => (pmap[p.id] = p))
+    }
+
+    const mapped: ThoughtComment[] = (data || []).map((c: any) => ({
+      ...c,
+      profile: pmap[c.user_id],
+    }))
+    setCommentsMap((prev) => ({ ...prev, [id]: mapped }))
+  }
+
+  const sendReply = async () => {
+    if (!replyFor || !userId) return
+    const bodyClean = replyBody.trim()
+    if (bodyClean.length === 0 || bodyClean.length > 280) return
+
+    const { data, error } = await supabase
+      .from("recommendation_comments")
+      .insert({
+        recommendation_id: replyFor,
+        user_id: userId,
+        body: bodyClean,
+      })
+      .select("id, created_at")
+      .single()
+
+    if (!error) {
+      setTakes((prev) =>
+        prev.map((it) => (it.id === replyFor ? { ...it, comments_count: (it.comments_count || 0) + 1 } : it))
+      )
+      setCommentsMap((prev) => {
+        const prevList = prev[replyFor] || []
+        const newItem: ThoughtComment = {
+          id: data.id,
+          user_id: userId,
+          body: bodyClean,
+          created_at: data.created_at,
+          profile: { id: userId, full_name: "—", username: null },
+        }
+        return { ...prev, [replyFor]: [...prevList, newItem] }
+      })
+    }
+
+    setReplyBody("")
+    setReplyFor(null)
   }
 
   if (!record) {
@@ -354,6 +590,154 @@ export default function RecordProfile() {
           </button>
         </div>
       </Modal>
+
+      {/* ───────────────────────────────
+          LISTENER TAKES (antes community)
+          ─────────────────────────────── */}
+      <section className="px-6 md:px-24 pb-24">
+        <div className="mx-auto w-full max-w-[680px]">
+          <h2 className="text-xl mb-3" style={{ fontFamily: "Times New Roman" }}>
+            Listener Takes
+          </h2>
+
+          {/* Composer (solo texto, 280) */}
+          <div className="bg-white border border-neutral-200 rounded-3xl p-4 shadow-[0_10px_30px_rgba(0,0,0,0.06)] mb-4">
+            <textarea
+              value={takeBody}
+              onChange={(e) => setTakeBody(e.target.value)}
+              placeholder="Share your thoughts about this record…"
+              className="w-full min-h-[90px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF] font-[family-name:Times_New_Roman,Times,serif]"
+              maxLength={280}
+            />
+            <div className="mt-2 flex items-center justify-between">
+              <span className={`text-xs ${takeBody.length > 280 ? "text-red-600" : "text-neutral-500"}`}>
+                {280 - takeBody.length}
+              </span>
+              <button
+                onClick={postTake}
+                disabled={takePosting || takeBody.trim().length === 0 || takeBody.length > 280}
+                className={`text-xs px-4 py-2 rounded-full ${
+                  takeBody.trim().length && takeBody.length <= 280
+                    ? "bg-[#1F48AF] text-white"
+                    : "bg-neutral-300 text-neutral-600 cursor-not-allowed"
+                }`}
+              >
+                {takePosting ? "Posting…" : "Share Take"}
+              </button>
+            </div>
+          </div>
+
+          {/* Feed */}
+          {takesLoading ? (
+            <div className="text-sm text-neutral-500">Loading takes…</div>
+          ) : takes.length === 0 ? (
+            <div className="text-sm text-neutral-500">No takes yet.</div>
+          ) : (
+            <ul className="space-y-3">
+              {takes.map((it) => (
+                <li key={String(it.id)} className="border border-neutral-200 rounded-3xl p-4 shadow-[0_6px_24px_rgba(0,0,0,0.05)]">
+                  {/* Cabecera */}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-[15px] font-light font-[family-name:Times_New_Roman,Times,serif]">
+                        {it.profile?.full_name || "—"}
+                      </div>
+                      <div className="text-[11px] text-neutral-500">{new Date(it.created_at).toLocaleString()}</div>
+                    </div>
+                    <div className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">RECORD</div>
+                  </div>
+
+                  {/* Texto */}
+                  <p className="mt-3 text-[16px] leading-7 font-[family-name:Times_New_Roman,Times,serif]">{it.body}</p>
+
+                  {/* Acciones */}
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      onClick={() => toggleLike(it)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                        it.liked_by_me ? "bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                      }`}
+                    >
+                      Like · {it.likes_count || 0}
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        const isOpen = !!openComments[it.id]
+                        const next = { ...openComments, [it.id]: !isOpen }
+                        setOpenComments(next)
+                        if (!isOpen && !commentsMap[it.id]) await loadComments(it.id)
+                        setReplyFor(it.id)
+                      }}
+                      className="text-xs px-3 py-1.5 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                      aria-expanded={!!openComments[it.id]}
+                    >
+                      Comment · {it.comments_count || 0}
+                    </button>
+                  </div>
+
+                  {/* Lista de comentarios */}
+                  {openComments[it.id] && (
+                    <div className="mt-3">
+                      {commentsMap[it.id] && commentsMap[it.id]!.length > 0 ? (
+                        <ul className="space-y-2">
+                          {commentsMap[it.id]!.map((c) => (
+                            <li key={c.id} className="rounded-2xl bg-neutral-50 border border-neutral-200 px-3 py-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[13px] font-light font-[family-name:Times_New_Roman,Times,serif]">
+                                  {c.profile?.full_name || "—"}
+                                </span>
+                                <span className="text-[10px] text-neutral-500">{new Date(c.created_at).toLocaleString()}</span>
+                              </div>
+                              <p className="mt-1 text-[14px]">{c.body}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-[12px] text-neutral-500">Be the first to comment.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Reply inline */}
+                  {replyFor === it.id && (
+                    <div className="mt-3 border-t border-neutral-200 pt-3">
+                      <textarea
+                        value={replyBody}
+                        onChange={(e) => setReplyBody(e.target.value)}
+                        placeholder="Write a reply…"
+                        className="w-full min-h-[80px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] outline-none focus:ring-2 focus:ring-[#1F48AF]"
+                        maxLength={280}
+                      />
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className={`text-xs ${replyBody.length > 280 ? "text-red-600" : "text-neutral-500"}`}>
+                          {280 - replyBody.length}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setReplyFor(null); setReplyBody(""); }} className="text-xs px-3 py-1.5 rounded-full bg-neutral-200 text-neutral-700">
+                            Cancel
+                          </button>
+                          <button
+                            onClick={sendReply}
+                            disabled={!replyBody.trim().length || replyBody.length > 280}
+                            className={`text-xs px-3 py-1.5 rounded-full ${
+                              replyBody.trim().length && replyBody.length <= 280
+                                ? "bg-[#1F48AF] text-white"
+                                : "bg-neutral-300 text-neutral-600 cursor-not-allowed"
+                            }`}
+                          >
+                            Reply
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
     </main>
   )
 }

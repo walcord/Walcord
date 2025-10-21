@@ -1397,12 +1397,12 @@ export default function FeedPage() {
     if (!meId) return;
     try {
       const [{ data: cts }, { data: liked }] = await Promise.all([
-        supabase.from("v_posts_counts").select("post_id, like_count, comment_count").eq("post_id", postId).maybeSingle(),
-        supabase.from("post_likes").select("post_id").eq("post_id", postId).eq("user_id", meId).maybeSingle(),
+        supabase.from("v_posts_counts").select("post_id, concert_likes, comment_count").eq("post_id", postId).maybeSingle(),
+        supabase.from("concert_likes").select("post_id").eq("post_id", postId).eq("user_id", meId).maybeSingle(),
       ]);
       setCounts((p) => ({
         ...p,
-        [postId]: { likes: cts?.like_count ?? p[postId]?.likes ?? 0, comments: cts?.comment_count ?? p[postId]?.comments ?? 0 },
+        [postId]: { likes: cts?.concert_likes ?? p[postId]?.likes ?? 0, comments: cts?.comment_count ?? p[postId]?.comments ?? 0 },
       }));
       setLikedByMe((p) => ({ ...p, [postId]: !!liked }));
     } catch (e) {

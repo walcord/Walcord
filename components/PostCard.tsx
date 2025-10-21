@@ -7,6 +7,15 @@ type Props = { post: any }
 
 const cap = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
 
+/** Línea 18–22 — UTIL: confirm seguro para web/app */
+function safeConfirm(message: string): boolean {
+  if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+    return window.confirm(message)
+  }
+  // En apps/WebView donde no existe window.confirm, seguimos adelante.
+  return true
+}
+
 export default function PostCard({ post }: Props) {
   const isConcert =
     !!post?.artist_id || !!post?.country_code || !!post?.event_date || !!post?.cover_url
@@ -109,10 +118,12 @@ export default function PostCard({ post }: Props) {
 
   function toggleMenu(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setMenuOpen(s => !s) }
 
+  /** Línea 92 — usar safeConfirm en report */
   async function handleReport(e: React.MouseEvent) {
     e.preventDefault(); e.stopPropagation()
     if (reported || reporting) return
-    const ok = window.confirm('Report this post?'); if (!ok) return
+    const ok = safeConfirm('Report this post?')  // <— cambio
+    if (!ok) return
     try {
       setReporting(true)
       const { data: { user } } = await supabase.auth.getUser()
@@ -122,10 +133,12 @@ export default function PostCard({ post }: Props) {
     } catch { alert('Could not send report. Please try again.') } finally { setReporting(false) }
   }
 
+  /** Línea 103 — usar safeConfirm en delete */
   async function handleDelete(e: React.MouseEvent) {
     e.preventDefault(); e.stopPropagation()
     if (!isOwner || deleting) return
-    const ok = window.confirm('Delete this post? This cannot be undone.'); if (!ok) return
+    const ok = safeConfirm('Delete this post? This cannot be undone.') // <— cambio
+    if (!ok) return
     try {
       setDeleting(true)
       const { data: { session } } = await supabase.auth.getSession()
