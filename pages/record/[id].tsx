@@ -1,10 +1,12 @@
-import { useRouter } from "next/router"
-import { useEffect, useState } from "react"
-import { supabase } from "../../lib/supabaseClient"
-import Image from "next/image"
-import WalcordCircle from "../../components/icons/WalcordCircle"
-import WalcordPeopleIcon from "../../components/icons/WalcordPeopleIcon"
-import Link from "next/link"
+'use client';
+
+import { useRouter } from "next/router";
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "../../lib/supabaseClient";
+import Image from "next/image";
+import WalcordCircle from "../../components/icons/WalcordCircle";
+import WalcordPeopleIcon from "../../components/icons/WalcordPeopleIcon";
+import Link from "next/link";
 
 /** Tooltip minimal Walcord */
 const Tooltip = ({ children, message }: { children: React.ReactNode; message: string }) => (
@@ -17,7 +19,7 @@ const Tooltip = ({ children, message }: { children: React.ReactNode; message: st
       {message}
     </span>
   </div>
-)
+);
 
 /** Modal simple y limpio */
 const Modal = ({
@@ -26,12 +28,12 @@ const Modal = ({
   title,
   children,
 }: {
-  open: boolean
-  onClose: () => void
-  title: string
-  children: React.ReactNode
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
 }) => {
-  if (!open) return null
+  if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -51,113 +53,122 @@ const Modal = ({
         {children}
       </div>
     </div>
-  )
-}
+  );
+};
 
 type Profile = {
-  id: string
-  full_name: string | null
-  username: string | null
-}
+  id: string;
+  full_name: string | null;
+  username: string | null;
+};
 
 type Thought = {
-  id: string
-  user_id: string
-  target_type: "record" | "artist" | "track"
-  target_id: string
-  body: string
-  created_at: string
-  profile?: Profile
-  likes_count?: number
-  comments_count?: number
-  liked_by_me?: boolean
-}
+  id: string;
+  user_id: string;
+  target_type: "record" | "artist" | "track";
+  target_id: string;
+  body: string;
+  created_at: string;
+  profile?: Profile;
+  likes_count?: number;
+  comments_count?: number;
+  liked_by_me?: boolean;
+  rating_id?: string | null; // 🔗 rating enlazado (nuevo)
+};
 
 type ThoughtComment = {
-  id: string
-  user_id: string
-  body: string
-  created_at: string
-  profile?: Profile
-}
+  id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  profile?: Profile;
+};
 
 export default function RecordProfile() {
-  const router = useRouter()
-  const { id } = router.query
-  const recordId = Array.isArray(id) ? id[0] : (id as string | undefined)
+  const router = useRouter();
+  const { id } = router.query;
+  const recordId = Array.isArray(id) ? id[0] : (id as string | undefined);
 
-  const [record, setRecord] = useState<any>(null)
-  const [friends, setFriends] = useState<any[]>([])
-  const [averageRate, setAverageRate] = useState<number | null>(null)
-  const [userRating, setUserRating] = useState<number | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
-  const [isFromFavouriteArtist, setIsFromFavouriteArtist] = useState<boolean>(false)
+  const [record, setRecord] = useState<any>(null);
+  const [friends, setFriends] = useState<any[]>([]);
+  const [averageRate, setAverageRate] = useState<number | null>(null);
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isFromFavouriteArtist, setIsFromFavouriteArtist] = useState<boolean>(false);
 
   // modal amigos
-  const [openFriends, setOpenFriends] = useState(false)
+  const [openFriends, setOpenFriends] = useState(false);
 
   // ✅ Modal de login contextual (solo si no hay sesión)
-  const [loginOpen, setLoginOpen] = useState(false)
-  const [loginTitle, setLoginTitle] = useState<string>("Sign in to continue")
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginTitle, setLoginTitle] = useState<string>("Sign in to continue");
   const requireAuth = (title: string) => {
     if (!userId) {
-      setLoginTitle(title)
-      setLoginOpen(true)
-      return false
+      setLoginTitle(title);
+      setLoginOpen(true);
+      return false;
     }
-    return true
-  }
+    return true;
+  };
 
   // ────────────────────────────────────────────────
   // STATE: Listener Takes embebido en este record
   // ────────────────────────────────────────────────
-  const [takesLoading, setTakesLoading] = useState<boolean>(true)
-  const [takes, setTakes] = useState<Thought[]>([])
-  const [takeBody, setTakeBody] = useState<string>("")
-  const [takePosting, setTakePosting] = useState<boolean>(false)
-  const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
-  const [commentsMap, setCommentsMap] = useState<Record<string, ThoughtComment[]>>({})
-  const [replyFor, setReplyFor] = useState<string | null>(null)
-  const [replyBody, setReplyBody] = useState<string>("")
+  const [takesLoading, setTakesLoading] = useState<boolean>(true);
+  const [takes, setTakes] = useState<Thought[]>([]);
+  const [takeBody, setTakeBody] = useState<string>("");
+  const [takeRate, setTakeRate] = useState<number | null>(null); // ⭐ rate requerido en composer
+  const [takePosting, setTakePosting] = useState<boolean>(false);
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const [commentsMap, setCommentsMap] = useState<Record<string, ThoughtComment[]>>({});
+  const [replyFor, setReplyFor] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState<string>("");
+  const [hasMyTake, setHasMyTake] = useState<boolean>(false);
+  const [showComposer, setShowComposer] = useState<boolean>(false);
+  const composerRef = useRef<HTMLDivElement | null>(null);
+
+  // Edición de take
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState<string>("");
 
   useEffect(() => {
     const syncUser = async () => {
-      const u = (await supabase.auth.getUser()).data.user
-      setUserId(u?.id || null)
-    }
-    syncUser()
-  }, [])
+      const u = (await supabase.auth.getUser()).data.user;
+      setUserId(u?.id || null);
+    };
+    syncUser();
+  }, []);
 
   useEffect(() => {
-    if (!recordId) return
+    if (!recordId) return;
 
     const fetchAll = async () => {
       // RECORD
-      const { data: recordData } = await supabase.from("records").select("*").eq("id", recordId).single()
-      if (!recordData) return
+      const { data: recordData } = await supabase.from("records").select("*").eq("id", recordId).single();
+      if (!recordData) return;
 
       // ARTISTA
       const { data: artistData } = await supabase
         .from("artists")
         .select("id, name")
         .eq("name", recordData.artist_name)
-        .single()
+        .single();
 
       // RATINGS (media)
-      const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId)
+      const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId);
       const avg =
         ratingsData && ratingsData.length > 0
           ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
-          : null
+          : null;
 
-      // AMIGOS (quien tiene este record en favoritos)
+      // AMIGOS
       const { data: friendsData } = await supabase
         .from("favourite_records")
         .select("user_id, profiles(username, avatar_url)")
-        .eq("record_id", recordId)
+        .eq("record_id", recordId);
 
       // USUARIO
-      const u = (await supabase.auth.getUser()).data.user
+      const u = (await supabase.auth.getUser()).data.user;
 
       if (u?.id && artistData) {
         // ¿El artista es favorito del usuario?
@@ -165,8 +176,8 @@ export default function RecordProfile() {
           .from("favourite_artists")
           .select("*")
           .eq("user_id", u.id)
-          .eq("artist_id", artistData.id)
-        if (favArtist?.length > 0) setIsFromFavouriteArtist(true)
+          .eq("artist_id", artistData.id);
+        if (favArtist?.length > 0) setIsFromFavouriteArtist(true);
 
         // Rating del usuario
         const { data: userRate } = await supabase
@@ -174,105 +185,120 @@ export default function RecordProfile() {
           .select("rate")
           .eq("user_id", u.id)
           .eq("record_id", recordId)
-          .maybeSingle()
-        if (userRate) setUserRating(userRate.rate)
+          .maybeSingle();
+        if (userRate) {
+          setUserRating(userRate.rate);
+          setTakeRate(userRate.rate); // precarga en composer
+        }
       }
 
-      const friendsWithoutMe = (friendsData || []).filter((f: any) => f.user_id !== u?.id)
+      const friendsWithoutMe = (friendsData || []).filter((f: any) => f.user_id !== u?.id);
 
-      setRecord({ ...recordData, artist: artistData })
-      setFriends(friendsWithoutMe || [])
-      setAverageRate(avg)
+      setRecord({ ...recordData, artist: artistData });
+      setFriends(friendsWithoutMe || []);
+      setAverageRate(avg);
 
-      await loadTakes(recordId, u?.id || null)
-    }
+      await loadTakes(recordId, u?.id || null);
+    };
 
-    fetchAll()
-  }, [recordId])
+    fetchAll();
+  }, [recordId]);
 
   // Cambiar / quitar rating
   const handleRate = async (rate: number) => {
-    if (!requireAuth("Sign in to rate this record")) return
-    if (!userId || !recordId) return
+    if (!requireAuth("Sign in to rate this record")) return;
+    if (!userId || !recordId) return;
 
-    // Si repite la misma nota, borramos su rating
-    if (userRating === rate) {
-      await supabase.from("ratings").delete().eq("user_id", userId).eq("record_id", recordId)
-      setUserRating(null)
-    } else {
-      // Eliminamos cualquier rating previo y luego insertamos
-      await supabase.from("ratings").delete().eq("user_id", userId).eq("record_id", recordId)
-      await supabase.from("ratings").insert({ user_id: userId, record_id: recordId, rate })
-      setUserRating(rate)
+    // si tiene un take, no permitimos borrar la nota (mantener integridad con el take)
+    if (userRating === rate && hasMyTake) {
+      alert("You already shared a Listener Take for this record. Delete your take before removing the rating.");
+      return;
     }
 
-    const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId)
+    if (userRating === rate) {
+      // borrar rating si no hay take
+      await supabase.from("ratings").delete().eq("user_id", userId).eq("record_id", recordId);
+      setUserRating(null);
+      setTakeRate(null);
+    } else {
+      // upsert rating y animamos a escribir un take
+      await supabase
+        .from("ratings")
+        .upsert({ user_id: userId, record_id: recordId, rate }, { onConflict: "user_id,record_id" });
+      setUserRating(rate);
+      setTakeRate(rate);
+      setShowComposer(true);
+      setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+    }
+
+    const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId);
     const avg =
       ratingsData && ratingsData.length > 0
         ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
-        : null
-    setAverageRate(avg)
-  }
+        : null;
+    setAverageRate(avg);
+  };
 
   // ────────────────────────────────────────────────
   // LÓGICA Listener Takes (filtrado al recordId)
   // ────────────────────────────────────────────────
   const loadTakes = async (recId: string, myId: string | null) => {
-    setTakesLoading(true)
+    setTakesLoading(true);
     const { data: recs, error } = await supabase
       .from("recommendations")
-      .select("id, user_id, target_type, target_id, body, created_at")
+      .select("id, user_id, target_type, target_id, body, created_at, rating_id")
       .eq("target_type", "record")
       .eq("target_id", recId)
       .order("created_at", { ascending: false })
-      .limit(200)
+      .limit(200);
 
     if (error) {
-      setTakes([])
-      setTakesLoading(false)
-      return
+      setTakes([]);
+      setHasMyTake(false);
+      setTakesLoading(false);
+      return;
     }
 
     // Perfiles
-    const userIds = Array.from(new Set((recs || []).map((r) => r.user_id)))
-    let profiles: Record<string, Profile> = {}
+    const userIds = Array.from(new Set((recs || []).map((r) => r.user_id)));
+    let profiles: Record<string, Profile> = {};
     if (userIds.length) {
-      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", userIds)
-      ;(profs || []).forEach((p: any) => (profiles[p.id] = p))
+      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", userIds);
+      (profs || []).forEach((p: any) => (profiles[p.id] = p));
     }
 
     // Métricas likes/comments
-    const ids = (recs || []).map((r) => r.id)
-    const likesCount: Record<string, number> = {}
-    const commentsCount: Record<string, number> = {}
-    const likedSet = new Set<string>()
+    const ids = (recs || []).map((r) => r.id);
+    const likesCount: Record<string, number> = {};
+    const commentsCount: Record<string, number> = {};
+    const likedSet = new Set<string>();
 
     if (ids.length) {
       const { data: likes } = await supabase
         .from("recommendation_likes")
         .select("recommendation_id")
-        .in("recommendation_id", ids as any)
-      ;(likes || []).forEach((row: any) => {
-        const k = String(row.recommendation_id)
-        likesCount[k] = (likesCount[k] || 0) + 1
-      })
+        .in("recommendation_id", ids as any);
+      (likes || []).forEach((row: any) => {
+        const k = String(row.recommendation_id);
+        likesCount[k] = (likesCount[k] || 0) + 1;
+      });
 
       const { data: comments } = await supabase
         .from("recommendation_comments")
         .select("recommendation_id")
-        .in("recommendation_id", ids as any)
-      ;(comments || []).forEach((row: any) => {
-        const k = String(row.recommendation_id)
-        commentsCount[k] = (commentsCount[k] || 0) + 1
-      })
+        .in("recommendation_id", ids as any);
+      (comments || []).forEach((row: any) => {
+        const k = String(row.recommendation_id);
+        commentsCount[k] = (commentsCount[k] || 0) + 1;
+      });
 
       if (myId) {
         const { data: myLikes } = await supabase
           .from("recommendation_likes")
           .select("recommendation_id")
           .in("recommendation_id", ids as any)
-          .eq("user_id", myId)
-        ;(myLikes || []).forEach((row: any) => likedSet.add(row.recommendation_id))
+          .eq("user_id", myId);
+        (myLikes || []).forEach((row: any) => likedSet.add(row.recommendation_id));
       }
     }
 
@@ -282,35 +308,40 @@ export default function RecordProfile() {
       likes_count: likesCount[String(r.id)] ?? 0,
       comments_count: commentsCount[String(r.id)] ?? 0,
       liked_by_me: likedSet.has(r.id),
-    }))
+    }));
 
-    setTakes(mapped)
-    setTakesLoading(false)
-  }
+    setTakes(mapped);
+    setHasMyTake(!!myId && !!mapped.find((t) => t.user_id === myId));
+    setTakesLoading(false);
+  };
 
   const postTake = async () => {
-    if (!recordId) return
-    if (!requireAuth("Sign in to share your take")) return
-    const bodyClean = takeBody.trim()
-    if (bodyClean.length === 0 || bodyClean.length > 280) return
-    if (!userId) return
-
-    setTakePosting(true)
-    const tmpId = `tmp_${Date.now()}`
-    const optimistic: Thought = {
-      id: tmpId,
-      user_id: userId,
-      target_type: "record",
-      target_id: recordId,
-      body: bodyClean,
-      created_at: new Date().toISOString(),
-      profile: { id: userId, full_name: "—", username: null },
-      likes_count: 0,
-      comments_count: 0,
-      liked_by_me: false,
+    if (!recordId) return;
+    if (!requireAuth("Sign in to share your take")) return;
+    const bodyClean = takeBody.trim();
+    if (bodyClean.length === 0 || bodyClean.length > 280) return;
+    if (!userId) return;
+    if (takeRate == null) {
+      alert("Please select a rating (1–10) to publish your Listener Take.");
+      return;
     }
-    setTakes((prev) => [optimistic, ...prev])
 
+    setTakePosting(true);
+
+    // 1) upsert del rating y obtenemos su id
+    const { data: ratingRow, error: ratingErr } = await supabase
+      .from("ratings")
+      .upsert({ user_id: userId, record_id: recordId, rate: takeRate }, { onConflict: "user_id,record_id" })
+      .select("id")
+      .single();
+
+    if (ratingErr || !ratingRow) {
+      setTakePosting(false);
+      alert("Error saving the rating for this take.");
+      return;
+    }
+
+    // 2) insert del take enlazado a ese rating
     const { data, error } = await supabase
       .from("recommendations")
       .insert({
@@ -318,66 +349,68 @@ export default function RecordProfile() {
         target_type: "record",
         target_id: recordId,
         body: bodyClean,
+        rating_id: ratingRow.id, // 🔗
       })
-      .select("id")
-      .single()
+      .select("id, created_at")
+      .single();
 
     if (error) {
-      setTakes((prev) => prev.filter((it) => it.id !== tmpId))
-      alert(`Error posting: ${error.message}`)
+      alert(`Error posting: ${error.message}`);
     } else {
-      setTakes((prev) => prev.map((it) => (it.id === tmpId ? { ...it, id: data.id } : it)))
+      // recargar takes
+      await loadTakes(recordId, userId);
+      setHasMyTake(true);
     }
 
-    setTakePosting(false)
-    setTakeBody("")
-  }
+    setTakePosting(false);
+    setTakeBody("");
+  };
 
   const toggleLike = async (rec: Thought) => {
-    if (!requireAuth("Sign in to like")) return
-    if (!userId) return
+    if (!requireAuth("Sign in to like")) return;
+    if (!userId) return;
 
     if (rec.liked_by_me) {
-      await supabase.from("recommendation_likes").delete().match({ recommendation_id: rec.id, user_id: userId })
+      await supabase.from("recommendation_likes").delete().match({ recommendation_id: rec.id, user_id: userId });
       setTakes((prev) =>
         prev.map((it) =>
           it.id === rec.id ? { ...it, liked_by_me: false, likes_count: Math.max(0, (it.likes_count || 0) - 1) } : it
         )
-      )
+      );
     } else {
-      await supabase.from("recommendation_likes").insert({ recommendation_id: rec.id, user_id: userId })
+      await supabase.from("recommendation_likes").insert({ recommendation_id: rec.id, user_id: userId });
       setTakes((prev) =>
         prev.map((it) => (it.id === rec.id ? { ...it, liked_by_me: true, likes_count: (it.likes_count || 0) + 1 } : it))
-      )
+      );
     }
-  }
+  };
 
   const loadComments = async (id: string) => {
     const { data, error } = await supabase
       .from("recommendation_comments")
       .select("id, user_id, body, created_at")
       .eq("recommendation_id", id)
-      .order("created_at", { ascending: true })
-    if (error) return
+      .order("created_at", { ascending: true });
+    if (error) return;
 
-    const uids = Array.from(new Set((data || []).map((c) => c.user_id)))
-    let pmap: Record<string, Profile> = {}
+    const uids = Array.from(new Set((data || []).map((c) => c.user_id)));
+    let pmap: Record<string, Profile> = {};
     if (uids.length) {
-      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", uids)
-      ;(profs || []).forEach((p: any) => (pmap[p.id] = p))
+      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", uids);
+      (profs || []).forEach((p: any) => (pmap[p.id] = p));
     }
 
     const mapped: ThoughtComment[] = (data || []).map((c: any) => ({
       ...c,
       profile: pmap[c.user_id],
-    }))
-    setCommentsMap((prev) => ({ ...prev, [id]: mapped }))
-  }
+    }));
+    setCommentsMap((prev) => ({ ...prev, [id]: mapped }));
+  };
 
   const sendReply = async () => {
-    if (!replyFor || !userId) return
-    const bodyClean = replyBody.trim()
-    if (bodyClean.length === 0 || bodyClean.length > 280) return
+    if (!replyFor || !userId) return;
+    const bodyClean = replyBody.trim();
+    if (bodyClean.length === 0 || bodyClean.length > 280) return;
 
     const { data, error } = await supabase
       .from("recommendation_comments")
@@ -387,35 +420,73 @@ export default function RecordProfile() {
         body: bodyClean,
       })
       .select("id, created_at")
-      .single()
+      .single();
 
     if (!error) {
       setTakes((prev) =>
         prev.map((it) => (it.id === replyFor ? { ...it, comments_count: (it.comments_count || 0) + 1 } : it))
-      )
+      );
       setCommentsMap((prev) => {
-        const prevList = prev[replyFor] || []
+        const prevList = prev[replyFor] || [];
         const newItem: ThoughtComment = {
           id: data.id,
           user_id: userId,
           body: bodyClean,
           created_at: data.created_at,
           profile: { id: userId, full_name: "—", username: null },
-        }
-        return { ...prev, [replyFor]: [...prevList, newItem] }
-      })
+        };
+        return { ...prev, [replyFor]: [...prevList, newItem] };
+      });
     }
 
-    setReplyBody("")
-    setReplyFor(null)
-  }
+    setReplyBody("");
+    setReplyFor(null);
+  };
+
+  // Editar take (autor)
+  const beginEdit = (t: Thought) => {
+    setEditingId(t.id);
+    setEditingBody(t.body);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingBody("");
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const bodyClean = editingBody.trim();
+    if (bodyClean.length === 0 || bodyClean.length > 280) return;
+
+    const { error } = await supabase
+      .from("recommendations")
+      .update({ body: bodyClean })
+      .eq("id", editingId)
+      .eq("user_id", userId || "");
+
+    if (!error) {
+      setTakes((prev) => prev.map((it) => (it.id === editingId ? { ...it, body: bodyClean } : it)));
+      cancelEdit();
+    }
+  };
+
+  // Eliminar take (autor)
+  const deleteTake = async (id: string) => {
+    if (!confirm("Delete this take?")) return;
+    await supabase.from("recommendations").delete().eq("id", id).eq("user_id", userId || "");
+    setTakes((prev) => prev.filter((it) => it.id !== id));
+    // Re-evaluamos si quedan takes propios
+    setHasMyTake((prev) => {
+      const stillMine = takes.some((t) => t.id !== id && t.user_id === userId);
+      return stillMine;
+    });
+  };
 
   if (!record) {
     return (
       <main className="flex justify-center items-center h-screen text-gray-500 text-sm">
         Loading record...
       </main>
-    )
+    );
   }
 
   return (
@@ -437,13 +508,13 @@ export default function RecordProfile() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M15 18l-6-6 6-6" />
+<path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
       </header>
 
       {/* ===== Layout centrado del disco ===== */}
-      <div className="px-6 md:px-24 pt-10 pb-16">
+      <div className="px-6 md:px-24 pt-10 pb-8">{/* ↓ pb reducido para pegar Listener Takes */}
         <div className="mx-auto w-full max-w-[680px] flex flex-col items-center text-center">
           {/* Cover centrada */}
           <div
@@ -491,7 +562,7 @@ export default function RecordProfile() {
           )}
 
           {/* Rate buttons (toggle to remove) */}
-          <div className="grid grid-cols-5 gap-2 mb-8">
+          <div className="grid grid-cols-5 gap-2 mb-6">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
               <Tooltip key={n} message={userRating === n ? `Tap again to remove (${n})` : `Rate ${n}`}>
                 <button
@@ -594,30 +665,51 @@ export default function RecordProfile() {
       {/* ───────────────────────────────
           LISTENER TAKES (antes community)
           ─────────────────────────────── */}
-      <section className="px-6 md:px-24 pb-24">
+      <section className="px-6 md:px-24 pt-0 pb-16">{/* ↑ pt-0 y pb más corto */}
         <div className="mx-auto w-full max-w-[680px]">
           <h2 className="text-xl mb-3" style={{ fontFamily: "Times New Roman" }}>
             Listener Takes
           </h2>
 
-          {/* Composer (solo texto, 280) */}
-          <div className="bg-white border border-neutral-200 rounded-3xl p-4 shadow-[0_10px_30px_rgba(0,0,0,0.06)] mb-4">
+          {/* Composer — obligatorio elegir RATE */}
+          <div ref={composerRef} className="bg-white border border-neutral-200 rounded-3xl p-4 shadow-[0_10px_30px_rgba(0,0,0,0.06)] mb-4">
             <textarea
               value={takeBody}
               onChange={(e) => setTakeBody(e.target.value)}
               placeholder="Share your thoughts about this record…"
               className="w-full min-h-[90px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF] font-[family-name:Times_New_Roman,Times,serif]"
               maxLength={280}
+              onFocus={() => setShowComposer(true)}
             />
-            <div className="mt-2 flex items-center justify-between">
+            {/* Selector de rating compacto */}
+            {showComposer && (
+              <div className="mt-3">
+                <div className="text-[12px] text-neutral-600 mb-2 flex items-center gap-2">
+                  <span>Select your rating (required)</span>
+                  {hasMyTake && <span className="text-neutral-400">· you can still change it here</span>}
+                </div>
+                <div className="grid grid-cols-10 gap-1">
+                  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setTakeRate(n)}
+                      className={`h-9 rounded-full border text-sm ${takeRate===n ? "bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 hover:bg-neutral-50"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mt-3 flex items-center justify-between">
               <span className={`text-xs ${takeBody.length > 280 ? "text-red-600" : "text-neutral-500"}`}>
                 {280 - takeBody.length}
               </span>
               <button
                 onClick={postTake}
-                disabled={takePosting || takeBody.trim().length === 0 || takeBody.length > 280}
+                disabled={takePosting || takeBody.trim().length === 0 || takeBody.length > 280 || takeRate==null}
                 className={`text-xs px-4 py-2 rounded-full ${
-                  takeBody.trim().length && takeBody.length <= 280
+                  takeBody.trim().length && takeBody.length <= 280 && takeRate!=null
                     ? "bg-[#1F48AF] text-white"
                     : "bg-neutral-300 text-neutral-600 cursor-not-allowed"
                 }`}
@@ -644,18 +736,46 @@ export default function RecordProfile() {
                       </div>
                       <div className="text-[11px] text-neutral-500">{new Date(it.created_at).toLocaleString()}</div>
                     </div>
-                    <div className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">RECORD</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
+                        RATE
+                      </div>
+                      {it.user_id === userId && (
+                        <>
+                          {editingId === it.id ? (
+                            <div className="flex items-center gap-2">
+                              <button onClick={saveEdit} className="text-[11px] px-2 py-0.5 rounded-full bg-[#1F48AF] text-white">Save</button>
+                              <button onClick={cancelEdit} className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-200">Cancel</button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => beginEdit(it)} className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-300 hover:bg-neutral-50">Edit</button>
+                              <button onClick={() => deleteTake(it.id)} className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-300 hover:bg-neutral-50">Delete</button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Texto */}
-                  <p className="mt-3 text-[16px] leading-7 font-[family-name:Times_New_Roman,Times,serif]">{it.body}</p>
+                  {/* Texto (o edición) */}
+                  {editingId === it.id ? (
+                    <textarea
+                      value={editingBody}
+                      onChange={(e)=>setEditingBody(e.target.value)}
+                      className="mt-3 w-full min-h-[90px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF] font-[family-name:Times_New_Roman,Times,serif]"
+                      maxLength={280}
+                    />
+                  ) : (
+                    <p className="mt-3 text-[16px] leading-7 font-[family-name:Times_New_Roman,Times,serif]">{it.body}</p>
+                  )}
 
                   {/* Acciones */}
                   <div className="mt-3 flex items-center gap-3">
                     <button
                       onClick={() => toggleLike(it)}
                       className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                        it.liked_by_me ? "bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                        it.liked_by_me ? "bg[#1F48AF] bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                       }`}
                     >
                       Like · {it.likes_count || 0}
@@ -663,11 +783,11 @@ export default function RecordProfile() {
 
                     <button
                       onClick={async () => {
-                        const isOpen = !!openComments[it.id]
-                        const next = { ...openComments, [it.id]: !isOpen }
-                        setOpenComments(next)
-                        if (!isOpen && !commentsMap[it.id]) await loadComments(it.id)
-                        setReplyFor(it.id)
+                        const isOpen = !!openComments[it.id];
+                        const next = { ...openComments, [it.id]: !isOpen };
+                        setOpenComments(next);
+                        if (!isOpen && !commentsMap[it.id]) await loadComments(it.id);
+                        setReplyFor(it.id);
                       }}
                       className="text-xs px-3 py-1.5 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                       aria-expanded={!!openComments[it.id]}
@@ -739,5 +859,5 @@ export default function RecordProfile() {
         </div>
       </section>
     </main>
-  )
+  );
 }

@@ -142,13 +142,18 @@ export default function PostCard({ post }: Props) {
     try {
       setDeleting(true)
       const { data: { session } } = await supabase.auth.getSession()
-      const resp = await fetch('/api/delete-post', {
+
+      // ⬇️ Corrección: endpoint y payload según sea post o concert
+      const endpoint = isConcert ? '/api/delete-concert' : '/api/delete-post'
+      const payload = isConcert ? { concertId: post.id } : { postId: post.id }
+
+      const resp = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-        body: JSON.stringify({ postId: post.id })
+        body: JSON.stringify(payload)
       })
       const json = await resp.json()
-      if (!resp.ok) { console.error('delete-post error:', json); alert(json?.error || 'Could not delete this post.'); return }
+      if (!resp.ok) { console.error('delete error:', json); alert(json?.error || 'Could not delete this post.'); return }
       setMenuOpen(false); window.location.reload()
     } catch (err) { console.error(err); alert('Could not delete this post.') } finally { setDeleting(false) }
   }

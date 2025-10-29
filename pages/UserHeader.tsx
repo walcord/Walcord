@@ -86,7 +86,7 @@ export default function UserHeader() {
     setEditingName(false);
   };
 
-  /* Social: solo followers (sin friends) */
+  /* Social: solo followers */
   useEffect(() => {
     if (!profileId) return;
     const loadFollowers = async () => {
@@ -153,7 +153,7 @@ export default function UserHeader() {
     })();
   }, []);
 
-  /* Nº conciertos reales (concerts) */
+  /* Nº conciertos */
   useEffect(() => {
     (async () => {
       if (!profileId) return;
@@ -166,17 +166,17 @@ export default function UserHeader() {
     })();
   }, [profileId]);
 
-  /* Icono fijo de dos personas (solo para followers) */
-  const PeopleIcon = () => (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className="shrink-0"
-    >
-      <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm0 2c-2.67 0-8 1.34-8 4v1h10v-1c0-2.66-5.33-4-8-4Zm8 0c-.29 0-.62.02-.97.05A6.33 6.33 0 0 1 18 17v1h6v-1c0-2.66-5.33-4-8-4Z" fill="#1F48AF"/>
+  /* ICONO NUEVO: dos personas (una apoyada ligeramente sobre la otra) */
+  const TwoPeopleIcon = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+      <g fill="none" stroke="#1F48AF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        {/* Persona 1 */}
+        <circle cx="8" cy="8.5" r="2.3" />
+        <path d="M5.6 15c0-2 1.9-3.7 4.4-3.7s4.4 1.7 4.4 3.7" />
+        {/* Persona 2 (ligeramente detrás y apoyada) */}
+        <circle cx="15" cy="7.8" r="2.1" />
+        <path d="M12.8 14.4c.4-1.5 1.6-2.6 3.3-2.6 1.9 0 3.5 1.4 3.5 3.2" />
+      </g>
     </svg>
   );
 
@@ -212,7 +212,10 @@ export default function UserHeader() {
                 defaultValue={username}
                 disabled={savingName}
                 onBlur={(e) => saveName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') saveName((e.target as HTMLInputElement).value); if (e.key === 'Escape') setEditingName(false); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveName((e.target as HTMLInputElement).value);
+                  if (e.key === 'Escape') setEditingName(false);
+                }}
                 className="bg-transparent outline-none border-b border-neutral-400 text-center sm:text-left"
                 style={{ fontFamily: 'Times New Roman, serif', fontSize: nameFontSizePx ? `${nameFontSizePx}px` : undefined }}
               />
@@ -277,7 +280,7 @@ export default function UserHeader() {
             </div>
           </div>
 
-          {/* Future concerts (misma fuente: Roboto) + contador */}
+          {/* Actions */}
           <div className="mt-1 flex items-center gap-3">
             <button
               onClick={() => router.push('/future-concerts')}
@@ -286,19 +289,29 @@ export default function UserHeader() {
             >
               Future concerts
             </button>
-
-            <span
-              className="inline-flex items-center px-3 py-[4px] rounded-full border border-neutral-300 text-[13px] text-neutral-800 select-none leading-none"
-              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+            <button
+              onClick={() => router.push('/listener-takes')}
+              className="inline-flex items-center justify-center whitespace-nowrap text-[14px] px-4 py-[6px] rounded-full border border-neutral-300 text-neutral-900 transition-colors hover:bg-neutral-100 active:scale-[0.98]"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 400, letterSpacing: '-0.2px' }}
             >
-              {concertsCount} {concertsCount === 1 ? 'concert' : 'concerts'} attended
-            </span>
+              Musical opinions
+            </button>
           </div>
 
-          {/* Followers (solo texto + icono fijo pequeño) */}
-          <div className="mt-6 flex items-center gap-2">
-            <PeopleIcon />
-            <span className="text-sm text-neutral-700 select-none" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
+          {/* Followers */}
+          <div
+            className="mt-6 flex items-center gap-2 cursor-pointer select-none hover:opacity-80 transition"
+            role="button"
+            tabIndex={0}
+            onClick={() => profileId && router.push(`/followers?u=${profileId}`)}
+            onKeyDown={(e) => {
+              if ((e.key === 'Enter' || e.key === ' ') && profileId) router.push(`/followers?u=${profileId}`);
+            }}
+            aria-label="Open Followers / Following"
+            title="Open Followers / Following"
+          >
+            <TwoPeopleIcon />
+            <span className="text-sm text-neutral-700" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
               {followersCount} followers
             </span>
           </div>
