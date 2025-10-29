@@ -314,7 +314,7 @@ function PostCardFutureConcert({ row }: { row: RowFutureConcert }) {
                 </span>
               </Link>
               <span
-                className="truncate text-[16px] leading-snug text-neutral-900"
+                className="flex-1 min-w-0 whitespace-normal break-words text-[16px] leading-snug text-neutral-900 sm:truncate"
                 style={{ fontFamily: "Times New Roman, serif", fontWeight: 400 }}
                 title={`${row.author.username || ""} ${sentence}`}
               >

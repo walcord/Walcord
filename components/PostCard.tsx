@@ -16,6 +16,17 @@ function safeConfirm(message: string): boolean {
   return true
 }
 
+/** Líneas 24–28 — NUEVO: alert seguro para web/app */
+function safeAlert(message: string) {
+  if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+    window.alert(message)
+  } else {
+    // En entornos sin alert, al menos registramos
+    // eslint-disable-next-line no-console
+    console.warn('ALERT:', message)
+  }
+}
+
 export default function PostCard({ post }: Props) {
   const isConcert =
     !!post?.artist_id || !!post?.country_code || !!post?.event_date || !!post?.cover_url
@@ -127,10 +138,11 @@ export default function PostCard({ post }: Props) {
     try {
       setReporting(true)
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { alert('Please sign in to report.'); return }
+      if (!user) { safeAlert('Please sign in to report.'); return } // <— línea 108
       await supabase.from('reports').insert({ user_id: user.id, post_id: post.id, reason: 'inappropriate' })
       setReported(true); setMenuOpen(false)
-    } catch { alert('Could not send report. Please try again.') } finally { setReporting(false) }
+    } catch { safeAlert('Could not send report. Please try again.') } // <— línea 116
+    finally { setReporting(false) }
   }
 
   /** Línea 103 — usar safeConfirm en delete */
@@ -147,15 +159,37 @@ export default function PostCard({ post }: Props) {
       const endpoint = isConcert ? '/api/delete-concert' : '/api/delete-post'
       const payload = isConcert ? { concertId: post.id } : { postId: post.id }
 
-      const resp = await fetch(endpoint, {
+      // ⬇️ LÍNEA 122 — Construir URL ABSOLUTA para app/web
+      const base =
+        typeof window !== 'undefined'
+          ? window.location.origin
+          : (process.env.NEXT_PUBLIC_SITE_URL || '')
+      const fullUrl = `${base}${endpoint}`
+
+      const resp = await fetch(fullUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify(payload)
       })
-      const json = await resp.json()
-      if (!resp.ok) { console.error('delete error:', json); alert(json?.error || 'Could not delete this post.'); return }
-      setMenuOpen(false); window.location.reload()
-    } catch (err) { console.error(err); alert('Could not delete this post.') } finally { setDeleting(false) }
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        // eslint-disable-next-line no-console
+        console.error('delete error:', json)
+        safeAlert((json as any)?.error || 'Could not delete this post.') // <— línea 126
+        return
+      }
+      setMenuOpen(false)
+      if (typeof window !== 'undefined') window.location.reload()
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(err)
+      safeAlert('Could not delete this post.') // <— línea 130
+    } finally {
+      setDeleting(false)
+    }
   }
 
   // 👇 Encabezado: usar categoría cuando exista (post.experience || post.experience_type)

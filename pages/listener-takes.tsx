@@ -431,7 +431,8 @@ export default function ListenerTakesPage() {
                   key={String(it.id)}
                   className="border border-neutral-200 rounded-3xl p-5 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  {/* 🔧 Cambio clave: apilar en móvil, fila en ≥ sm */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3">
                       <Link href={`/record/${it.target_id}`} className="shrink-0">
                         <div
@@ -446,10 +447,10 @@ export default function ListenerTakesPage() {
                         </div>
                       </Link>
 
-                      <div>
+                      <div className="min-w-0">
                         <Link href={`/record/${it.target_id}`}>
                           <h3
-                            className="text-[17px] leading-5 font-normal hover:opacity-80"
+                            className="text-[17px] leading-[1.2] sm:leading-5 font-normal hover:opacity-80 break-words"
                             style={{ fontFamily: 'Times New Roman' }}
                           >
                             {it.record?.title || 'Record'}
@@ -466,7 +467,8 @@ export default function ListenerTakesPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    {/* 🔧 En móvil, estos controles bajan debajo del título */}
+                    <div className="flex items-center gap-2 sm:gap-3 sm:self-start">
                       {typeof it.rate === 'number' ? <RatingBadge rate={it.rate} /> : null}
 
                       {it.user_id === userId && (
@@ -515,10 +517,12 @@ export default function ListenerTakesPage() {
                       maxLength={280}
                     />
                   ) : (
-                    <p className="mt-3 text-[16px] leading-7 font-[family-name:Times_New_Roman,Times,serif]">{it.body}</p>
+                    <p className="mt-3 text-[16px] leading-7 font-[family-name:Times_New_Roman,Times,serif]">
+                      {it.body}
+                    </p>
                   )}
 
-                  <div className="mt-3 flex items-center gap-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
                     <button
                       onClick={() => toggleLike(it)}
                       className={`text-xs px-3 py-1.5 rounded-full border transition ${
