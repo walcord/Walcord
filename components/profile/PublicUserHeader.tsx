@@ -23,7 +23,6 @@ export default function PublicUserHeader({ userId }: Props) {
   const [favouriteArtists, setFavouriteArtists] = useState<any[]>([]);
   const [favouriteRecords, setFavouriteRecords] = useState<any[]>([]);
   const [followersCount, setFollowersCount] = useState<number>(0);
-  const [concertsCount, setConcertsCount] = useState<number>(0); // ← NUEVO
 
   // auth (para Follow / report-block)
   const [me, setMe] = useState<string | null>(null);
@@ -64,7 +63,9 @@ export default function PublicUserHeader({ userId }: Props) {
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!active) return;
       setAuthed(!!session?.user);
       setMe(session?.user?.id ?? null);
@@ -115,19 +116,6 @@ export default function PublicUserHeader({ userId }: Props) {
       setFavouriteRecords(recs || []);
     };
     run();
-  }, [userId]);
-
-  // 🔢 Contador de conciertos asistidos (igual que en el otro header)
-  useEffect(() => {
-    if (!userId) return;
-    (async () => {
-      const { count, error } = await supabase
-        .from('concerts')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId);
-      if (error) { console.error(error.message); setConcertsCount(0); return; }
-      setConcertsCount(count ?? 0);
-    })();
   }, [userId]);
 
   const queryUser = username ? `?username=${encodeURIComponent(username)}` : '';
@@ -275,8 +263,8 @@ export default function PublicUserHeader({ userId }: Props) {
             </Link>
           </div>
 
-          {/* Future concerts + contador (igual estilo) */}
-          <div className="mt-1 flex items-center gap-3">
+          {/* Botones (ajustados como en el UserHeader normal) */}
+          <div className="mt-1 flex items-center gap-2">
             <Link
               href={`/u/ConcertsViewer${queryUser}`}
               aria-disabled={!username}
@@ -286,12 +274,15 @@ export default function PublicUserHeader({ userId }: Props) {
               Future concerts
             </Link>
 
-            <span
-              className="inline-flex items-center px-3 py-[4px] rounded-full border border-neutral-300 text-[13px] text-neutral-800 select-none leading-none"
-              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+            {/* Navegación correcta al viewer de opiniones */}
+            <Link
+              href={`/u/ListenerTakesViewer${queryUser}`}
+              aria-disabled={!username}
+              className={`inline-flex items-center justify-center whitespace-nowrap text-[14px] px-4 py-[6px] rounded-full border border-neutral-300 text-neutral-900 transition-colors hover:bg-neutral-100 active:scale-[0.98] ${disabledLinkClass}`}
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 400, letterSpacing: '-0.2px' }}
             >
-              {concertsCount} {concertsCount === 1 ? 'concert' : 'concerts'} attended
-            </span>
+              Musical opinions
+            </Link>
           </div>
 
           {/* Social (solo followers) */}

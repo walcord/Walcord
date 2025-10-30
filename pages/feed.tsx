@@ -286,10 +286,10 @@ function PostCardRecommendation({ row }: { row: RowReco }) {
   );
 }
 
-/** FUTURE CONCERT — UNA SOLA LÍNEA tipo notificación
- *  - Username EXACTAMENTE como en las otras tarjetas (Roboto/system, 13px, neutral-800)
- *  - Click SOLO en el username, sin subrayado ni hover underline
- *  - Frase editorial (Times) en la misma línea con truncate
+/** FUTURE CONCERT — CABECERA COMO LAS OTRAS TARJETAS
+ *  - Username en la fila superior, a la izquierda (mismo estilo que las demás)
+ *  - Fecha a la derecha
+ *  - Frase editorial en bloque aparte debajo (no comprimida con el username)
  */
 function PostCardFutureConcert({ row }: { row: RowFutureConcert }) {
   const sentence = `is going to ${row.artist_name || "a concert"}${
@@ -300,37 +300,35 @@ function PostCardFutureConcert({ row }: { row: RowFutureConcert }) {
 
   return (
     <article className="rounded-3xl border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="flex items-start justify-between gap-3 px-4 py-3">
-        <div className="flex items-start gap-3 min-w-0">
-          <Link href={`/profile/${row.author.username || ""}`} className="shrink-0 no-underline hover:no-underline">
-            <Avatar src={row.author.avatar_url} alt={row.author.username || "user"} />
-          </Link>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <Link href={`/profile/${row.author.username || ""}`} className="no-underline hover:no-underline">
-                <span className="text-[13px] text-neutral-800 leading-tight">
-                  {row.author.username || "—"}
-                </span>
-              </Link>
-              <span
-                className="flex-1 min-w-0 whitespace-normal break-words text-[16px] leading-snug text-neutral-900 sm:truncate"
-                style={{ fontFamily: "Times New Roman, serif", fontWeight: 400 }}
-                title={`${row.author.username || ""} ${sentence}`}
-              >
-                {sentence}
-              </span>
-            </div>
-
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
-              {row.country ? (
-                <span className="px-2 py-1 rounded-full border border-neutral-300">{row.country}</span>
-              ) : null}
+      {/* Fila superior: avatar + username (izquierda) y fecha (derecha) */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <Link href={`/profile/${row.author.username || ""}`} className="flex items-center gap-3 min-w-0 no-underline hover:no-underline">
+          <Avatar src={row.author.avatar_url} alt={row.author.username || "user"} />
+          <div className="min-w-0">
+            <div className="text-[13px] text-neutral-800 leading-tight line-clamp-1">
+              {row.author.username || "—"}
             </div>
           </div>
+        </Link>
+        <div className="text-[11px] text-neutral-500 shrink-0">{fmtDate(row.created_at)}</div>
+      </div>
+
+      {/* Cuerpo: frase editorial con buen respiro y wrapping normal */}
+      <div className="px-4 pb-3">
+        <div
+          className="text-[16px] leading-snug text-neutral-900 whitespace-normal break-words"
+          style={{ fontFamily: "Times New Roman, serif", fontWeight: 400 }}
+          title={`${row.author.username || ""} ${sentence}`}
+        >
+          {sentence}
         </div>
 
-        <div className="text-[11px] text-neutral-500 shrink-0">{fmtDate(row.created_at)}</div>
+        {/* Badges debajo (país, etc.) */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
+          {row.country ? (
+            <span className="px-2 py-1 rounded-full border border-neutral-300">{row.country}</span>
+          ) : null}
+        </div>
       </div>
     </article>
   );

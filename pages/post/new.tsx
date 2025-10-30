@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabaseClient";
    Walcord — New
    - Tabs arriba: Experiences (por defecto) · Listener Takes
    - Experiences = tu flujo actual (conciertos/experiencias)
-   - Listener Takes = buscador de discos + reseña (≤280)
+   - Listener Takes = buscador de discos + reseña (≤280) + RATING obligatorio
    ========================================================= */
 
 type TimeoutId = ReturnType<typeof setTimeout>;
@@ -517,6 +517,7 @@ export default function NewPostPage() {
 
   /* ==========================================
      LISTENER TAKES — buscador de discos + reseña
+     (con RATING obligatorio y enlace rating_id)
      ========================================== */
   const [meId, setMeId] = useState<string | null>(null);
   useEffect(() => {
@@ -533,6 +534,9 @@ export default function NewPostPage() {
   const recordDebouncer = useRef<TimeoutId | null>(null);
   const [takeBody, setTakeBody] = useState("");
   const [postingTake, setPostingTake] = useState(false);
+
+  // ⭐ NEW: rating para el take
+  const [takeRate, setTakeRate] = useState<number | null>(null);
 
   useEffect(() => {
     if (!recordQ.trim() || recordQ.trim().length < 2) {
@@ -559,27 +563,56 @@ export default function NewPostPage() {
   }, [recordQ]);
 
   const canPublishTake =
-    !!meId && !!selectedRecord && takeBody.trim().length > 0 && takeBody.length <= 280 && !postingTake;
+    !!meId &&
+    !!selectedRecord &&
+    takeBody.trim().length > 0 &&
+    takeBody.length <= 280 &&
+    takeRate != null &&
+    !postingTake;
 
   const submitTake = async () => {
     if (!meId) return alert("Sign in to continue.");
     if (!selectedRecord) return alert("Please choose a record.");
     const clean = takeBody.trim();
     if (!clean || clean.length > 280) return;
+    if (takeRate == null) {
+      alert("Please select a rating (1–10) to publish your Listener Take.");
+      return;
+    }
 
     setPostingTake(true);
     try {
-      const { error } = await supabase.from("recommendations").insert({
-        user_id: meId,
-        target_type: "record",
-        target_id: selectedRecord.id,
-        body: clean,
-      });
+      // 1) upsert del rating del usuario para este record y obtener su id
+      const { data: ratingRow, error: ratingErr } = await supabase
+        .from("ratings")
+        .upsert(
+          { user_id: meId, record_id: selectedRecord.id, rate: takeRate },
+          { onConflict: "user_id,record_id" }
+        )
+        .select("id")
+        .single();
+
+      if (ratingErr || !ratingRow) throw new Error("Error saving the rating.");
+
+      // 2) insertar la recomendación enlazando rating_id
+      const { error } = await supabase
+        .from("recommendations")
+        .insert({
+          user_id: meId,
+          target_type: "record",
+          target_id: selectedRecord.id,
+          body: clean,
+          rating_id: ratingRow.id, // 🔗 vínculo
+        });
+
       if (error) throw error;
+
+      // Reset UI de takes
       setTakeBody("");
       setSelectedRecord(null);
       setRecordQ("");
       setRecordResults([]);
+      setTakeRate(null);
       alert("Your take has been shared.");
     } catch (e: any) {
       alert(e?.message ?? "Error");
@@ -629,7 +662,7 @@ export default function NewPostPage() {
               Share in The Wall
             </h1>
 
-            {/* ====== Tabs superiores (estilo cápsula, como el screenshot) ====== */}
+            {/* ====== Tabs superiores (estilo cápsula) ====== */}
             <div className="mt-3">
               <div className="inline-flex items-center gap-2">
                 <button
@@ -1298,7 +1331,10 @@ export default function NewPostPage() {
                       />
                     </div>
                     <button
-                      onClick={() => setSelectedRecord(null)}
+                      onClick={() => {
+                        setSelectedRecord(null);
+                        setTakeRate(null);
+                      }}
                       className="text-sm text-[#1F48AF] hover:underline"
                       style={{
                         fontFamily: "Roboto, Arial, sans-serif",
@@ -1403,7 +1439,30 @@ export default function NewPostPage() {
                     className="w-full min-h-[110px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF] font-[family-name:Times_New_Roman,Times,serif]"
                     maxLength={280}
                   />
-                  <div className="mt-2 flex items-center justify-between">
+
+                  {/* ⭐ Selector de rating obligatorio (1–10) */}
+                  <div className="mt-3">
+                    <div className="text-[12px] text-neutral-600 mb-2 flex items-center gap-2">
+                      <span>Select your rating (required)</span>
+                    </div>
+                    <div className="grid grid-cols-10 gap-1">
+                      {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setTakeRate(n)}
+                          className={`h-9 rounded-full border text-sm ${
+                            takeRate===n ? "bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 hover:bg-neutral-50"
+                          }`}
+                          aria-pressed={takeRate===n}
+                          aria-label={`Rate ${n}`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between">
                     <span
                       className={`text-xs ${
                         takeBody.length > 280
@@ -1434,7 +1493,6 @@ export default function NewPostPage() {
                     fontWeight: 300,
                   }}
                 >
-            
                 </p>
               </div>
             </section>
