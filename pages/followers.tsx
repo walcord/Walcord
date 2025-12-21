@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/router";
 import { useUser } from "@supabase/auth-helpers-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -15,9 +15,19 @@ interface Profile {
 /** ========= Walcord palette + utils ========= */
 const WALCORD_BLUE = "#1F48AF";
 const PALETTE = [
-  WALCORD_BLUE, "#0F254E", "#1B2A41", "#2E4057", "#14213D",
-  "#2F3E46", "#0B4F6C", "#1D3557", "#2C3E50", "#112D32",
-  "#4C4C47", "#3D2C2E", "#6B2E2E",
+  WALCORD_BLUE,
+  "#0F254E",
+  "#1B2A41",
+  "#2E4057",
+  "#14213D",
+  "#2F3E46",
+  "#0B4F6C",
+  "#1D3557",
+  "#2C3E50",
+  "#112D32",
+  "#4C4C47",
+  "#3D2C2E",
+  "#6B2E2E",
 ];
 
 const hashStr = (s: string) => {
@@ -27,12 +37,20 @@ const hashStr = (s: string) => {
 };
 const colorFor = (s: string) => PALETTE[hashStr(s) % PALETTE.length];
 const norm = (s?: string | null) =>
-  (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+  (s || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+
+const firstQueryValue = (v: string | string[] | undefined): string | null => {
+  if (!v) return null;
+  return Array.isArray(v) ? v[0] ?? null : v;
+};
 
 /** ========= Component ========= */
 export default function FollowersPage() {
   const router = useRouter();
-  const qs = useSearchParams();
   const me = useUser();
 
   /** target profile (read-only if viewing others) */
@@ -42,21 +60,41 @@ export default function FollowersPage() {
 
   useEffect(() => {
     const init = async () => {
-      const qProfileId = qs.get("profileId") || qs.get("user") || qs.get("u");
-      const qUsername = qs.get("username") || qs.get("handle");
-      if (qProfileId) { setTargetId(qProfileId); return; }
+      if (!router.isReady) return;
+
+      const qProfileId =
+        firstQueryValue(router.query.profileId as any) ||
+        firstQueryValue(router.query.user as any) ||
+        firstQueryValue(router.query.u as any);
+
+      const qUsername =
+        firstQueryValue(router.query.username as any) ||
+        firstQueryValue(router.query.handle as any);
+
+      if (qProfileId) {
+        setTargetId(qProfileId);
+        return;
+      }
+
       if (qUsername) {
         const { data } = await supabase
           .from("profiles")
           .select("id,username")
           .eq("username", qUsername)
           .maybeSingle();
-        if (data?.id) { setTargetId(data.id); setTargetUsername(data.username); return; }
+
+        if (data?.id) {
+          setTargetId(data.id);
+          setTargetUsername(data.username);
+          return;
+        }
       }
+
       setTargetId(me?.id ?? null);
     };
+
     init();
-  }, [qs, me?.id]);
+  }, [router.isReady, router.query, me?.id]);
 
   /** state */
   const [tab, setTab] = useState<"following" | "followers">("following");
@@ -82,25 +120,43 @@ export default function FollowersPage() {
       setLoading(true);
 
       const { data: f1 } = await supabase
-        .from("follows").select("following_id").eq("follower_id", targetId);
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", targetId);
 
       const { data: f2 } = await supabase
-        .from("follows").select("follower_id").eq("following_id", targetId);
+        .from("follows")
+        .select("follower_id")
+        .eq("following_id", targetId);
 
-      const followingIds = (f1 || []).map((r: any) => r.following_id).filter(Boolean);
-      const followerIds = (f2 || []).map((r: any) => r.follower_id).filter(Boolean);
+      const followingIds = (f1 || [])
+        .map((r: any) => r.following_id)
+        .filter(Boolean);
+      const followerIds = (f2 || [])
+        .map((r: any) => r.follower_id)
+        .filter(Boolean);
 
       const [followingProfiles, followerProfiles] = await Promise.all([
         fetchProfilesByIds(followingIds),
         fetchProfilesByIds(followerIds),
       ]);
 
-      setFollowing(followingProfiles.sort((a, b) => (a.username || "").localeCompare(b.username || "")));
-      setFollowers(followerProfiles.sort((a, b) => (a.username || "").localeCompare(b.username || "")));
+      setFollowing(
+        followingProfiles.sort((a, b) =>
+          (a.username || "").localeCompare(b.username || ""),
+        ),
+      );
+      setFollowers(
+        followerProfiles.sort((a, b) =>
+          (a.username || "").localeCompare(b.username || ""),
+        ),
+      );
 
       if (me?.id) {
         const { data: mine } = await supabase
-          .from("follows").select("following_id").eq("follower_id", me.id);
+          .from("follows")
+          .select("following_id")
+          .eq("follower_id", me.id);
         setMyFollowingIds(new Set((mine || []).map((r: any) => r.following_id)));
       } else {
         setMyFollowingIds(new Set());
@@ -114,12 +170,14 @@ export default function FollowersPage() {
   /** actions */
   const isMeFollowing = useCallback(
     (userId: string) => myFollowingIds.has(userId),
-    [myFollowingIds]
+    [myFollowingIds],
   );
 
   const follow = async (userId: string) => {
     if (!me?.id || me.id === userId) return;
-    const { error } = await supabase.from("follows").insert([{ follower_id: me.id, following_id: userId }]);
+    const { error } = await supabase
+      .from("follows")
+      .insert([{ follower_id: me.id, following_id: userId }]);
     if (!error) {
       setMyFollowingIds((prev) => new Set(prev).add(userId));
       if (!readonly && tab === "following") {
@@ -135,10 +193,15 @@ export default function FollowersPage() {
   const unfollow = async (userId: string) => {
     if (!me?.id) return;
     const { error } = await supabase
-      .from("follows").delete()
+      .from("follows")
+      .delete()
       .match({ follower_id: me.id, following_id: userId });
     if (!error) {
-      setMyFollowingIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
+      setMyFollowingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
       if (!readonly && tab === "following") {
         setFollowing((prev) => prev.filter((p) => p.id !== userId));
       }
@@ -153,95 +216,110 @@ export default function FollowersPage() {
     return list.filter((p) => norm(p.username).includes(q));
   }, [list, search]);
 
-  const openProfile = (p: Profile) => router.push(`/profile?u=${p.id}`);
+  // ✅ CONECTADO con pages/u/[username].tsx
+  // -> Navega a /u/<username>
+  // -> Si no viene username en la lista, lo resuelve por id en Supabase.
+  const openProfile = useCallback(
+    async (p: Profile) => {
+      const directUsername = (p.username || "").trim();
+      if (directUsername) {
+        router.push(`/u/${encodeURIComponent(directUsername)}`);
+        return;
+      }
 
-  /** ========= UI (editorial Walcord, consistente app/web) ========= */
+      const { data } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", p.id)
+        .maybeSingle();
+
+      const resolved = (data?.username || "").trim();
+      if (resolved) {
+        router.push(`/u/${encodeURIComponent(resolved)}`);
+        return;
+      }
+
+      // fallback (si por lo que sea no hay username)
+      router.push(`/u/${encodeURIComponent(p.id)}`);
+    },
+    [router],
+  );
+
+  /** ========= UI (nuevo diseño, sin banner azul, estilo app Walcord) ========= */
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner superior sobrio — ahora más alto (h-24) */}
-      <header
-        className="w-full h-24 flex items-end px-4 sm:px-6 pb-2"
-        style={{ backgroundColor: WALCORD_BLUE }}
-      >
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-white/10 transition"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-               stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-      </header>
-
-      {/* Título + tabs (ligeramente más grandes) */}
-      <div className="w-full flex flex-col items-center mt-8 mb-4">
-        <h1
-          className="text-[clamp(24px,4.5vw,32px)] tracking-tight"
-          style={{ fontFamily: "Times New Roman, serif", fontWeight: 400, opacity: 0.9 }}
-        >
-          {tab === "following" ? "Following" : "Followers"}
-        </h1>
-
-        <div className="mt-3 flex items-center gap-8">
-          <button
-            onClick={() => setTab("following")}
-            className={`px-5 h-11 rounded-full text-[14px] transition ${
-              tab === "following"
-                ? "bg-[#1F48AF] text-white"
-                : "bg-white text-[#1F48AF] ring-1 ring-inset ring-[#1F48AF] hover:bg-[#EAF0FF]"
-            }`}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-16">
+        {/* Header compacto */}
+        <div className="flex flex-col items-center gap-2 mb-6">
+          <h1
+            className="text-[clamp(22px,4vw,30px)] tracking-tight"
+            style={{
+              fontFamily: "Times New Roman, serif",
+              fontWeight: 400,
+              letterSpacing: "-0.03em",
+            }}
           >
-            Following
-          </button>
-          <button
-            onClick={() => setTab("followers")}
-            className={`px-5 h-11 rounded-full text-[14px] transition ${
-              tab === "followers"
-                ? "bg-[#1F48AF] text-white"
-                : "bg-white text-[#1F48AF] ring-1 ring-inset ring-[#1F48AF] hover:bg-[#EAF0FF]"
-            }`}
-          >
-            Followers
-          </button>
+            {tab === "following" ? "Following" : "Followers"}
+          </h1>
+
+          {readonly && targetUsername && (
+            <p className="text-xs text-neutral-600">@{targetUsername}</p>
+          )}
+
+          {/* Tabs minimalistas tipo app */}
+          <div className="mt-1 flex items-center gap-8 text-sm">
+            <button
+              onClick={() => setTab("following")}
+              className={`pb-1 transition ${
+                tab === "following"
+                  ? "text-black border-b-2 border-black"
+                  : "text-neutral-500 hover:text-black"
+              }`}
+            >
+              Following
+            </button>
+            <button
+              onClick={() => setTab("followers")}
+              className={`pb-1 transition ${
+                tab === "followers"
+                  ? "text-black border-b-2 border-black"
+                  : "text-neutral-500 hover:text-black"
+              }`}
+            >
+              Followers
+            </button>
+          </div>
         </div>
 
-        {readonly && targetUsername && (
-          <p className="text-xs text-neutral-600 mt-2 font-[Roboto]">@{targetUsername}</p>
-        )}
+        {/* Buscador fino, centrado */}
+        <div className="flex justify-center mb-5">
+          <input
+            type="text"
+            placeholder="Search people"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full max-w-md h-9 rounded-full border border-neutral-300 px-4 text-xs tracking-wide placeholder-neutral-500 focus:outline-none focus:border-black transition-all text-center"
+          />
+        </div>
 
-        <hr className="w-[92%] mt-4 border-t border-black/20" />
-      </div>
-
-      {/* Buscador — se mantiene sobrio */}
-      <div className="w-full flex flex-col items-center gap-6 mb-6 px-4">
-        <input
-          type="text"
-          placeholder="Search users…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-[92%] max-w-xl px-5 h-10 border border-black/60 rounded-full text-[13px] placeholder-neutral-500 focus:outline-none focus:border-black transition-all duration-200 text-center font-light"
-        />
-      </div>
-
-      {/* Lista en TARJETAS (cards) */}
-      <section className="w-full max-w-3xl mx-auto px-4 sm:px-6 mt-2 mb-24">
+        {/* Contenido */}
         {loading ? (
-          <ul className="grid grid-cols-1 gap-3">
+          <ul className="divide-y divide-neutral-100">
             {Array.from({ length: 6 }).map((_, i) => (
-              <li key={i} className="rounded-2xl border border-neutral-200 p-4">
-                <div className="h-7 w-1/2 rounded bg-neutral-100 animate-pulse" />
-                <div className="mt-3 h-10 w-full rounded-md bg-neutral-100 animate-pulse" />
+              <li key={i} className="py-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-neutral-100 animate-pulse" />
+                <div className="flex-1 h-3 rounded bg-neutral-100 animate-pulse" />
               </li>
             ))}
           </ul>
         ) : filtered.length === 0 ? (
-          <div className="text-center text-neutral-500 text-sm mt-16 font-[Roboto]">
-            {tab === "following" ? "Not following anyone yet." : "No followers yet."}
+          <div className="mt-16 text-center text-xs text-neutral-500">
+            {tab === "following"
+              ? "Not following anyone yet."
+              : "No followers yet."}
           </div>
         ) : (
-          <ul className="grid grid-cols-1 gap-3">
+          <ul className="divide-y divide-neutral-100">
             {filtered.map((p) => {
               const hasAvatar = !!p.avatar_url;
               const color = colorFor(p.username || p.id);
@@ -251,72 +329,66 @@ export default function FollowersPage() {
               return (
                 <li
                   key={p.id}
-                  className="rounded-2xl border border-neutral-200 p-4 hover:shadow-[0_10px_30px_rgba(0,0,0,0.06)] transition-shadow"
+                  className="py-3 flex items-center gap-3 hover:bg-neutral-50/70 transition"
                 >
-                  <div className="flex items-center gap-3">
-                    {/* Avatar */}
-                    <button
-                      onClick={() => openProfile(p)}
-                      title={p.username || "User"}
-                      aria-label={`Open ${p.username || "user"} profile`}
-                      className="shrink-0 w-12 h-12 rounded-full overflow-hidden ring-1 ring-black/10"
-                      style={{ backgroundColor: hasAvatar ? "#FFFFFF" : color }}
-                    >
-                      {hasAvatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.avatar_url as string}
-                          alt={p.username || "User avatar"}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : null}
-                    </button>
+                  {/* Avatar */}
+                  <button
+                    onClick={() => openProfile(p)}
+                    title={p.username || "User"}
+                    aria-label={`Open ${p.username || "user"} profile`}
+                    className="shrink-0 w-10 h-10 rounded-full overflow-hidden ring-1 ring-black/5"
+                    style={{ backgroundColor: hasAvatar ? "#FFFFFF" : color }}
+                  >
+                    {hasAvatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.avatar_url as string}
+                        alt={p.username || "User avatar"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
+                  </button>
 
-                    {/* Username — Roboto LIGHT y clicable al perfil */}
-                    <div className="min-w-0 flex-1">
+                  {/* Username */}
+                  <button
+                    onClick={() => openProfile(p)}
+                    className="flex-1 text-left min-w-0 hover:opacity-80 transition"
+                    aria-label={`Open ${p.username || "user"} profile`}
+                  >
+                    <p className="text-[13px] leading-5 truncate font-light">
+                      {p.username ? `@${p.username}` : "Unnamed"}
+                    </p>
+                  </button>
+
+                  {/* Follow / Following CTA */}
+                  {!isMeCard && me?.id && (
+                    amIFollowing ? (
                       <button
-                        onClick={() => openProfile(p)}
-                        className="text-left w-full hover:opacity-80 transition"
-                        aria-label={`Open ${p.username || "user"} profile`}
+                        onClick={() => unfollow(p.id)}
+                        className="px-4 h-8 text-[11px] rounded-full border border-neutral-400 text-black hover:bg-neutral-100 transition"
+                        aria-label={`Unfollow ${p.username || "user"}`}
+                        title="Unfollow"
                       >
-                        <p
-                          className="text-[14px] leading-6 truncate font-light"
-                          style={{ fontFamily: "Roboto, system-ui, -apple-system, Segoe UI" }}
-                        >
-                          {p.username ? `@${p.username}` : "Unnamed"}
-                        </p>
+                        Following
                       </button>
-                    </div>
-
-                    {/* CTA (más grande: h-11 y 14px) */}
-                    {!isMeCard && me?.id && (
-                      amIFollowing ? (
-                        <button
-                          onClick={() => unfollow(p.id)}
-                          className="px-4 h-11 text-[14px] rounded-full text-black ring-1 ring-inset ring-black/60 hover:bg-neutral-100 transition"
-                          aria-label={`Unfollow ${p.username || "user"}`}
-                          title="Unfollow"
-                        >
-                          Following
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => follow(p.id)}
-                          className="px-4 h-11 text-[14px] rounded-full bg-[#1F48AF] text-white hover:bg-[#1A3A95] transition"
-                          aria-label={`Follow ${p.username || "user"}`}
-                          title="Follow"
-                        >
-                          Follow
-                        </button>
-                      )
-                    )}
-                  </div>
+                    ) : (
+                      <button
+                        onClick={() => follow(p.id)}
+                        className="px-4 h-8 text-[11px] rounded-full bg-[--walcord-blue] text-white hover:opacity-90 transition"
+                        style={{ backgroundColor: WALCORD_BLUE }}
+                        aria-label={`Follow ${p.username || "user"}`}
+                        title="Follow"
+                      >
+                        Follow
+                      </button>
+                    )
+                  )}
                 </li>
               );
             })}
           </ul>
         )}
-      </section>
+      </div>
     </main>
   );
 }

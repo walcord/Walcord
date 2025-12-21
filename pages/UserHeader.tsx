@@ -37,7 +37,7 @@ export default function UserHeader() {
     return 28;
   }, [username]);
 
-  /* Avatar */
+  /* Avatar (ya no editable desde el perfil) */
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -183,28 +183,32 @@ export default function UserHeader() {
   return (
     <section className="w-full px-6 sm:px-12">
       <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-10">
-        {/* Avatar */}
+        {/* Avatar (sin opción de cambiar desde aquí) */}
         <div
-          className="w-[108px] h-[108px] rounded-full shrink-0 overflow-hidden cursor-pointer bg-neutral-300 relative"
-          onClick={() => fileInputRef.current?.click()}
-          title="Change avatar"
+          className="w-[108px] h-[108px] rounded-full shrink-0 overflow-hidden bg-neutral-300 relative"
         >
           {profileImage && <Image src={profileImage} alt="Profile" fill className="object-cover" />}
-          <input type="file" accept="image/*" ref={fileInputRef} onChange={handleProfileImageUpload} className="hidden" />
+          {/* input oculto sin uso directo desde el perfil */}
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            onChange={handleProfileImageUpload}
+            className="hidden"
+          />
         </div>
 
         {/* Info */}
         <div className="flex flex-col items-center sm:items-start text-center sm:text-left w-full">
           {/* Géneros */}
           <p
-            onClick={() => router.push('/select-genres')}
-            className="text-[15px] font-light text-[#1d1d1d] leading-tight cursor-pointer transition-all duration-200 hover:opacity-70"
+            className="text-[15px] font-light text-[#1d1d1d] leading-tight transition-all duration-200"
             style={{ fontFamily: 'Times New Roman, serif' }}
           >
             {genres.length === 2 ? `${genres[0]} and ${genres[1]}` : 'Select your favourite genres'}
           </p>
 
-          {/* Nombre */}
+          {/* Nombre (ya no editable aquí) */}
           <div className="mt-1 mb-4">
             {editingName ? (
               <input
@@ -221,10 +225,8 @@ export default function UserHeader() {
               />
             ) : (
               <h1
-                className="font-normal whitespace-nowrap overflow-hidden text-ellipsis cursor-text"
+                className="font-normal whitespace-nowrap overflow-hidden text-ellipsis"
                 style={{ fontFamily: 'Times New Roman, serif', fontSize: nameFontSizePx ? `${nameFontSizePx}px` : undefined }}
-                onClick={() => setEditingName(true)}
-                title="Click to edit name"
               >
                 {username || ' '}
               </h1>
@@ -234,7 +236,10 @@ export default function UserHeader() {
           {/* Favoritos */}
           <div className="flex flex-wrap justify-center sm:justify-start gap-6 mb-3">
             {/* Records */}
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all" onClick={() => router.push('/favourite-records')}>
+            <div
+              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all"
+              onClick={() => router.push('/favourite-records')}
+            >
               <div className="relative w-[48px] h-[48px]">
                 {favouriteRecords.length >= 2 ? (
                   favouriteRecords.slice(0, 2).map((rec, i) => (
@@ -257,7 +262,10 @@ export default function UserHeader() {
             </div>
 
             {/* Artists */}
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all" onClick={() => router.push('/favourite-artists')}>
+            <div
+              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all"
+              onClick={() => router.push('/favourite-artists')}
+            >
               <div className="relative w-[48px] h-[48px]">
                 {favouriteArtists.length >= 2 ? (
                   favouriteArtists.slice(0, 2).map((art, i) => (

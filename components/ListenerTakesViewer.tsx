@@ -1,72 +1,46 @@
 'use client';
 
-import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 
-/** Tooltip minimal Walcord (idéntico estilo al record id) */
-const Tooltip = ({ children, message }: { children: React.ReactNode; message: string }) => (
-  <div className="group relative flex justify-center items-center">
-    {children}
-    <span
-      className="absolute bottom-full mb-2 w-max max-w-[240px] scale-0 group-hover:scale-100 transition-all bg-[#1F48AF] text-white text-xs px-3 py-[6px] rounded z-10 whitespace-nowrap font-light"
-      style={{ fontFamily: 'Roboto' }}
-    >
-      {message}
-    </span>
-  </div>
-);
-
-/** Modal simple (idéntico estilo al record id) */
-const Modal = ({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}) => {
-  if (!open) return null;
+/** Badge editorial del rating (versión grande – timeline) */
+const RatingBadge = ({ rate }: { rate: number }) => {
+  if (Number.isNaN(rate)) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-50 w-full max-w-md rounded-2xl bg-white shadow-2xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg" style={{ fontFamily: 'Times New Roman' }}>
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-black text-sm font-light"
-            style={{ fontFamily: 'Roboto' }}
-          >
-            Close
-          </button>
-        </div>
-        {children}
+    <div
+      className="relative inline-flex items-center justify-center select-none"
+      style={{ width: 40, height: 40 }}
+    >
+      <div className="w-10 h-10 rounded-full border border-black flex items-center justify-center bg-white">
+        <span className="text-[15px] leading-none" style={{ fontFamily: 'Times New Roman' }}>
+          {rate}
+        </span>
+      </div>
+      <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border border-[#1F48AF] bg-white flex items-center justify-center">
+        <div className="w-[5px] h-[5px] rounded-full bg-[#1F48AF]" />
       </div>
     </div>
   );
 };
 
-/** Badge editorial del rating (como en el feed) */
-const RatingBadge = ({ rate }: { rate: number }) => {
+/** Badge rating para shelves (más pequeño) */
+const RatingBadgeSmall = ({ rate }: { rate: number }) => {
   if (Number.isNaN(rate)) return null;
   return (
-    <div className="relative inline-flex items-center justify-center select-none" style={{ width: 44, height: 44 }}>
-      <div className="w-11 h-11 rounded-full border border-black flex items-center justify-center bg-white">
-        <span className="text-[16px] leading-none" style={{ fontFamily: 'Times New Roman' }}>
+    <div
+      className="relative inline-flex items-center justify-center select-none"
+      style={{ width: 32, height: 32 }}
+    >
+      <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center bg-white">
+        <span className="text-[13px] leading-none" style={{ fontFamily: 'Times New Roman' }}>
           {rate}
         </span>
       </div>
-      {/* circulito azul Walcord con punto — borde fino y punto más pequeño */}
-      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border border-[#1F48AF] bg-white flex items-center justify-center">
-        <div className="w-[6px] h-[6px] rounded-full bg-[#1F48AF]" />
+      <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border border-[#1F48AF] bg-white flex items-center justify-center">
+        <div className="w-[4px] h-[4px] rounded-full bg-[#1F48AF]" />
       </div>
     </div>
   );
@@ -76,7 +50,6 @@ type Profile = {
   id: string;
   full_name: string | null;
   username: string | null;
-  avatar_url?: string | null;
 };
 
 type RecordRow = {
@@ -92,88 +65,64 @@ type Thought = {
   id: string;
   user_id: string;
   target_type: 'record';
-  target_id: string; // record_id
-  body: string;
+  target_id: string;
+  body: string | null;
   created_at: string;
   rating_id?: string | null;
-  // hydrate
-  likes_count?: number;
-  comments_count?: number;
-  liked_by_me?: boolean;
   record?: RecordRow | null;
   rate?: number | null;
+  listened_on?: string | null;
 };
 
-type ThoughtComment = {
-  id: string;
-  user_id: string;
-  body: string;
-  created_at: string;
-  profile?: Profile;
-};
+function formatDiaryDate(iso: string | null | undefined) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 export default function ListenerTakesViewer({ profileId: propProfileId }: { profileId?: string }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const usernameParam = searchParams.get('username') || null;
+  const usernameParam = searchParams?.get('username') || searchParams?.get('handle') || null;
 
   const [viewProfileId, setViewProfileId] = useState<string | null>(propProfileId ?? null);
-
-  const [userId, setUserId] = useState<string | null>(null); // sesión actual (para like/comentar)
-  const [me, setMe] = useState<Profile | null>(null);
+  const [targetUsername, setTargetUsername] = useState<string | null>(null);
 
   const [takes, setTakes] = useState<Thought[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
-  const [commentsMap, setCommentsMap] = useState<Record<string, ThoughtComment[]>>({});
-  const [replyFor, setReplyFor] = useState<string | null>(null);
-  const [replyBody, setReplyBody] = useState<string>('');
+  // Vista tipo Letterboxd: timeline / shelves
+  const [viewMode, setViewMode] = useState<'timeline' | 'shelves'>('timeline');
 
-  const [loginOpen, setLoginOpen] = useState(false);
+  // Orden
+  const [sortMode, setSortMode] = useState<'recent' | 'rating_high' | 'rating_low' | 'alpha'>('recent');
 
-  const pageTopRef = useRef<HTMLDivElement | null>(null);
+  // "See more" por take (solo para expand/collapse)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const requireAuth = (title: string) => {
-    if (!userId) {
-      setLoginOpen(true);
-      return false;
-    }
-    return true;
-  };
-
-  // Resolver sesión + mi perfil
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      const sessionUid = data.user?.id ?? null;
-      setUserId(sessionUid);
-
-      if (sessionUid) {
-        const { data: myp } = await supabase
-          .from('profiles')
-          .select('id, full_name, username, avatar_url')
-          .eq('id', sessionUid)
-          .maybeSingle();
-        if (myp) setMe(myp as Profile);
-      }
-    })();
-  }, []);
-
-  // Resolver profileId desde ?username si no viene por props
+  /* ========= Resolver profileId desde ?username si no viene por props ========= */
   useEffect(() => {
     let active = true;
+
     (async () => {
-      if (viewProfileId) return; // ya está
+      if (viewProfileId) return;
       if (!usernameParam) return;
 
-      const { data: prof } = await supabase
+      const { data } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, username')
         .eq('username', usernameParam)
         .maybeSingle();
 
       if (!active) return;
-      setViewProfileId(prof?.id ?? null);
+
+      setViewProfileId(data?.id ?? null);
+      setTargetUsername(data?.username ?? usernameParam);
     })();
 
     return () => {
@@ -181,26 +130,25 @@ export default function ListenerTakesViewer({ profileId: propProfileId }: { prof
     };
   }, [usernameParam, viewProfileId]);
 
-  // Cargar listener takes del perfil a visualizar
+  /* ========= Cargar takes del perfil objetivo (viewer) ========= */
   useEffect(() => {
     const boot = async () => {
       setLoading(true);
 
-      // Si no hay profileId aún (p.ej. esperando resolver username), no cargamos
       if (!viewProfileId) {
         setTakes([]);
         setLoading(false);
         return;
       }
 
-      // 1) listener takes del perfil público que estamos viendo (solo target_type='record')
       const { data: recs, error } = await supabase
         .from('recommendations')
-        .select('id, user_id, target_type, target_id, body, created_at, rating_id')
+        .select('id, user_id, target_type, target_id, body, created_at, rating_id, listened_on')
         .eq('user_id', viewProfileId)
         .eq('target_type', 'record')
+        .order('listened_on', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(400);
 
       if (error) {
         setTakes([]);
@@ -210,7 +158,6 @@ export default function ListenerTakesViewer({ profileId: propProfileId }: { prof
 
       const list = (recs || []) as Thought[];
 
-      // 2) records involucrados
       const recordIds = Array.from(new Set(list.map((t) => t.target_id))).filter(Boolean);
       let recordsMap: Record<string, RecordRow> = {};
       if (recordIds.length) {
@@ -218,66 +165,27 @@ export default function ListenerTakesViewer({ profileId: propProfileId }: { prof
           .from('records')
           .select('id, title, artist_name, release_year, vibe_color, cover_color')
           .in('id', recordIds);
+
         (recRows || []).forEach((r: any) => {
           recordsMap[r.id] = r as RecordRow;
         });
       }
 
-      // 3) likes y comments (counts + si yo he dado like)
-      const ids = list.map((t) => t.id);
-      const likesCount: Record<string, number> = {};
-      const commentsCount: Record<string, number> = {};
-      const likedSet = new Set<string>();
+      const ratingIds = Array.from(
+        new Set(list.map((t) => t.rating_id).filter((x) => x !== null && x !== undefined))
+      ) as string[];
 
-      if (ids.length) {
-        const { data: likes } = await supabase
-          .from('recommendation_likes')
-          .select('recommendation_id')
-          .in('recommendation_id', ids as any);
-        (likes || []).forEach((row: any) => {
-          const k = String(row.recommendation_id);
-          likesCount[k] = (likesCount[k] || 0) + 1;
-        });
-
-        const { data: comments } = await supabase
-          .from('recommendation_comments')
-          .select('recommendation_id')
-          .in('recommendation_id', ids as any);
-        (comments || []).forEach((row: any) => {
-          const k = String(row.recommendation_id);
-          commentsCount[k] = (commentsCount[k] || 0) + 1;
-        });
-
-        if (userId) {
-          const { data: myLikes } = await supabase
-            .from('recommendation_likes')
-            .select('recommendation_id')
-            .in('recommendation_id', ids as any)
-            .eq('user_id', userId);
-          (myLikes || []).forEach((row: any) => likedSet.add(row.recommendation_id));
-        }
-      }
-
-      // 4) rates
-      const ratingIds = Array.from(new Set(list.map((t) => t.rating_id).filter(Boolean))) as string[];
       let rateByRatingId: Record<string, number> = {};
       if (ratingIds.length) {
-        const { data: ratingRows } = await supabase
-          .from('ratings')
-          .select('id, rate')
-          .in('id', ratingIds);
+        const { data: ratingRows } = await supabase.from('ratings').select('id, rate').in('id', ratingIds);
         (ratingRows || []).forEach((r: any) => {
           rateByRatingId[r.id] = r.rate as number;
         });
       }
 
-      // ensamblado final
       const hydrated: Thought[] = list.map((t) => ({
         ...t,
         record: recordsMap[t.target_id] || null,
-        likes_count: likesCount[String(t.id)] ?? 0,
-        comments_count: commentsCount[String(t.id)] ?? 0,
-        liked_by_me: likedSet.has(t.id),
         rate: (t.rating_id ? rateByRatingId[t.rating_id] : null) ?? null,
       }));
 
@@ -286,331 +194,345 @@ export default function ListenerTakesViewer({ profileId: propProfileId }: { prof
     };
 
     boot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewProfileId, userId]);
+  }, [viewProfileId]);
 
-  const toggleLike = async (item: Thought) => {
-    if (!requireAuth('Sign in to like')) return;
-    if (!userId) return;
+  /* ========= Orden ========= */
+  const sorted = useMemo(() => {
+    const list = [...takes];
 
-    if (item.liked_by_me) {
-      await supabase.from('recommendation_likes').delete().match({ recommendation_id: item.id, user_id: userId });
-      setTakes((prev) =>
-        prev.map((it) =>
-          it.id === item.id ? { ...it, liked_by_me: false, likes_count: Math.max(0, (it.likes_count || 0) - 1) } : it
-        )
-      );
-    } else {
-      await supabase.from('recommendation_likes').insert({ recommendation_id: item.id, user_id: userId });
-      setTakes((prev) =>
-        prev.map((it) => (it.id === item.id ? { ...it, liked_by_me: true, likes_count: (it.likes_count || 0) + 1 } : it))
-      );
-    }
-  };
+    list.sort((a, b) => {
+      const da = new Date(a.listened_on || a.created_at).getTime();
+      const db = new Date(b.listened_on || b.created_at).getTime();
 
-  const loadComments = async (id: string) => {
-    const { data, error } = await supabase
-      .from('recommendation_comments')
-      .select('id, user_id, body, created_at')
-      .eq('recommendation_id', id)
-      .order('created_at', { ascending: true });
-    if (error) return;
+      switch (sortMode) {
+        case 'recent':
+          return db - da;
+        case 'rating_high': {
+          const ra = a.rate ?? -999;
+          const rb = b.rate ?? -999;
+          if (rb !== ra) return rb - ra;
+          return db - da;
+        }
+        case 'rating_low': {
+          const ra2 = a.rate ?? 999;
+          const rb2 = b.rate ?? 999;
+          if (ra2 !== rb2) return ra2 - rb2;
+          return db - da;
+        }
+        case 'alpha': {
+          const ta = (a.record?.title || '').toLowerCase();
+          const tb = (b.record?.title || '').toLowerCase();
+          if (ta < tb) return -1;
+          if (ta > tb) return 1;
+          return 0;
+        }
+        default:
+          return db - da;
+      }
+    });
 
-    const uids = Array.from(new Set((data || []).map((c) => c.user_id)));
-    let pmap: Record<string, Profile> = {};
-    if (uids.length) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, full_name, username, avatar_url')
-        .in('id', uids);
-      (profs || []).forEach((p: any) => (pmap[p.id] = p));
-    }
+    return list;
+  }, [takes, sortMode]);
 
-    const mapped: ThoughtComment[] = (data || []).map((c: any) => ({
-      ...c,
-      profile: pmap[c.user_id],
-    }));
-    setCommentsMap((prev) => ({ ...prev, [id]: mapped }));
-  };
+  // Agrupado por MES + AÑO (ej. "Nov 2025") para timeline
+  const groupedByPeriod = useMemo(() => {
+    type Bucket = { label: string; items: Thought[] };
+    const map: Record<string, Bucket> = {};
 
-  const sendReply = async () => {
-    if (!replyFor || !userId) return;
-    const bodyClean = replyBody.trim();
-    if (bodyClean.length === 0 || bodyClean.length > 280) return;
-
-    const { data, error } = await supabase
-      .from('recommendation_comments')
-      .insert({
-        recommendation_id: replyFor,
-        user_id: userId,
-        body: bodyClean,
-      })
-      .select('id, created_at')
-      .single();
-
-    if (!error) {
-      setTakes((prev) =>
-        prev.map((it) => (it.id === replyFor ? { ...it, comments_count: (it.comments_count || 0) + 1 } : it))
-      );
-      setCommentsMap((prev) => {
-        const prevList = prev[replyFor] || [];
-        const newItem: ThoughtComment = {
-          id: data.id,
-          user_id: userId,
-          body: bodyClean,
-          created_at: data.created_at,
-          profile: { id: userId, full_name: me?.full_name || '—', username: me?.username || null },
-        };
-        return { ...prev, [replyFor]: [...prevList, newItem] };
-      });
+    for (const t of sorted) {
+      const d = new Date(t.listened_on || t.created_at);
+      if (Number.isNaN(d.getTime())) {
+        if (!map['Unknown']) map['Unknown'] = { label: 'Unknown', items: [] };
+        map['Unknown'].items.push(t);
+      } else {
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        const key = `${year}-${month + 1}`;
+        const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+        if (!map[key]) map[key] = { label, items: [] };
+        map[key].items.push(t);
+      }
     }
 
-    setReplyBody('');
-    setReplyFor(null);
-  };
+    const orderedKeys = Object.keys(map).sort((a, b) => {
+      if (a === 'Unknown') return 1;
+      if (b === 'Unknown') return -1;
+      const [ya, ma] = a.split('-').map((v) => parseInt(v, 10));
+      const [yb, mb] = b.split('-').map((v) => parseInt(v, 10));
+      if (yb !== ya) return yb - ya;
+      return mb - ma;
+    });
+
+    return { map, orderedKeys };
+  }, [sorted]);
 
   return (
-    <main className="min-h-screen bg-white text-black">
-      {/* Banner azul superior */}
-      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-      </header>
+    <div className="bg-white min-h-screen text-black font-[Roboto]">
+      <main className="mx-auto w-full max-w-[780px] px-4 pt-7 pb-16">
+        {/* HEADER EDITORIAL (calcado, sin botón +) */}
+        <header className="mb-5">
+          <div className="flex items-center justify-between gap-3">
+            <h1
+              className="text-[clamp(26px,7vw,36px)] leading-tight"
+              style={{
+                fontFamily: '"Times New Roman", Times, serif',
+                fontWeight: 400,
+                letterSpacing: '-0.035em',
+              }}
+            >
+              Musical opinions
+            </h1>
 
-      {/* Modal de Login si no hay sesión */}
-      <Modal open={loginOpen} onClose={() => setLoginOpen(false)} title="Sign in to continue">
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600 font-light" style={{ fontFamily: 'Roboto' }}>
-            Create an account or sign in to interact with Walcord.
-          </p>
-          <Link
-            href="/login"
-            className="block text-center rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm"
-            style={{ fontFamily: 'Roboto' }}
-          >
-            Sign in
-          </Link>
-          <button
-            onClick={() => setLoginOpen(false)}
-            className="w-full text-center text-sm text-gray-500 underline"
-            style={{ fontFamily: 'Roboto' }}
-          >
-            Continue browsing
-          </button>
-        </div>
-      </Modal>
+            {/* SIN + (viewer) */}
+            <div className="w-9 h-9" />
+          </div>
 
-      {/* Cabecera de la página */}
-      <div ref={pageTopRef} className="px-6 md:px-24 pt-10 pb-4">
-        <div className="mx-auto w-full max-w-[780px]">
-          <h1 className="text-[clamp(1.6rem,3vw,2.3rem)] font-normal mb-1" style={{ fontFamily: 'Times New Roman' }}>
-            Listener Takes
-          </h1>
-        </div>
-      </div>
-
-      {/* Listado de takes */}
-      <section className="px-6 md:px-24 pb-16">
-        <div className="mx-auto w-full max-w-[780px]">
-          {loading ? (
-            <div className="text-sm text-neutral-500">Loading takes…</div>
-          ) : !viewProfileId ? (
-            <div className="text-sm text-neutral-500">User not found.</div>
-          ) : takes.length === 0 ? (
-            <div className="text-sm text-neutral-500">No Listener Takes yet.</div>
-          ) : (
-            <ul className="space-y-4">
-              {takes.map((it) => (
-                <li
-                  key={String(it.id)}
-                  className="border border-neutral-200 rounded-3xl p-5 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
-                >
-                  {/* apilar en móvil, fila en ≥ sm */}
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3">
-                      <Link href={`/record/${it.target_id}`} className="shrink-0">
-                        <div
-                          className="w-16 h-16 rounded-xl flex items-center justify-center border border-black/10"
-                          style={{ backgroundColor: it.record?.vibe_color || '#f3f3f3' }}
-                          aria-label={`${it.record?.title || 'Record'} cover`}
-                        >
-                          <div
-                            className="w-5 h-5 rounded-sm shadow"
-                            style={{ backgroundColor: it.record?.cover_color || '#111' }}
-                          />
-                        </div>
-                      </Link>
-
-                      <div className="min-w-0">
-                        <Link href={`/record/${it.target_id}`}>
-                          <h3
-                            className="text-[17px] leading-[1.2] sm:leading-5 font-normal hover:opacity-80 break-words"
-                            style={{ fontFamily: 'Times New Roman' }}
-                          >
-                            {it.record?.title || 'Record'}
-                          </h3>
-                        </Link>
-                        <div className="text-[12px] text-neutral-600 font-light" style={{ fontFamily: 'Roboto' }}>
-                          by {it.record?.artist_name || '—'}
-                          {it.record?.release_year ? ` · ${it.record.release_year}` : ''}
-                        </div>
-                        {/* Solo fecha (sin hora exacta) */}
-                        <div className="text-[11px] text-neutral-500 mt-1">
-                          {new Date(it.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* En viewer NO hay Edit ni Delete */}
-                    <div className="flex items-center gap-2 sm:gap-3 sm:self-start">
-                      {typeof it.rate === 'number' ? <RatingBadge rate={it.rate} /> : null}
-                    </div>
-                  </div>
-
-                  {/* En viewer no hay textarea de edición: siempre texto plano */}
-                  <p className="mt-3 text-[16px] leading-7 font-[family-name:Times_New_Roman,Times,serif]">
-                    {it.body}
-                  </p>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
-                    <button
-                      onClick={() => toggleLike(it)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                        it.liked_by_me
-                          ? 'bg-[#1F48AF] text-white border-[#1F48AF]'
-                          : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'
-                      }`}
-                    >
-                      Like · {it.likes_count || 0}
-                    </button>
-
-                    <button
-                      onClick={async () => {
-                        const isOpen = !!openComments[it.id];
-                        const next = { ...openComments, [it.id]: !isOpen };
-                        setOpenComments(next);
-                        if (!isOpen && !commentsMap[it.id]) await loadComments(it.id);
-                        setReplyFor(it.id);
-                        if (!isOpen) {
-                          setTimeout(() => {
-                            document
-                              .getElementById(`comments-${it.id}`)
-                              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }, 0);
-                        }
-                      }}
-                      className="text-xs px-3 py-1.5 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
-                      aria-expanded={!!openComments[it.id]}
-                    >
-                      Comment · {it.comments_count || 0}
-                    </button>
-
-                    <Link
-                      href={`/record/${it.target_id}`}
-                      className="text-xs px-3 py-1.5 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
-                    >
-                      Open record
-                    </Link>
-                  </div>
-
-                  {openComments[it.id] && (
-                    <div id={`comments-${it.id}`} className="mt-3">
-                      {commentsMap[it.id] && commentsMap[it.id]!.length > 0 ? (
-                        <ul className="space-y-2">
-                          {commentsMap[it.id]!.map((c) => (
-                            <li
-                              key={c.id}
-                              className="rounded-2xl bg-neutral-50 border border-neutral-200 px-3 py-2"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Image
-                                    src={c.profile?.avatar_url || '/default-user-icon.png'}
-                                    width={20}
-                                    height={20}
-                                    alt="user"
-                                    className="rounded-full border border-black/10"
-                                  />
-                                  <span className="text-[13px] font-light font-[family-name:Times_New_Roman,Times,serif]">
-                                    {c.profile?.full_name || '—'}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-neutral-500">
-                                  {new Date(c.created_at).toLocaleString()}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-[14px]">{c.body}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="text-[12px] text-neutral-500">Be the first to comment.</div>
-                      )}
-                    </div>
-                  )}
-
-                  {replyFor === it.id && (
-                    <div className="mt-3 border-t border-neutral-200 pt-3">
-                      <textarea
-                        value={replyBody}
-                        onChange={(e) => setReplyBody(e.target.value)}
-                        placeholder="Write a reply…"
-                        className="w-full min-h-[80px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] outline-none focus:ring-2 focus:ring-[#1F48AF]"
-                        maxLength={280}
-                      />
-                      <div className="mt-2 flex items-center justify-between">
-                        <span
-                          className={`text-xs ${replyBody.length > 280 ? 'text-red-600' : 'text-neutral-500'}`}
-                        >
-                          {280 - replyBody.length}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setReplyFor(null);
-                              setReplyBody('');
-                            }}
-                            className="text-xs px-3 py-1.5 rounded-full bg-neutral-200 text-neutral-700"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={sendReply}
-                            disabled={!replyBody.trim().length || replyBody.length > 280}
-                            className={`text-xs px-3 py-1.5 rounded-full ${
-                              replyBody.trim().length && replyBody.length <= 280
-                                ? 'bg-[#1F48AF] text-white'
-                                : 'bg-neutral-300 text-neutral-600 cursor-not-allowed'
-                            }`}
-                          >
-                            Reply
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+          {targetUsername && (
+            <p className="text-sm text-neutral-600 mt-3" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
+              Viewing @{targetUsername}
+            </p>
           )}
-        </div>
-      </section>
-    </main>
+        </header>
+
+        {/* CONTROLES SUPERIORES (calcados) */}
+        <section className="mb-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            {/* Vista Timeline / Shelves */}
+            <div className="inline-flex rounded-full bg-neutral-100 p-1 self-start">
+              <button
+                type="button"
+                onClick={() => setViewMode('timeline')}
+                className={`px-3 h-8 rounded-full text-[11px] ${
+                  viewMode === 'timeline' ? 'bg-white shadow-sm' : 'text-neutral-600'
+                }`}
+              >
+                Timeline
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('shelves')}
+                className={`px-3 h-8 rounded-full text-[11px] ${
+                  viewMode === 'shelves' ? 'bg-white shadow-sm' : 'text-neutral-600'
+                }`}
+              >
+                Shelves
+              </button>
+            </div>
+
+            {/* Orden – solo Recent / Top rated / A–Z */}
+            <div className="flex flex-wrap gap-1.5 md:justify-end">
+              <button
+                type="button"
+                onClick={() => setSortMode('recent')}
+                className={`h-8 rounded-full px-3 text-[11px] border whitespace-nowrap ${
+                  sortMode === 'recent'
+                    ? 'bg-[#1F48AF] text-white border-[#1F48AF]'
+                    : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'
+                }`}
+              >
+                Recent
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortMode('rating_high')}
+                className={`h-8 rounded-full px-3 text-[11px] border whitespace-nowrap ${
+                  sortMode === 'rating_high'
+                    ? 'bg-[#1F48AF] text-white border-[#1F48AF]'
+                    : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'
+                }`}
+              >
+                Top rated
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortMode('alpha')}
+                className={`h-8 rounded-full px-3 text-[11px] border whitespace-nowrap ${
+                  sortMode === 'alpha'
+                    ? 'bg-[#1F48AF] text-white border-[#1F48AF]'
+                    : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'
+                }`}
+              >
+                A–Z
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* CONTENIDO PRINCIPAL */}
+        <section>
+          {loading ? (
+            <div className="text-sm text-neutral-500">Loading diary…</div>
+          ) : !viewProfileId ? (
+            <div className="mt-16 text-center text-xs text-neutral-500">User not found.</div>
+          ) : sorted.length === 0 ? (
+            <div className="mt-16 text-center text-xs text-neutral-500">No records logged yet.</div>
+          ) : viewMode === 'shelves' ? (
+            // GRID – Shelves: cover limpia, info editorial debajo
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+              {sorted.map((it) => (
+                <Link key={it.id} href={`/record/${it.target_id}`} className="group block">
+                  <div
+                    className="w-full aspect-square rounded-3xl flex items-center justify-center border border-black/10 overflow-hidden"
+                    style={{ backgroundColor: it.record?.vibe_color || '#f3f3f3' }}
+                  >
+                    <div
+                      className="w-[38%] h-[38%] rounded-[10px] shadow"
+                      style={{ backgroundColor: it.record?.cover_color || '#111' }}
+                    />
+                  </div>
+
+                  <div className="mt-2 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p
+                        className="text-[13px] leading-tight truncate group-hover:opacity-80"
+                        style={{ fontFamily: '"Times New Roman", Times, serif' }}
+                      >
+                        {it.record?.title || 'Record'}
+                      </p>
+                      <p className="text-[11px] text-neutral-700 truncate">{it.record?.artist_name || '—'}</p>
+                    </div>
+                    {typeof it.rate === 'number' && (
+                      <div className="shrink-0 pt-1">
+                        <RatingBadgeSmall rate={it.rate} />
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            // TIMELINE – agrupado por mes + año
+            <div className="space-y-4">
+              {groupedByPeriod.orderedKeys.map((key) => {
+                const bucket = groupedByPeriod.map[key];
+                if (!bucket) return null;
+
+                return (
+                  <div key={key} className="space-y-3">
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="h-px flex-1 bg-neutral-200" />
+                      <span
+                        className="text-[11px] uppercase tracking-[0.18em] text-neutral-600"
+                        style={{ fontFamily: '"Times New Roman", Times, serif' }}
+                      >
+                        {bucket.label.toUpperCase()}
+                      </span>
+                      <div className="h-px flex-1 bg-neutral-200" />
+                    </div>
+
+                    {bucket.items.map((it) => {
+                      const fullBody = it.body || '';
+                      const isLong = fullBody.length > 420;
+                      const isExpanded = expanded[it.id];
+                      const displayBody = !isLong || isExpanded ? fullBody : `${fullBody.slice(0, 420)}…`;
+
+                      return (
+                        <article
+                          key={it.id}
+                          className="relative rounded-[28px] border border-neutral-200 bg-white shadow-[0_14px_38px_rgba(0,0,0,0.06)]"
+                        >
+                          {/* rating flotante (solo UNA vez) */}
+                          {typeof it.rate === 'number' && (
+                            <div className="absolute top-4 right-4">
+                              <RatingBadge rate={it.rate} />
+                            </div>
+                          )}
+
+                          <div className="px-3 sm:px-5 py-4">
+                            {/* CABECERA */}
+                            <div className="flex items-start gap-3">
+                              {/* COVER */}
+                              <Link href={`/record/${it.target_id}`} className="shrink-0">
+                                <div
+                                  className="w-[64px] h-[64px] sm:w-[74px] sm:h-[74px] rounded-[18px] flex items-center justify-center border border-black/10 overflow-hidden"
+                                  style={{ backgroundColor: it.record?.vibe_color || '#f3f3f3' }}
+                                  aria-label={`${it.record?.title || 'Record'} cover`}
+                                >
+                                  <div
+                                    className="w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] rounded-[8px] shadow"
+                                    style={{ backgroundColor: it.record?.cover_color || '#111' }}
+                                  />
+                                </div>
+                              </Link>
+
+                              <div className="flex-1 min-w-0 pr-12">
+                                <Link href={`/record/${it.target_id}`}>
+                                  <h3
+                                    className="text-[16px] sm:text-[17px] leading-5 font-normal hover:opacity-80 break-words"
+                                    style={{ fontFamily: '"Times New Roman", Times, serif' }}
+                                  >
+                                    {it.record?.title || 'Record'}
+                                  </h3>
+                                </Link>
+
+                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  <p className="text-[12px] text-neutral-700">
+                                    {it.record?.artist_name || '—'}
+                                    {it.record?.release_year ? ` · ${it.record.release_year}` : ''}
+                                  </p>
+                                  <span className="text-[11px] text-neutral-400">·</span>
+                                  <p className="text-[11px] text-neutral-500">
+                                    {formatDiaryDate(it.listened_on || it.created_at)}
+                                  </p>
+                                </div>
+
+                                {/* SIN acciones (viewer) */}
+                              </div>
+                            </div>
+
+                            {/* BODY */}
+                            <div className="mt-4">
+                              {fullBody ? (
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-500 mb-2">
+                                    Listener take
+                                  </p>
+
+                                  <p
+                                    className="text-[15px] leading-7 text-neutral-900"
+                                    style={{ fontFamily: '"Times New Roman", Times, serif' }}
+                                  >
+                                    {displayBody}
+                                  </p>
+
+                                  {isLong && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpanded((prev) => ({
+                                          ...prev,
+                                          [it.id]: !isExpanded,
+                                        }))
+                                      }
+                                      className="mt-2 text-[11px] text-[#1F48AF]"
+                                    >
+                                      {isExpanded ? 'See less' : 'See more'}
+                                    </button>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {/* SEE MORE -> /review/[id].tsx */}
+                            <div className="mt-4">
+                              <Link
+                                href={`/review/${it.id}`}
+                                className="text-[11px] font-light text-neutral-500 hover:text-neutral-900"
+                              >
+                                See more
+                              </Link>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
   );
 }

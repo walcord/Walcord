@@ -12,8 +12,8 @@ interface Artist {
   id: string;
   name: string;
   image_url?: string | null;
-  place?: string | null;       // "City, Country"
-  start_year?: number | null;  // e.g. 1985
+  place?: string | null; // "City, Country"
+  start_year?: number | null; // e.g. 1985
 }
 
 /* ===============================
@@ -94,12 +94,15 @@ export default function FavouriteArtists() {
   const [favourites, setFavourites] = useState<{ artist_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // UI states
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
   // Carga artistas + favoritos
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
 
-      // Aseguramos traer los campos necesarios para que "no falte info"
       const { data: artistsData } = await supabase
         .from("artists")
         .select("id,name,image_url,place,start_year")
@@ -150,155 +153,250 @@ export default function FavouriteArtists() {
     return artists.filter((a) => norm(a.name).includes(q) || norm(a.place).includes(q));
   }, [artists, search]);
 
-  // Mostrar favoritos si no hay búsqueda; con búsqueda, mostrar resultados
-  const showing = search ? matchedArtists : artists.filter((a) => isFavourite(a.id));
-
   const goToArtist = (id: string) => router.push(`/artist/${id}`);
+
+  const openSearch = () => {
+    if (readonly) return;
+    setSearchOpen(true);
+    setEditMode(false);
+    setTimeout(() => {
+      const el = document.getElementById("artistSearchInput") as HTMLInputElement | null;
+      el?.focus();
+    }, 0);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearch("");
+  };
+
+  const toggleEdit = () => {
+    if (readonly) return;
+    setEditMode((v) => !v);
+    setSearchOpen(false);
+    setSearch("");
+  };
+
+  // favourites grid
+  const favouriteArtists = artists.filter((a) => isFavourite(a.id));
+
+  // search results list (solo al buscar)
+  const searchResults = search ? matchedArtists : [];
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner azul con flecha minimalista pegada abajo */}
-      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-      </header>
+      {/* Header */}
+      <div className="w-full px-5 sm:px-6 pt-9">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col">
+            <div
+              className="text-[11px] tracking-[0.28em] uppercase text-black/50"
+              style={{ fontFamily: "Roboto, sans-serif", fontWeight: 300 }}
+            >
+              Collection
+            </div>
 
-      {/* Título */}
-      <div className="w-full flex flex-col items-center mt-10 mb-6">
-        <h1
-          className="text-[clamp(1.5rem,3.5vw,2.4rem)]"
-          style={{
-            fontFamily: "Times New Roman, serif",
-            fontWeight: 400,
-            opacity: 0.85,
-            letterSpacing: "0.4px",
-          }}
-        >
-          Favourite Artists
-        </h1>
-        {readonly && targetUsername && (
-          <p className="text-sm text-neutral-600 mt-2">Viewing @{targetUsername}</p>
-        )}
-        <hr className="w-[90%] mt-4 border-t-[1.5px] border-black opacity-60" />
-      </div>
+            <h1
+              className="mt-2 text-[clamp(2.05rem,7.0vw,3.15rem)] leading-[0.95]"
+              style={{
+                fontFamily: "Times New Roman, serif",
+                fontWeight: 400,
+                letterSpacing: "-0.25px",
+                opacity: 0.92,
+              }}
+            >
+              Favourite Artists
+            </h1>
 
-      {/* Buscador (sin mensaje extra) */}
-      <div className="w-full flex flex-col items-center gap-6 mb-8">
-        <input
-          type="text"
-          placeholder={readonly ? "Search artists…" : "Find your artist"}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-[90%] max-w-2xl px-5 h-12 border border-black rounded-full text-base placeholder-gray-500 focus:outline-none transition-all duration-200 text-center font-light"
-        />
-      </div>
+            <div className="mt-4 h-[1px] w-24 bg-black/55" />
 
-      {/* Resultados */}
-      {loading ? (
-        <p className="text-center text-gray-500 text-sm mb-32">Loading artists...</p>
-      ) : search || favourites.length > 0 ? (
-        <div className="w-full px-4 sm:px-6 mb-24">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {showing.map((artist) => {
-              const fav = isFavourite(artist.id);
-              const hasImg = !!artist.image_url;
-              const color = colorFor(artist.name || "");
+            {readonly && targetUsername && (
+              <p className="text-sm text-neutral-600 mt-4">Viewing @{targetUsername}</p>
+            )}
+          </div>
 
-              // Normalizamos "info" para evitar falsos vacíos (espacios, 0, etc.)
-              const place = artist.place && artist.place.trim().length > 0 ? artist.place.trim() : null;
-              const since =
-                typeof artist.start_year === "number" && artist.start_year > 0 ? artist.start_year : null;
+          {/* Actions */}
+          {!readonly && (
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                onClick={toggleEdit}
+                className="text-[12px] uppercase tracking-[0.18em] text-black/55 hover:text-black/80 transition"
+                style={{ fontFamily: "Roboto, sans-serif", fontWeight: 300 }}
+                aria-label="Toggle edit"
+                title={editMode ? "Done" : "Edit"}
+              >
+                {editMode ? "Done" : "Edit"}
+              </button>
 
-              return (
-                <div key={artist.id} className="flex flex-col items-center text-center">
-                  {/* Avatar circular:
-                      - Sin letras (como pediste).
-                      - Si hay imagen: borde del color editorial. */}
+              {/* + más pequeño */}
+              <button
+                onClick={() => (searchOpen ? closeSearch() : openSearch())}
+                className="w-[40px] h-[40px] rounded-full bg-[#1F48AF] text-white flex items-center justify-center shadow-[0_10px_18px_rgba(31,72,175,0.16)] hover:opacity-95 transition"
+                aria-label="Add artist"
+                title="Add"
+              >
+                <span className="text-[20px] leading-none">+</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Search block */}
+        {searchOpen && !readonly && (
+          <div className="mt-8">
+            <input
+              id="artistSearchInput"
+              type="text"
+              placeholder="Find your artist"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-4 h-12 border border-black/15 rounded-[12px] text-[14px] placeholder-gray-500 focus:outline-none focus:border-black/30 transition font-light text-left"
+            />
+
+            {/* Results label + small close aligned right (not huge, not centered) */}
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">Results</div>
+
+              <button
+                onClick={closeSearch}
+                className="text-[11px] uppercase tracking-[0.22em] text-black/45 hover:text-black/75 transition"
+                style={{ fontFamily: "Roboto, sans-serif", fontWeight: 300 }}
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Results list */}
+            <div className="mt-3 space-y-2">
+              {searchResults.slice(0, 18).map((artist) => {
+                const fav = isFavourite(artist.id);
+                const hasImg = !!artist.image_url;
+                const color = colorFor(artist.name || "");
+
+                return (
                   <div
-                    onClick={() => goToArtist(artist.id)}
-                    className="w-32 h-32 sm:w-36 sm:h-36 rounded-full shadow-md cursor-pointer transition-transform duration-200 hover:scale-[1.03] flex items-center justify-center"
-                    style={{
-                      backgroundColor: hasImg ? "#F4F5F7" : color,
-                      overflow: "hidden",
-                      border: hasImg ? "2px solid" : "none",
-                      borderColor: hasImg ? color : undefined,
-                    }}
-                    aria-label={`Open ${artist.name}`}
-                    title={artist.name}
+                    key={artist.id}
+                    className="w-full flex items-center justify-between gap-3 px-4 h-14 rounded-[16px] border border-black/10 hover:border-black/20 transition"
                   >
-                    {hasImg ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={artist.image_url as string} alt={artist.name} className="w-full h-full object-cover" />
-                    ) : null}
-                  </div>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        onClick={() => goToArtist(artist.id)}
+                        className="w-10 h-10 rounded-full cursor-pointer flex items-center justify-center"
+                        style={{
+                          backgroundColor: hasImg ? "#F4F5F7" : color,
+                          overflow: "hidden",
+                          border: hasImg ? "1.5px solid" : "none",
+                          borderColor: hasImg ? color : undefined,
+                        }}
+                        aria-label={`Open ${artist.name}`}
+                        title={artist.name}
+                      >
+                        {hasImg ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={artist.image_url as string} alt={artist.name} className="w-full h-full object-cover" />
+                        ) : null}
+                      </div>
 
-                  {/* Nombre */}
-                  <p
-                    className="mt-2 text-[13px] sm:text-sm font-normal leading-tight line-clamp-2"
-                    style={{ fontFamily: "Times New Roman, serif", opacity: 0.9 }}
-                  >
-                    {artist.name}
-                  </p>
+                      <div className="min-w-0">
+                        <div
+                          className="text-[15px] leading-tight truncate"
+                          style={{ fontFamily: "Times New Roman, serif", opacity: 0.92 }}
+                        >
+                          {artist.name}
+                        </div>
+                      </div>
+                    </div>
 
-                  {/* Info secundaria (solo si existe, para que no “falte info” por huecos) */}
-                  {place ? (
-                    <p className="text-[11px] sm:text-xs text-gray-600 font-light">{place}</p>
-                  ) : (
-                    <div className="h-[14px]" />
-                  )}
-                  {since ? (
-                    <p className="text-[11px] sm:text-xs text-gray-500 font-light mb-1">Since {since}</p>
-                  ) : (
-                    <div className="h-[18px] mb-1" />
-                  )}
-
-                  {/* Add / Remove */}
-                  {fav ? (
-                    !readonly ? (
+                    {fav ? (
                       <button
                         onClick={() => handleRemoveFavourite(artist.id)}
-                        className="text-base sm:text-lg text-gray-500 hover:text-black transition font-light"
-                        aria-label="Remove from favourites"
-                        title="Remove"
+                        className="px-4 h-9 rounded-full text-[12px] border border-black/15 hover:border-black/25 transition font-light"
                       >
-                        ✕
+                        Remove
                       </button>
                     ) : (
-                      <span className="text-[10px] sm:text-[11px] text-neutral-500">Favourite</span>
-                    )
-                  ) : (
-                    !readonly && (
                       <button
                         onClick={() => handleAddFavourite(artist.id)}
-                        className="bg-[#1F48AF] text-white px-3 sm:px-4 py-1.5 text-xs sm:text-sm rounded-full hover:bg-[#1A3A95] transition font-light"
+                        className="px-4 h-9 rounded-full text-[12px] bg-[#1F48AF] text-white hover:opacity-95 transition font-light"
                       >
                         Add
                       </button>
-                    )
-                  )}
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <p className="text-center text-gray-500 text-sm mt-14 mb-32">Loading artists...</p>
+      ) : favouriteArtists.length > 0 ? (
+        <div className="w-full px-5 sm:px-6 mt-10 pb-36">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
+            Your favourites · {favouriteArtists.length}
+          </div>
+
+          {/* Grid: tighter vertical rhythm, no weird gaps */}
+          <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-7 gap-y-10">
+            {favouriteArtists.map((artist) => {
+              const hasImg = !!artist.image_url;
+              const color = colorFor(artist.name || "");
+
+              return (
+                <div key={artist.id} className="flex flex-col items-center text-center">
+                  {/* Avatar + delete X pinned (close to artist, correct scale) */}
+                  <div className="relative">
+                    <div
+                      onClick={() => goToArtist(artist.id)}
+                      className="w-[118px] h-[118px] sm:w-[132px] sm:h-[132px] rounded-full cursor-pointer transition-transform duration-200 hover:scale-[1.02] shadow-[0_12px_26px_rgba(0,0,0,0.10)]"
+                      style={{
+                        backgroundColor: hasImg ? "#F4F5F7" : color,
+                        overflow: "hidden",
+                        border: hasImg ? "2px solid" : "none",
+                        borderColor: hasImg ? color : undefined,
+                      }}
+                      aria-label={`Open ${artist.name}`}
+                      title={artist.name}
+                    >
+                      {hasImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={artist.image_url as string}
+                          alt={artist.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+
+                    {/* X like your reference: small, on the corner, not floating far away */}
+                    {!readonly && editMode && (
+                      <button
+                        onClick={() => handleRemoveFavourite(artist.id)}
+                        className="absolute -top-2 -right-2 w-9 h-9 rounded-full bg-white border border-black/20 shadow-sm flex items-center justify-center hover:border-black/35 transition"
+                        aria-label="Remove from favourites"
+                        title="Remove"
+                      >
+                        <span className="text-[22px] leading-none font-light text-black/70">×</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p
+                    className="mt-4 text-[16px] leading-tight line-clamp-2"
+                    style={{ fontFamily: "Times New Roman, serif", opacity: 0.92 }}
+                  >
+                    {artist.name}
+                  </p>
                 </div>
               );
             })}
           </div>
         </div>
       ) : (
-        <p className="text-center text-neutral-500">No artists yet.</p>
+        <p className="text-center text-neutral-500 mt-16">No artists yet.</p>
       )}
     </main>
   );

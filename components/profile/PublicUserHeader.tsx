@@ -35,6 +35,15 @@ export default function PublicUserHeader({ userId }: Props) {
     []
   );
 
+  const nameFontSizePx = useMemo(() => {
+    const len = fullName.trim().length;
+    if (len === 0) return undefined;
+    if (len <= 16) return 42;
+    if (len <= 22) return 36;
+    if (len <= 28) return 32;
+    return 28;
+  }, [fullName]);
+
   // Perfil base
   useEffect(() => {
     if (!userId) return;
@@ -44,16 +53,19 @@ export default function PublicUserHeader({ userId }: Props) {
         .select('avatar_url, full_name, username')
         .eq('id', userId)
         .single();
+
       if (data) {
         setAvatarUrl(data.avatar_url || null);
         setFullName(data.full_name || 'User');
         setUsername(data.username || '');
       }
+
       const { data: fcounts } = await supabase
         .from('profile_follow_counts')
         .select('followers_count')
         .eq('profile_id', userId)
         .single();
+
       setFollowersCount(fcounts?.followers_count ?? 0);
     };
     run();
@@ -70,10 +82,12 @@ export default function PublicUserHeader({ userId }: Props) {
       setAuthed(!!session?.user);
       setMe(session?.user?.id ?? null);
     })();
+
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
       setAuthed(!!session?.user);
       setMe(session?.user?.id ?? null);
     });
+
     return () => {
       sub.subscription.unsubscribe();
       active = false;
@@ -89,11 +103,13 @@ export default function PublicUserHeader({ userId }: Props) {
         .select('genres (slug)')
         .eq('user_id', userId)
         .limit(2);
+
       const names =
         data
           ?.map((it: any) => it.genres?.slug)
           .filter(Boolean)
           .map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)) || [];
+
       setGenres(names);
     };
     run();
@@ -126,6 +142,7 @@ export default function PublicUserHeader({ userId }: Props) {
     e.stopPropagation();
     setMenuOpen((s) => !s);
   }
+
   async function onBlock(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -139,6 +156,7 @@ export default function PublicUserHeader({ userId }: Props) {
       alert('Could not block user. Please try again.');
     }
   }
+
   function onReportUser(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -150,13 +168,17 @@ export default function PublicUserHeader({ userId }: Props) {
     setMenuOpen(false);
   }
 
-  /* Icono fijo de dos personas (followers) */
-  const PeopleIcon = () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0">
-      <path
-        d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm0 2c-2.67 0-8 1.34-8 4v1h10v-1c0-2.66-5.33-4-8-4Zm8 0c-.29 0-.62.02-.97.05A6.33 6.33 0 0 1 18 17v1h6v-1c0-2.66-5.33-4-8-4Z"
-        fill="#1F48AF"
-      />
+  /* ICONO NUEVO: dos personas (una apoyada ligeramente sobre la otra) */
+  const TwoPeopleIcon = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+      <g fill="none" stroke="#1F48AF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        {/* Persona 1 */}
+        <circle cx="8" cy="8.5" r="2.3" />
+        <path d="M5.6 15c0-2 1.9-3.7 4.4-3.7s4.4 1.7 4.4 3.7" />
+        {/* Persona 2 (ligeramente detrás y apoyada) */}
+        <circle cx="15" cy="7.8" r="2.1" />
+        <path d="M12.8 14.4c.4-1.5 1.6-2.6 3.3-2.6 1.9 0 3.5 1.4 3.5 3.2" />
+      </g>
     </svg>
   );
 
@@ -172,27 +194,32 @@ export default function PublicUserHeader({ userId }: Props) {
         <div className="flex flex-col items-center sm:items-start text-center sm:text-left w-full">
           {/* Géneros */}
           <p
-            className="text-[15px] font-light text-[#1d1d1d] leading-tight"
+            className="text-[15px] font-light text-[#1d1d1d] leading-tight transition-all duration-200"
             style={{ fontFamily: 'Times New Roman, serif' }}
           >
             {genres.length === 2 ? `${genres[0]} and ${genres[1]}` : '—'}
           </p>
 
-          {/* Nombre */}
-          <h1
-            className="text-[clamp(2rem,5vw,2.625rem)] font-normal mt-1 mb-2"
-            style={{ fontFamily: 'Times New Roman, serif' }}
-          >
-            {fullName}
-          </h1>
+          {/* Nombre (misma lógica visual del UserHeader original) */}
+          <div className="mt-1 mb-4">
+            <h1
+              className="font-normal whitespace-nowrap overflow-hidden text-ellipsis"
+              style={{
+                fontFamily: 'Times New Roman, serif',
+                fontSize: nameFontSizePx ? `${nameFontSizePx}px` : undefined,
+              }}
+            >
+              {fullName || ' '}
+            </h1>
+          </div>
 
-          {/* Favourite blocks */}
-          <div className="flex flex-wrap justify-center sm:justify-start gap-6 mb-4">
+          {/* Favoritos */}
+          <div className="flex flex-wrap justify-center sm:justify-start gap-6 mb-3">
             {/* Records */}
             <Link
-              href={`/u/records${queryUser}`}
+              href={`/u/FavouriteRecordsViewer${queryUser}`}
               aria-disabled={!username}
-              className={`flex items-center gap-3 hover:opacity-80 transition-all ${disabledLinkClass}`}
+              className={`flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all ${disabledLinkClass}`}
             >
               <div className="relative w-[48px] h-[48px]">
                 {favouriteRecords.length >= 2 ? (
@@ -208,18 +235,12 @@ export default function PublicUserHeader({ userId }: Props) {
                   ))
                 ) : (
                   <>
-                    <div
-                      className="absolute left-0 top-0 w-[40px] h-[40px] rounded-sm z-10"
-                      style={{ backgroundColor: WALCORD_BLUES.blue2 }}
-                    />
-                    <div
-                      className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-sm z-0"
-                      style={{ backgroundColor: WALCORD_BLUES.blue1 }}
-                    />
+                    <div className="absolute left-0 top-0 w-[40px] h-[40px] rounded-sm z-10" style={{ backgroundColor: color1 }} />
+                    <div className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-sm z-0" style={{ backgroundColor: color2 }} />
                   </>
                 )}
               </div>
-              <div className="text-[15px] font-light leading-tight">
+              <div className="text-[15px] font-light leading-tight" style={{ fontFamily: 'Roboto, sans-serif' }}>
                 <div>Favourite</div>
                 <div>Records</div>
               </div>
@@ -229,7 +250,7 @@ export default function PublicUserHeader({ userId }: Props) {
             <Link
               href={`/u/artists${queryUser}`}
               aria-disabled={!username}
-              className={`flex items-center gap-3 hover:opacity-80 transition-all ${disabledLinkClass}`}
+              className={`flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all ${disabledLinkClass}`}
             >
               <div className="relative w-[48px] h-[48px]">
                 {favouriteArtists.length >= 2 ? (
@@ -245,26 +266,20 @@ export default function PublicUserHeader({ userId }: Props) {
                   ))
                 ) : (
                   <>
-                    <div
-                      className="absolute left-0 top-0 w-[40px] h-[40px] rounded-full z-10"
-                      style={{ backgroundColor: WALCORD_BLUES.blue4 }}
-                    />
-                    <div
-                      className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-full z-0"
-                      style={{ backgroundColor: WALCORD_BLUES.blue3 }}
-                    />
+                    <div className="absolute left-0 top-0 w-[40px] h-[40px] rounded-full z-10" style={{ backgroundColor: color3 }} />
+                    <div className="absolute left-[8px] top-0 w-[40px] h-[40px] rounded-full z-0" style={{ backgroundColor: color4 }} />
                   </>
                 )}
               </div>
-              <div className="text-[15px] font-light leading-tight">
+              <div className="text-[15px] font-light leading-tight" style={{ fontFamily: 'Roboto, sans-serif' }}>
                 <div>Favourite</div>
                 <div>Artists</div>
               </div>
             </Link>
           </div>
 
-          {/* Botones (ajustados como en el UserHeader normal) */}
-          <div className="mt-1 flex items-center gap-2">
+          {/* Actions (copiadas del UserHeader original) */}
+          <div className="mt-1 flex items-center gap-3">
             <Link
               href={`/u/ConcertsViewer${queryUser}`}
               aria-disabled={!username}
@@ -274,7 +289,6 @@ export default function PublicUserHeader({ userId }: Props) {
               Future concerts
             </Link>
 
-            {/* Navegación correcta al viewer de opiniones */}
             <Link
               href={`/u/ListenerTakesViewer${queryUser}`}
               aria-disabled={!username}
@@ -285,18 +299,15 @@ export default function PublicUserHeader({ userId }: Props) {
             </Link>
           </div>
 
-          {/* Social (solo followers) */}
-          <div className="mt-6 flex items-center gap-2">
-            <PeopleIcon />
-            <span
-              className="text-sm text-neutral-700 select-none"
-              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
-            >
+          {/* Followers (NO clicable) */}
+          <div className="mt-6 flex items-center gap-2 select-none">
+            <TwoPeopleIcon />
+            <span className="text-sm text-neutral-700" style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}>
               {followersCount} followers
             </span>
           </div>
 
-          {/* Acciones (solo Follow) */}
+          {/* Follow / Following + menú 3 puntos (mantener) */}
           {!isSelf && authed !== null && (
             <div className="mt-4 flex items-center gap-2 shrink-0 relative">
               {authed ? (
@@ -328,11 +339,19 @@ export default function PublicUserHeader({ userId }: Props) {
                       e.stopPropagation();
                     }}
                   >
-                    <button type="button" onClick={onReportUser} className="block w-full text-left px-3 py-2 hover:bg-white/10">
+                    <button
+                      type="button"
+                      onClick={onReportUser}
+                      className="block w-full text-left px-3 py-2 hover:bg-white/10"
+                    >
                       Report user
                     </button>
                     {authed && (
-                      <button type="button" onClick={onBlock} className="block w-full text-left px-3 py-2 hover:bg-white/10">
+                      <button
+                        type="button"
+                        onClick={onBlock}
+                        className="block w-full text-left px-3 py-2 hover:bg-white/10"
+                      >
                         Block
                       </button>
                     )}

@@ -1,42 +1,110 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { ARTIST_COLOR_PALETTE } from '../../lib/artist.Colors';
 
-type Artist = { id: string; name: string; place: string | null; image_url: string | null };
-type FavRow = { artist_id: string; since_year: number };
+/* ===============================
+   Tipos (igual base)
+   =============================== */
+type Artist = {
+  id: string;
+  name: string;
+  image_url?: string | null;
+  place?: string | null; // NO se renderiza en viewer
+  start_year?: number | null;
+};
 
-function getArtistColor(artistId: string) {
-  const hash = artistId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const index = hash % ARTIST_COLOR_PALETTE.length;
-  return ARTIST_COLOR_PALETTE[index];
+type FavRow = {
+  artist_id: string;
+  since_year?: number | null; // NO se renderiza en viewer
+};
+
+/* ===============================
+   Utilidades (idénticas al original)
+   - Paleta determinista (sin guardar en BD).
+   =============================== */
+const PALETTE = [
+  '#1F48AF',
+  '#0F254E',
+  '#1B2A41',
+  '#2E4057',
+  '#14213D',
+  '#2F3E46',
+  '#0B4F6C',
+  '#1D3557',
+  '#2C3E50',
+  '#112D32',
+  '#4C4C47',
+  '#3D2C2E',
+  '#6B2E2E',
+];
+
+function hashName(name: string) {
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) h = (h * 33) ^ name.charCodeAt(i);
+  return Math.abs(h);
+}
+function colorFor(name: string) {
+  const idx = hashName(name) % PALETTE.length;
+  return PALETTE[idx];
 }
 
 type Props = { viewerId?: string };
 
 export default function FavouriteArtistsViewer({ viewerId }: Props) {
   const searchParams = useSearchParams();
+
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(viewerId ?? null);
+  const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
 
   const [artists, setArtists] = useState<Artist[]>([]);
   const [favourites, setFavourites] = useState<FavRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
+  /* ===============================
+     Resolver username -> user_id (viewer)
+     =============================== */
   useEffect(() => {
     if (viewerId) return;
-    const username = searchParams?.get('username');
+
+    const username = searchParams?.get('username') || searchParams?.get('handle');
     if (!username) return;
+
     (async () => {
-      const { data } = await supabase.from('profiles').select('id').eq('username', username).single();
-      if (data?.id) setResolvedUserId(data.id);
+      setLoading(true);
+      setNotFound(false);
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id,username')
+        .eq('username', username)
+        .maybeSingle();
+
+      if (error || !data?.id) {
+        setNotFound(true);
+        setResolvedUserId(null);
+        setResolvedUsername(null);
+        setLoading(false);
+        return;
+      }
+
+      setResolvedUserId(data.id);
+      setResolvedUsername(data.username ?? username);
     })();
   }, [viewerId, searchParams]);
 
+  /* ===============================
+     Cargar favoritos + artistas
+     =============================== */
   useEffect(() => {
-    if (!resolvedUserId) return;
+    if (!resolvedUserId) {
+      if (!notFound) setLoading(false);
+      return;
+    }
+
     (async () => {
       setLoading(true);
 
@@ -45,47 +113,69 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
         .select('artist_id, since_year')
         .eq('user_id', resolvedUserId);
 
-      const ids: string[] = Array.from(new Set(((favs as FavRow[]) || []).map((f) => f.artist_id)));
+      const favRows = ((favs as FavRow[]) || []).filter((f) => !!f.artist_id);
+      const ids = Array.from(new Set(favRows.map((f) => f.artist_id)));
 
       let arts: Artist[] = [];
       if (ids.length > 0) {
-        const { data } = await supabase.from('artists').select('id,name,place,image_url').in('id', ids);
+        const { data } = await supabase
+          .from('artists')
+          .select('id,name,image_url,place,start_year')
+          .in('id', ids);
+
         arts = (data as Artist[]) || [];
       }
 
-      setFavourites((favs as FavRow[]) || []);
-      setArtists(arts || []);
+      setFavourites(favRows);
+      setArtists(arts);
       setLoading(false);
     })();
-  }, [resolvedUserId]);
+  }, [resolvedUserId, notFound]);
+
+  const artistsById = useMemo(() => {
+    const map = new Map<string, Artist>();
+    for (const a of artists) map.set(a.id, a);
+    return map;
+  }, [artists]);
+
+  const favouriteArtists = useMemo(() => {
+    return favourites
+      .map((f) => artistsById.get(f.artist_id))
+      .filter(Boolean) as Artist[];
+  }, [favourites, artistsById]);
 
   if (loading) {
     return (
       <main className="min-h-screen bg-white text-black font-[Roboto]">
-        {/* Banner actualizado */}
-        <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
-          <button
-            onClick={() => history.back()}
-            aria-label="Go back"
-            className="p-2 rounded-full hover:bg-[#1A3A95] transition"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-        </header>
+        {/* Header (igual que el original, sin acciones) */}
+        <div className="w-full px-5 sm:px-6 pt-9">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col">
+              <div
+                className="text-[11px] tracking-[0.28em] uppercase text-black/50"
+                style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+              >
+                Collection
+              </div>
 
-        <div className="w-full flex justify-center mt-10">
-          <p className="text-sm text-neutral-600">Loading…</p>
+              <h1
+                className="mt-2 text-[clamp(2.05rem,7.0vw,3.15rem)] leading-[0.95]"
+                style={{
+                  fontFamily: 'Times New Roman, serif',
+                  fontWeight: 400,
+                  letterSpacing: '-0.25px',
+                  opacity: 0.92,
+                }}
+              >
+                Favourite Artists
+              </h1>
+
+              <div className="mt-4 h-[1px] w-24 bg-black/55" />
+              <p className="text-sm text-neutral-600 mt-6">Loading…</p>
+            </div>
+
+            <div className="mt-2 w-[86px]" />
+          </div>
         </div>
       </main>
     );
@@ -93,78 +183,102 @@ export default function FavouriteArtistsViewer({ viewerId }: Props) {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner actualizado */}
-      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-      </header>
+      {/* Header (calcado al original, sin acciones) */}
+      <div className="w-full px-5 sm:px-6 pt-9">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col">
+            <div
+              className="text-[11px] tracking-[0.28em] uppercase text-black/50"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+            >
+              Collection
+            </div>
 
-      <div className="w-full flex flex-col items-center mt-8 mb-6">
-        <h1
-          className="text-[clamp(1.5rem,3.5vw,2.4rem)]"
-          style={{ fontFamily: 'Times New Roman', fontWeight: 400, opacity: 0.85, letterSpacing: '0.4px' }}
-        >
-          Favourite Artists
-        </h1>
-        <hr className="w-[90%] mt-4 border-t-[1.5px] border-black opacity-60" />
+            <h1
+              className="mt-2 text-[clamp(2.05rem,7.0vw,3.15rem)] leading-[0.95]"
+              style={{
+                fontFamily: 'Times New Roman, serif',
+                fontWeight: 400,
+                letterSpacing: '-0.25px',
+                opacity: 0.92,
+              }}
+            >
+              Favourite Artists
+            </h1>
+
+            <div className="mt-4 h-[1px] w-24 bg-black/55" />
+
+            {resolvedUsername && (
+              <p className="text-sm text-neutral-600 mt-4">Viewing @{resolvedUsername}</p>
+            )}
+          </div>
+
+          {/* Sin Edit / sin + */}
+          <div className="mt-2 w-[86px]" />
+        </div>
       </div>
 
-      {favourites.length === 0 ? (
-        <p className="text-center text-neutral-600 text-sm mb-24">No artists yet.</p>
-      ) : (
-        <div className="w-full px-4 sm:px-6 pb-24">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {favourites.map((fav) => {
-              const artist = artists.find((a) => a.id === fav.artist_id);
-              if (!artist) return null;
-              const color = getArtistColor(artist.id);
+      {/* Content */}
+      {notFound ? (
+        <p
+          className="text-center text-[16px] text-black/80 mt-16"
+          style={{ fontFamily: 'Times New Roman, Times, serif' }}
+        >
+          User not found.
+        </p>
+      ) : favouriteArtists.length > 0 ? (
+        <div className="w-full px-5 sm:px-6 mt-10 pb-36">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
+            Favourites · {favouriteArtists.length}
+          </div>
+
+          {/* Grid idéntica */}
+          <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-7 gap-y-10">
+            {favouriteArtists.map((artist) => {
+              const hasImg = !!artist.image_url;
+              const color = colorFor(artist.name || '');
+
               return (
-                <Link
-                  key={fav.artist_id}
-                  href={`/artist/${fav.artist_id}`}
-                  className="shadow-sm rounded-3xl overflow-hidden hover:bg-neutral-50 transition"
-                >
-                  <div className="w-full h-36 sm:h-40 flex items-center justify-center" style={{ backgroundColor: color }}>
-                    {artist.image_url ? (
-                      <img src={artist.image_url} alt={artist.name} className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white/40" />
-                    )}
-                  </div>
-                  <div className="p-3 sm:p-4 text-center">
-                    <p className="text-sm sm:text-lg truncate" style={{ fontFamily: 'Times New Roman, serif', fontWeight: 400, opacity: 0.9 }}>
-                      {artist.name}
-                    </p>
-                    <p className="text-xs sm:text-sm text-gray-500 font-light truncate">
-                      {artist.place}
-                    </p>
-                    <div className="mt-2 sm:mt-3 mb-1">
-                      <span className="inline-flex items-center justify-center h-8 sm:h-9 px-3 sm:px-4 rounded-full text-xs sm:text-sm text-white font-light bg-[#1F48AF]">
-                        Since {fav.since_year}
-                      </span>
+                <div key={artist.id} className="flex flex-col items-center text-center">
+                  <Link href={`/artist/${artist.id}`} className="relative">
+                    <div
+                      className="w-[118px] h-[118px] sm:w-[132px] sm:h-[132px] rounded-full cursor-pointer transition-transform duration-200 hover:scale-[1.02] shadow-[0_12px_26px_rgba(0,0,0,0.10)]"
+                      style={{
+                        backgroundColor: hasImg ? '#F4F5F7' : color,
+                        overflow: 'hidden',
+                        border: hasImg ? '2px solid' : 'none',
+                        borderColor: hasImg ? color : undefined,
+                      }}
+                      aria-label={`Open ${artist.name}`}
+                      title={artist.name}
+                    >
+                      {hasImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={artist.image_url as string}
+                          alt={artist.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : null}
                     </div>
-                  </div>
-                </Link>
+                  </Link>
+
+                  <p
+                    className="mt-4 text-[16px] leading-tight line-clamp-2"
+                    style={{ fontFamily: 'Times New Roman, serif', opacity: 0.92 }}
+                  >
+                    {artist.name}
+                  </p>
+
+                  {/* ❌ SIN place */}
+                  {/* ❌ SIN since */}
+                </div>
               );
             })}
           </div>
         </div>
+      ) : (
+        <p className="text-center text-neutral-500 mt-16">No artists yet.</p>
       )}
     </main>
   );

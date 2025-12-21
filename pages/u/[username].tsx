@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { useRouter } from 'next/router';
 import PublicUserHeader from '../../components/profile/PublicUserHeader';
 import PostCard from '../../components/PostCard';
+import MusicCollectionPostCard from '../../components/MusicCollectionPostCard';
 
 type CardRow = {
-  id: string;                // concert_id
+  id: string; // concert_id
   user_id: string;
   artist_id: string | null;
   artist_name: string | null;
@@ -28,6 +29,58 @@ export default function ExternalProfilePage() {
   const [concertsLoading, setConcertsLoading] = useState(true);
   const [concerts, setConcerts] = useState<CardRow[]>([]);
 
+  const [collectionLoading, setCollectionLoading] = useState(true);
+  const [collectionPosts, setCollectionPosts] = useState<any[]>([]);
+
+  // Tabs internas del perfil (Musical Memories / Music Collection)
+  const [activeTab, setActiveTab] = useState<'memories' | 'collection'>('memories');
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollSyncTimeout = useRef<any>(null);
+  const isAutoScrolling = useRef(false);
+
+  // Sincronizar scroll horizontal con el tab activo
+  useEffect(() => {
+    if (!scrollRef.current) return;
+
+    isAutoScrolling.current = true;
+
+    if (activeTab === 'memories') {
+      scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    } else {
+      const width = scrollRef.current.clientWidth;
+      scrollRef.current.scrollTo({ left: width, behavior: 'smooth' });
+    }
+
+    const reset = setTimeout(() => {
+      isAutoScrolling.current = false;
+    }, 350);
+
+    return () => clearTimeout(reset);
+  }, [activeTab]);
+
+  const handleHorizontalScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    // Si el scroll lo ha provocado el click del tab (scrollTo smooth), no resincro
+    if (isAutoScrolling.current) return;
+
+    if (scrollSyncTimeout.current) clearTimeout(scrollSyncTimeout.current);
+
+    scrollSyncTimeout.current = setTimeout(() => {
+      const width = el.clientWidth || 1;
+      const next = el.scrollLeft >= width / 2 ? 'collection' : 'memories';
+
+      setActiveTab((prev) => (prev === next ? prev : (next as any)));
+    }, 80);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (scrollSyncTimeout.current) clearTimeout(scrollSyncTimeout.current);
+    };
+  }, []);
+
   /* ===== username → user_id ===== */
   useEffect(() => {
     if (!username) return;
@@ -37,7 +90,12 @@ export default function ExternalProfilePage() {
         .select('id')
         .eq('username', username)
         .single();
-      if (error || !data?.id) { router.replace('/feed'); return; }
+
+      if (error || !data?.id) {
+        router.replace('/feed');
+        return;
+      }
+
       setTargetUserId(data.id);
       setProfileLoading(false);
     })();
@@ -51,15 +109,17 @@ export default function ExternalProfilePage() {
       setConcertsLoading(true);
 
       // 1) Intento con view optimizada
-      const { data: byView } = await supabase
+      const { data: byView, error } = await supabase
         .from('v_concert_cards')
-        .select('*')
+        .select(
+          'concert_id, user_id, artist_id, artist_name, country_code, country_name, city, event_date, cover_url'
+        )
         .eq('user_id', targetUserId)
         .order('event_date', { ascending: false });
 
-      if (byView && byView.length > 0) {
+      if (!error && byView && byView.length > 0) {
         setConcerts(
-          (byView as any[]).map(r => ({
+          (byView as any[]).map((r) => ({
             id: r.concert_id,
             user_id: r.user_id,
             artist_id: r.artist_id,
@@ -78,12 +138,14 @@ export default function ExternalProfilePage() {
       // 2) Fallback directo a tablas
       const { data } = await supabase
         .from('concerts')
-        .select(`
+        .select(
+          `
           id, user_id, artist_id, country_code, city, event_date,
           artists(name),
           countries(name),
           concert_media(url, created_at)
-        `)
+        `
+        )
         .eq('user_id', targetUserId)
         .order('event_date', { ascending: false });
 
@@ -92,6 +154,7 @@ export default function ExternalProfilePage() {
           (c.concert_media || []).sort(
             (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           )[0]?.url ?? null;
+
         return {
           id: c.id,
           user_id: c.user_id,
@@ -120,112 +183,201 @@ export default function ExternalProfilePage() {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, [targetUserId]);
 
-  /* ===== agrupar por año (años DESC; dentro fecha DESC) ===== */
+  /* ===== cargar MUSIC COLLECTION del usuario ===== */
+  useEffect(() => {
+    if (!targetUserId) return;
+
+    const fetchCollection = async () => {
+      setCollectionLoading(true);
+
+      const { data, error } = await supabase
+        .from('music_collections')
+        .select('id, user_id, record_id, photo_url, caption, created_at')
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading music collection', error.message);
+        setCollectionPosts([]);
+        setCollectionLoading(false);
+        return;
+      }
+
+      setCollectionPosts(data ?? []);
+      setCollectionLoading(false);
+    };
+
+    void fetchCollection();
+
+    const ch = supabase
+      .channel('external-profile-collection')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'music_collections', filter: `user_id=eq.${targetUserId}` },
+        () => void fetchCollection()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [targetUserId]);
+
+  /* ===== agrupar por año ===== */
   const groupsOrdered = useMemo(() => {
     const map = new Map<string, CardRow[]>();
+
     for (const c of concerts) {
-      const year = c.event_date ? new Date(c.event_date).getFullYear() : null;
+      const year = c?.event_date ? new Date(c.event_date).getFullYear() : null;
       const key = year && year >= 1950 && year <= 2050 ? String(year) : 'Unknown';
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(c);
     }
+
     for (const [, arr] of map) {
       arr.sort(
-        (a, b) =>
-          new Date(b.event_date || 0).getTime() - new Date(a.event_date || 0).getTime()
+        (a, b) => new Date(b.event_date || 0).getTime() - new Date(a.event_date || 0).getTime()
       );
     }
+
     const years = Array.from(map.keys())
-      .filter(k => k !== 'Unknown')
+      .filter((k) => k !== 'Unknown')
       .map(Number)
       .sort((a, b) => b - a)
-      .map(String);
+      .map((n) => String(n));
 
-    const ordered = years.map(y => ({ yearLabel: y, items: map.get(y)! }));
+    const ordered = years.map((y) => ({
+      yearLabel: y,
+      items: map.get(y)!,
+    }));
+
     if (map.has('Unknown')) ordered.push({ yearLabel: 'Unknown', items: map.get('Unknown')! });
+
     return ordered;
   }, [concerts]);
 
   if (profileLoading || !targetUserId) {
     return (
       <div className="min-h-screen flex items-center justify-center text-black bg-white">
-        <p>Loading profile…</p>
+        <p>Loading profile...</p>
       </div>
     );
   }
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Banner (alineado con el del perfil actual) */}
-      <div className="w-full h-24 flex items-end justify-between px-6 bg-[#1F48AF] pb-3 pt-[env(safe-area-inset-top)]">
-        <div className="flex items-center gap-2 ml-auto">
-          <a
-            href="/feed"
-            aria-label="Back to The Wall"
-            className="inline-flex items-center gap-2 rounded-full bg-white/95 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition-all"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M19 12H5m6 7l-7-7 7-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="hidden sm:inline">The Wall</span>
-          </a>
-        </div>
-      </div>
+      {/* TOP — en móvil sin márgenes enormes (sin botón/settings en external) */}
+      <div className="w-full px-5 sm:px-12 pt-8 pb-4 flex justify-end" />
 
-      {/* Título (Times New Roman) */}
-      <div className="w-full px-10 sm:px-12 mt-6 mb-8 relative">
-        <h1 className="text-[clamp(1.8rem,4.5vw,2.375rem)] font-normal" style={{ fontFamily: 'Times New Roman, serif' }}>
-          Profile
-        </h1>
-        <hr className="mt-2 border-t border-black/50" />
-      </div>
-
-      {/* Layout */}
-      <div className="px-10 sm:px-12 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-10 items-start">
+      {/* MAIN LAYOUT — en móvil pegado a bordes, en desktop mantiene aire */}
+      <div className="px-5 sm:px-12 grid grid-cols-1 lg:grid-cols-[1fr_1.35fr] gap-10 items-start">
         <div className="m-0 p-0">
           <PublicUserHeader userId={targetUserId} />
         </div>
 
-        <aside className="m-0 p-0">
-          {/* Encabezado de sección alineado al perfil actual */}
-          <h2 className="text-[clamp(1.1rem,2vw,1.5rem)] font-light mb-1">Musical Memories</h2>
+        <div className="m-0 p-0">
+          {/* Tabs: Musical Memories / Music Collection */}
+          <div className="flex gap-6 text-[1rem] font-light mb-4 pl-1">
+            <button
+              className={`transition-all ${
+                activeTab === 'memories'
+                  ? 'text-black underline underline-offset-8'
+                  : 'text-neutral-400'
+              }`}
+              onClick={() => setActiveTab('memories')}
+            >
+              Musical Memories
+            </button>
 
-          {concertsLoading ? (
-            <div className="mt-4 text-sm text-neutral-600">Loading memories…</div>
-          ) : groupsOrdered.length === 0 ? (
-            <div className="mt-4 text-sm text-neutral-600">No musical memories yet.</div>
-          ) : (
-            groupsOrdered.map(({ yearLabel, items }) => (
-              <section key={yearLabel} className="mt-7">
-                <div className="flex items-center">
-                  <div className="text-[0.78rem] tracking-[0.14em] uppercase text-neutral-500">{yearLabel}</div>
-                  <div className="h-px flex-1 ml-6 bg-black/10" />
-                </div>
+            <button
+              className={`transition-all ${
+                activeTab === 'collection'
+                  ? 'text-black underline underline-offset-8'
+                  : 'text-neutral-400'
+              }`}
+              onClick={() => setActiveTab('collection')}
+            >
+              Music Collection
+            </button>
+          </div>
 
-                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-7">
-                  {items.map((c) => (
-                    <PostCard
-                      key={c.id}
-                      post={{
-                        id: c.id,
-                        user_id: c.user_id,
-                        artist_id: c.artist_id,
-                        artist_name: c.artist_name,
-                        country_code: c.country_code,
-                        country_name: c.country_name,
-                        event_date: c.event_date,
-                        cover_url: c.cover_url,
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))
-          )}
-        </aside>
+          {/* Contenedor horizontal tipo Instagram */}
+          <div
+            ref={scrollRef}
+            onScroll={handleHorizontalScroll}
+            className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar transition-all"
+          >
+            {/* PANEL 1 — MUSICAL MEMORIES */}
+            <div className="snap-center min-w-full pr-0 sm:pr-10">
+              <aside className="m-0 p-0">
+                <div className="mt-[1.1rem]" />
+
+                {concertsLoading ? (
+                  <div className="mt-4 text-sm text-neutral-600">Loading memories…</div>
+                ) : groupsOrdered.length === 0 ? (
+                  <div className="mt-4 text-sm text-neutral-600">No musical memories yet.</div>
+                ) : (
+                  groupsOrdered.map(({ yearLabel, items }) => (
+                    <section key={yearLabel} className="mt-6">
+                      <div className="flex items-center">
+                        <div className="text-[0.75rem] tracking-[0.14em] uppercase text-neutral-500">
+                          {yearLabel}
+                        </div>
+                        <div className="h-px flex-1 ml-6 bg-black/10" />
+                      </div>
+
+                      {/* ✅ 2 por fila en móvil, estilo IG */}
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-7">
+                        {items.map((c) => (
+                          <PostCard
+                            key={c.id}
+                            post={{
+                              id: c.id,
+                              user_id: c.user_id,
+                              artist_id: c.artist_id,
+                              artist_name: c.artist_name,
+                              country_code: c.country_code,
+                              country_name: c.country_name,
+                              event_date: c.event_date,
+                              cover_url: c.cover_url,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))
+                )}
+              </aside>
+            </div>
+
+            {/* PANEL 2 — MUSIC COLLECTION */}
+            <div className="snap-center min-w-full pl-0 sm:pl-10">
+              <aside className="m-0 p-0">
+                <div className="mt-[1.1rem]" />
+
+                {collectionLoading ? (
+                  <div className="mt-4 text-sm text-neutral-600">Loading collection…</div>
+                ) : collectionPosts.length === 0 ? (
+                  <div className="mt-4 text-sm text-neutral-600">
+                    No posts in your collection yet.
+                  </div>
+                ) : (
+                  /* ✅ 2 por fila en móvil, 3 en desktop */
+                  <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
+                    {collectionPosts.map((p) => (
+                      <MusicCollectionPostCard key={p.id} post={p} />
+                    ))}
+                  </div>
+                )}
+              </aside>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );

@@ -1,11 +1,10 @@
-'use client';
+"use client";
 
+import type React from "react";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import Image from "next/image";
 import WalcordCircle from "../../components/icons/WalcordCircle";
-import WalcordPeopleIcon from "../../components/icons/WalcordPeopleIcon";
 import Link from "next/link";
 
 /** Tooltip minimal Walcord */
@@ -20,6 +19,28 @@ const Tooltip = ({ children, message }: { children: React.ReactNode; message: st
     </span>
   </div>
 );
+
+/** Badge editorial del rating */
+const RatingBadge = ({ rate, size = 44 }: { rate: number; size?: number }) => {
+  if (Number.isNaN(rate)) return null;
+  const box = size;
+  const dotBox = Math.max(14, Math.round(size * 0.32));
+  const dot = Math.max(6, Math.round(size * 0.14));
+  return (
+    <div
+      className="relative inline-flex items-center justify-center rounded-full border border-neutral-900 bg-white text-neutral-900 select-none"
+      style={{ width: box, height: box, fontSize: Math.max(12, Math.round(size * 0.3)) }}
+    >
+      {rate}
+      <div
+        className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full border border-[#1F48AF] bg-white"
+        style={{ width: dotBox, height: dotBox }}
+      >
+        <div className="rounded-full bg-[#1F48AF]" style={{ width: dot, height: dot }} />
+      </div>
+    </div>
+  );
+};
 
 /** Modal simple y limpio */
 const Modal = ({
@@ -60,6 +81,7 @@ type Profile = {
   id: string;
   full_name: string | null;
   username: string | null;
+  avatar_url?: string | null;
 };
 
 type Thought = {
@@ -73,7 +95,8 @@ type Thought = {
   likes_count?: number;
   comments_count?: number;
   liked_by_me?: boolean;
-  rating_id?: string | null; // 🔗 rating enlazado (nuevo)
+  rating_id?: string | null;
+  rate?: number | null;
 };
 
 type ThoughtComment = {
@@ -84,22 +107,24 @@ type ThoughtComment = {
   profile?: Profile;
 };
 
+type LikeUser = {
+  user_id: string;
+  username: string | null;
+  avatar_url: string | null;
+};
+
 export default function RecordProfile() {
   const router = useRouter();
   const { id } = router.query;
   const recordId = Array.isArray(id) ? id[0] : (id as string | undefined);
 
   const [record, setRecord] = useState<any>(null);
-  const [friends, setFriends] = useState<any[]>([]);
   const [averageRate, setAverageRate] = useState<number | null>(null);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [meProfile, setMeProfile] = useState<Profile | null>(null);
   const [isFromFavouriteArtist, setIsFromFavouriteArtist] = useState<boolean>(false);
 
-  // modal amigos
-  const [openFriends, setOpenFriends] = useState(false);
-
-  // ✅ Modal de login contextual (solo si no hay sesión)
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginTitle, setLoginTitle] = useState<string>("Sign in to continue");
   const requireAuth = (title: string) => {
@@ -111,124 +136,198 @@ export default function RecordProfile() {
     return true;
   };
 
-  // ────────────────────────────────────────────────
-  // STATE: Listener Takes embebido en este record
-  // ────────────────────────────────────────────────
+  // ✅ FAVOURITE RECORD (Add button)
+  const [isFavourite, setIsFavourite] = useState(false);
+  const [favLoading, setFavLoading] = useState(false);
+
   const [takesLoading, setTakesLoading] = useState<boolean>(true);
   const [takes, setTakes] = useState<Thought[]>([]);
   const [takeBody, setTakeBody] = useState<string>("");
-  const [takeRate, setTakeRate] = useState<number | null>(null); // ⭐ rate requerido en composer
+  const [takeRate, setTakeRate] = useState<number | null>(null);
   const [takePosting, setTakePosting] = useState<boolean>(false);
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [commentsMap, setCommentsMap] = useState<Record<string, ThoughtComment[]>>({});
   const [replyFor, setReplyFor] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState<string>("");
   const [hasMyTake, setHasMyTake] = useState<boolean>(false);
-  const [showComposer, setShowComposer] = useState<boolean>(false);
   const composerRef = useRef<HTMLDivElement | null>(null);
 
-  // Edición de take
+  const [composerOpen, setComposerOpen] = useState<boolean>(false);
+  const [ratePickerOpen, setRatePickerOpen] = useState<boolean>(false);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState<string>("");
 
+  const [likesPanelOpen, setLikesPanelOpen] = useState(false);
+  const [likesUsers, setLikesUsers] = useState<LikeUser[]>([]);
+  const [loadingLikesUsers, setLoadingLikesUsers] = useState(false);
+  const [likesForRecId, setLikesForRecId] = useState<string | null>(null);
+
+  /** Sync auth + profile */
   useEffect(() => {
     const syncUser = async () => {
       const u = (await supabase.auth.getUser()).data.user;
-      setUserId(u?.id || null);
+      const uid = u?.id || null;
+      setUserId(uid);
+
+      if (uid) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("id, full_name, username, avatar_url")
+          .eq("id", uid)
+          .maybeSingle();
+        if (prof) setMeProfile(prof as Profile);
+      } else {
+        setMeProfile(null);
+      }
     };
+
     syncUser();
+
+    // Mantener sincronizado si cambia sesión
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      syncUser();
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
+  const refreshIsFavourite = async (recId: string, myUid: string | null) => {
+    if (!myUid) {
+      setIsFavourite(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("favourite_records")
+      .select("id")
+      .eq("user_id", myUid)
+      .eq("records_id", recId)
+      .maybeSingle();
+
+    if (error) {
+      setIsFavourite(false);
+      return;
+    }
+    setIsFavourite(!!data);
+  };
+
+  /** Load record + ratings + favArtist + isFavourite + takes */
   useEffect(() => {
     if (!recordId) return;
 
     const fetchAll = async () => {
-      // RECORD
       const { data: recordData } = await supabase.from("records").select("*").eq("id", recordId).single();
       if (!recordData) return;
 
-      // ARTISTA
       const { data: artistData } = await supabase
         .from("artists")
         .select("id, name")
         .eq("name", recordData.artist_name)
         .single();
 
-      // RATINGS (media)
       const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId);
       const avg =
         ratingsData && ratingsData.length > 0
           ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
           : null;
 
-      // AMIGOS
-      const { data: friendsData } = await supabase
-        .from("favourite_records")
-        .select("user_id, profiles(username, avatar_url)")
-        .eq("record_id", recordId);
-
-      // USUARIO
       const u = (await supabase.auth.getUser()).data.user;
 
+      await refreshIsFavourite(recordId, u?.id || null);
+
       if (u?.id && artistData) {
-        // ¿El artista es favorito del usuario?
         const { data: favArtist } = await supabase
           .from("favourite_artists")
-          .select("*")
+          .select("id")
           .eq("user_id", u.id)
           .eq("artist_id", artistData.id);
-        if (favArtist?.length > 0) setIsFromFavouriteArtist(true);
 
-        // Rating del usuario
+        setIsFromFavouriteArtist(!!(favArtist && favArtist.length > 0));
+
         const { data: userRate } = await supabase
           .from("ratings")
           .select("rate")
           .eq("user_id", u.id)
           .eq("record_id", recordId)
           .maybeSingle();
+
         if (userRate) {
           setUserRating(userRate.rate);
-          setTakeRate(userRate.rate); // precarga en composer
+          setTakeRate(userRate.rate);
+        } else {
+          setUserRating(null);
         }
+      } else {
+        setIsFromFavouriteArtist(false);
       }
 
-      const friendsWithoutMe = (friendsData || []).filter((f: any) => f.user_id !== u?.id);
-
       setRecord({ ...recordData, artist: artistData });
-      setFriends(friendsWithoutMe || []);
       setAverageRate(avg);
 
       await loadTakes(recordId, u?.id || null);
     };
 
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordId]);
 
-  // Cambiar / quitar rating
+  /** Si cambia userId con el record cargado, recalculamos fav */
+  useEffect(() => {
+    if (!recordId) return;
+    refreshIsFavourite(recordId, userId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, recordId]);
+
+  const toggleFavourite = async () => {
+    if (!recordId) return;
+    if (!requireAuth("Sign in to add this record to favourites")) return;
+    if (!userId) return;
+    if (favLoading) return;
+
+    setFavLoading(true);
+    try {
+      if (isFavourite) {
+        const { error } = await supabase
+          .from("favourite_records")
+          .delete()
+          .eq("user_id", userId)
+          .eq("records_id", recordId);
+
+        if (!error) setIsFavourite(false);
+      } else {
+        const { error } = await supabase
+          .from("favourite_records")
+          .upsert({ user_id: userId, records_id: recordId }, { onConflict: "user_id,records_id" });
+
+        if (!error) setIsFavourite(true);
+      }
+    } finally {
+      setFavLoading(false);
+    }
+  };
+
   const handleRate = async (rate: number) => {
     if (!requireAuth("Sign in to rate this record")) return;
     if (!userId || !recordId) return;
 
-    // si tiene un take, no permitimos borrar la nota (mantener integridad con el take)
     if (userRating === rate && hasMyTake) {
-      alert("You already shared a Listener Take for this record. Delete your take before removing the rating.");
+      alert("You already shared a take for this record. Delete your take before removing the rating.");
       return;
     }
 
     if (userRating === rate) {
-      // borrar rating si no hay take
       await supabase.from("ratings").delete().eq("user_id", userId).eq("record_id", recordId);
       setUserRating(null);
       setTakeRate(null);
     } else {
-      // upsert rating y animamos a escribir un take
       await supabase
         .from("ratings")
         .upsert({ user_id: userId, record_id: recordId, rate }, { onConflict: "user_id,record_id" });
       setUserRating(rate);
       setTakeRate(rate);
-      setShowComposer(true);
-      setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
     }
 
     const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId);
@@ -236,12 +335,10 @@ export default function RecordProfile() {
       ratingsData && ratingsData.length > 0
         ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
         : null;
+
     setAverageRate(avg);
   };
 
-  // ────────────────────────────────────────────────
-  // LÓGICA Listener Takes (filtrado al recordId)
-  // ────────────────────────────────────────────────
   const loadTakes = async (recId: string, myId: string | null) => {
     setTakesLoading(true);
     const { data: recs, error } = await supabase
@@ -259,16 +356,29 @@ export default function RecordProfile() {
       return;
     }
 
-    // Perfiles
-    const userIds = Array.from(new Set((recs || []).map((r) => r.user_id)));
-    let profiles: Record<string, Profile> = {};
+    const userIds = Array.from(new Set((recs || []).map((r: any) => r.user_id)));
+    const profiles: Record<string, Profile> = {};
     if (userIds.length) {
-      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", userIds);
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, full_name, username, avatar_url")
+        .in("id", userIds);
       (profs || []).forEach((p: any) => (profiles[p.id] = p));
     }
 
-    // Métricas likes/comments
-    const ids = (recs || []).map((r) => r.id);
+    const ratingIds = Array.from(
+      new Set((recs || []).map((r: any) => r.rating_id).filter((x: any) => x !== null && x !== undefined))
+    ) as string[];
+
+    const rateByRatingId: Record<string, number> = {};
+    if (ratingIds.length) {
+      const { data: ratingRows } = await supabase.from("ratings").select("id, rate").in("id", ratingIds as any);
+      (ratingRows || []).forEach((r: any) => {
+        rateByRatingId[String(r.id)] = r.rate as number;
+      });
+    }
+
+    const ids = (recs || []).map((r: any) => r.id);
     const likesCount: Record<string, number> = {};
     const commentsCount: Record<string, number> = {};
     const likedSet = new Set<string>();
@@ -278,6 +388,7 @@ export default function RecordProfile() {
         .from("recommendation_likes")
         .select("recommendation_id")
         .in("recommendation_id", ids as any);
+
       (likes || []).forEach((row: any) => {
         const k = String(row.recommendation_id);
         likesCount[k] = (likesCount[k] || 0) + 1;
@@ -287,6 +398,7 @@ export default function RecordProfile() {
         .from("recommendation_comments")
         .select("recommendation_id")
         .in("recommendation_id", ids as any);
+
       (comments || []).forEach((row: any) => {
         const k = String(row.recommendation_id);
         commentsCount[k] = (commentsCount[k] || 0) + 1;
@@ -298,6 +410,7 @@ export default function RecordProfile() {
           .select("recommendation_id")
           .in("recommendation_id", ids as any)
           .eq("user_id", myId);
+
         (myLikes || []).forEach((row: any) => likedSet.add(row.recommendation_id));
       }
     }
@@ -308,6 +421,7 @@ export default function RecordProfile() {
       likes_count: likesCount[String(r.id)] ?? 0,
       comments_count: commentsCount[String(r.id)] ?? 0,
       liked_by_me: likedSet.has(r.id),
+      rate: (r.rating_id ? (rateByRatingId[String(r.rating_id)] ?? null) : null) ?? null,
     }));
 
     setTakes(mapped);
@@ -319,16 +433,16 @@ export default function RecordProfile() {
     if (!recordId) return;
     if (!requireAuth("Sign in to share your take")) return;
     const bodyClean = takeBody.trim();
-    if (bodyClean.length === 0 || bodyClean.length > 280) return;
+    if (bodyClean.length === 0) return;
     if (!userId) return;
+
     if (takeRate == null) {
-      alert("Please select a rating (1–10) to publish your Listener Take.");
+      alert("Please select a rating (1–10) to publish your take.");
       return;
     }
 
     setTakePosting(true);
 
-    // 1) upsert del rating y obtenemos su id
     const { data: ratingRow, error: ratingErr } = await supabase
       .from("ratings")
       .upsert({ user_id: userId, record_id: recordId, rate: takeRate }, { onConflict: "user_id,record_id" })
@@ -341,29 +455,25 @@ export default function RecordProfile() {
       return;
     }
 
-    // 2) insert del take enlazado a ese rating
-    const { data, error } = await supabase
-      .from("recommendations")
-      .insert({
-        user_id: userId,
-        target_type: "record",
-        target_id: recordId,
-        body: bodyClean,
-        rating_id: ratingRow.id, // 🔗
-      })
-      .select("id, created_at")
-      .single();
+    const { error } = await supabase.from("recommendations").insert({
+      user_id: userId,
+      target_type: "record",
+      target_id: recordId,
+      body: bodyClean,
+      rating_id: ratingRow.id,
+    });
 
     if (error) {
       alert(`Error posting: ${error.message}`);
     } else {
-      // recargar takes
       await loadTakes(recordId, userId);
       setHasMyTake(true);
     }
 
     setTakePosting(false);
     setTakeBody("");
+    setRatePickerOpen(false);
+    setComposerOpen(false);
   };
 
   const toggleLike = async (rec: Thought) => {
@@ -385,18 +495,73 @@ export default function RecordProfile() {
     }
   };
 
-  const loadComments = async (id: string) => {
+  const loadLikesUsers = async (recommendationId: string) => {
+    setLoadingLikesUsers(true);
+    setLikesForRecId(recommendationId);
+
+    try {
+      const { data, error } = await supabase
+        .from("recommendation_likes")
+        .select("user_id")
+        .eq("recommendation_id", recommendationId)
+        .order("created_at", { ascending: false });
+
+      if (error || !data) {
+        setLikesUsers([]);
+        return;
+      }
+
+      const userIds = Array.from(new Set((data || []).map((r: any) => r.user_id).filter(Boolean)));
+      if (userIds.length === 0) {
+        setLikesUsers([]);
+        return;
+      }
+
+      const { data: profiles, error: profErr } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url")
+        .in("id", userIds);
+
+      if (profErr || !profiles) {
+        setLikesUsers([]);
+        return;
+      }
+
+      const profileMap = new Map(profiles.map((p: any) => [p.id as string, p]));
+      const mapped: LikeUser[] = (data || [])
+        .map((row: any) => {
+          const p = profileMap.get(row.user_id as string) as any | undefined;
+          return {
+            user_id: row.user_id as string,
+            username: p?.username ?? null,
+            avatar_url: p?.avatar_url ?? null,
+          } as LikeUser;
+        })
+        .filter(Boolean);
+
+      setLikesUsers(mapped);
+    } finally {
+      setLoadingLikesUsers(false);
+    }
+  };
+
+  const loadComments = async (rid: string) => {
     const { data, error } = await supabase
       .from("recommendation_comments")
       .select("id, user_id, body, created_at")
-      .eq("recommendation_id", id)
+      .eq("recommendation_id", rid)
       .order("created_at", { ascending: true });
+
     if (error) return;
 
-    const uids = Array.from(new Set((data || []).map((c) => c.user_id)));
-    let pmap: Record<string, Profile> = {};
+    const uids = Array.from(new Set((data || []).map((c: any) => c.user_id)));
+    const pmap: Record<string, Profile> = {};
     if (uids.length) {
-      const { data: profs } = await supabase.from("profiles").select("id, full_name, username").in("id", uids);
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, full_name, username, avatar_url")
+        .in("id", uids);
+
       (profs || []).forEach((p: any) => (pmap[p.id] = p));
     }
 
@@ -404,13 +569,14 @@ export default function RecordProfile() {
       ...c,
       profile: pmap[c.user_id],
     }));
-    setCommentsMap((prev) => ({ ...prev, [id]: mapped }));
+
+    setCommentsMap((prev) => ({ ...prev, [rid]: mapped }));
   };
 
   const sendReply = async () => {
     if (!replyFor || !userId) return;
     const bodyClean = replyBody.trim();
-    if (bodyClean.length === 0 || bodyClean.length > 280) return;
+    if (bodyClean.length === 0) return;
 
     const { data, error } = await supabase
       .from("recommendation_comments")
@@ -422,10 +588,11 @@ export default function RecordProfile() {
       .select("id, created_at")
       .single();
 
-    if (!error) {
+    if (!error && data) {
       setTakes((prev) =>
         prev.map((it) => (it.id === replyFor ? { ...it, comments_count: (it.comments_count || 0) + 1 } : it))
       );
+
       setCommentsMap((prev) => {
         const prevList = prev[replyFor] || [];
         const newItem: ThoughtComment = {
@@ -433,7 +600,9 @@ export default function RecordProfile() {
           user_id: userId,
           body: bodyClean,
           created_at: data.created_at,
-          profile: { id: userId, full_name: "—", username: null },
+          profile: meProfile
+            ? { id: userId, full_name: meProfile.full_name, username: meProfile.username, avatar_url: meProfile.avatar_url }
+            : { id: userId, full_name: "—", username: null, avatar_url: null },
         };
         return { ...prev, [replyFor]: [...prevList, newItem] };
       });
@@ -443,7 +612,6 @@ export default function RecordProfile() {
     setReplyFor(null);
   };
 
-  // Editar take (autor)
   const beginEdit = (t: Thought) => {
     setEditingId(t.id);
     setEditingBody(t.body);
@@ -455,7 +623,7 @@ export default function RecordProfile() {
   const saveEdit = async () => {
     if (!editingId) return;
     const bodyClean = editingBody.trim();
-    if (bodyClean.length === 0 || bodyClean.length > 280) return;
+    if (bodyClean.length === 0) return;
 
     const { error } = await supabase
       .from("recommendations")
@@ -469,14 +637,13 @@ export default function RecordProfile() {
     }
   };
 
-  // Eliminar take (autor)
-  const deleteTake = async (id: string) => {
+  const deleteTake = async (rid: string) => {
     if (!confirm("Delete this take?")) return;
-    await supabase.from("recommendations").delete().eq("id", id).eq("user_id", userId || "");
-    setTakes((prev) => prev.filter((it) => it.id !== id));
-    // Re-evaluamos si quedan takes propios
+    await supabase.from("recommendations").delete().eq("id", rid).eq("user_id", userId || "");
+
+    setTakes((prev) => prev.filter((it) => it.id !== rid));
     setHasMyTake((prev) => {
-      const stillMine = takes.some((t) => t.id !== id && t.user_id === userId);
+      const stillMine = takes.some((t) => t.id !== rid && t.user_id === userId);
       return stillMine;
     });
   };
@@ -490,374 +657,484 @@ export default function RecordProfile() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-black">
-      {/* Banner azul con flecha minimalista pegada abajo (h-24, sin logo) */}
-      <header className="w-full h-24 bg-[#1F48AF] flex items-end px-4 sm:px-6 pb-2">
-        <button
-          onClick={() => history.back()}
-          aria-label="Go back"
-          className="p-2 rounded-full hover:bg-[#1A3A95] transition"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-<path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-      </header>
-
-      {/* ===== Layout centrado del disco ===== */}
-      <div className="px-6 md:px-24 pt-10 pb-8">{/* ↓ pb reducido para pegar Listener Takes */}
-        <div className="mx-auto w-full max-w-[680px] flex flex-col items-center text-center">
-          {/* Cover centrada */}
-          <div
-            className="w-64 h-64 mb-6 flex items-center justify-center rounded-xl"
-            style={{ backgroundColor: record.vibe_color }}
-          >
-            <div className="w-16 h-16 rounded-sm shadow-md" style={{ backgroundColor: record.cover_color }} />
+    <main className="min-h-screen bg-white">
+      <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-14">
+        {/* ===== RECORD HEADER ===== */}
+        <section className="pb-6 border-b border-neutral-200">
+          {/* Cover centrado, bordes más cuadrados */}
+          <div className="flex justify-center">
+            <div className="w-full max-w-[228px]">
+              <div className="relative w-full">
+                <div className="pt-[100%]" />
+                <div className="absolute inset-0 overflow-hidden rounded-[18px] border border-neutral-200">
+                  <div className="absolute inset-0" style={{ backgroundColor: record.vibe_color }} />
+                  <div className="absolute inset-[34%] rounded-[8px]" style={{ backgroundColor: record.cover_color }} />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Title + artist */}
-          <h1 className="text-[clamp(1.8rem,3vw,2.5rem)] font-normal mb-1" style={{ fontFamily: "Times New Roman" }}>
-            {record.title}
-          </h1>
-          <p className="text-sm text-gray-600 font-light mb-4" style={{ fontFamily: "Roboto" }}>
-            by {record.artist?.name}
-          </p>
-
-          {/* Description */}
-          {record.description && (
-            <p
-              className="text-sm text-gray-700 font-light leading-relaxed mb-4 max-w-md"
-              style={{ fontFamily: "Roboto" }}
+          <div className="mt-5 text-center">
+            <h1
+              className="text-[26px] leading-tight text-neutral-900"
+              style={{ fontFamily: "Times New Roman, serif", letterSpacing: "-0.02em" }}
             >
-              {record.description}
-            </p>
+              {record.title}
+            </h1>
+            <p className="mt-1 text-[12px] text-neutral-600">by {record.artist?.name}</p>
+          </div>
+
+          {record.description && (
+            <p className="mt-4 text-center text-[13px] font-light leading-relaxed text-neutral-700">{record.description}</p>
           )}
 
-          <p className="text-xs text-gray-500 font-light mb-6">Released in {record.release_year}</p>
+          <p className="mt-3 text-center text-[11px] font-light uppercase tracking-[0.22em] text-neutral-500">
+            Released in {record.release_year}
+          </p>
 
-          {/* Average Grade */}
-          {averageRate !== null && (
-            <div className="flex flex-col items-center mb-6">
-              <Tooltip message="This is the average rating from all users">
-                <div className="relative flex items-center justify-center w-16 h-16 transition-all duration-300 hover:scale-105">
-                  <div className="absolute inset-0 rounded-full border border-black bg-white flex items-center justify-center">
-                    <span className="text-lg font-normal" style={{ fontFamily: "Times New Roman" }}>
-                      {averageRate.toFixed(1)}
+          {/* ✅ CLEAN: Average + Add arriba, pill debajo */}
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <div className="flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={toggleFavourite}
+                disabled={favLoading}
+                className={`h-8 rounded-full px-6 text-[11px] transition whitespace-nowrap ${
+                  isFavourite
+                    ? "bg-white border border-[#1F48AF] text-[#1F48AF] hover:bg-[#1F48AF]/5"
+                    : "bg-[#1F48AF] text-white hover:opacity-90"
+                } ${favLoading ? "opacity-50" : ""}`}
+                style={{ fontFamily: "Roboto" }}
+              >
+                {favLoading ? "Saving…" : isFavourite ? "Added" : "Add"}
+              </button>
+
+              {averageRate !== null && (
+                <Tooltip message="Average rating from all users">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex items-center justify-center w-12 h-12 shrink-0">
+                      <div className="absolute inset-0 rounded-full border border-black bg-white flex items-center justify-center">
+                        <span className="text-[14px]" style={{ fontFamily: "Times New Roman" }}>
+                          {averageRate.toFixed(1)}
+                        </span>
+                      </div>
+                      <WalcordCircle className="absolute -bottom-1 -right-1 w-5 h-5 text-[#1F48AF]" />
+                    </div>
+
+                    <span className="text-[12px] font-light text-neutral-500 leading-[1.05] whitespace-nowrap">
+                      <span className="block">Average</span>
+                      <span className="block">Grade</span>
                     </span>
                   </div>
-                  <WalcordCircle className="absolute -bottom-1 -right-1 w-5 h-5 text-[#1F48AF]" />
-                </div>
-              </Tooltip>
-              <p className="text-xs text-gray-500 mt-2">Average Grade</p>
+                </Tooltip>
+              )}
             </div>
-          )}
 
-          {/* Rate buttons (toggle to remove) */}
-          <div className="grid grid-cols-5 gap-2 mb-6">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-              <Tooltip key={n} message={userRating === n ? `Tap again to remove (${n})` : `Rate ${n}`}>
-                <button
-                  onClick={() => handleRate(n)}
-                  className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-200 active:scale-90
-                    ${
-                      userRating === n
-                        ? "bg-[#1F48AF] text-white border-[#1F48AF] scale-105"
-                        : "text-black hover:bg-gray-100 border-black hover:scale-105"
-                    }
-                  `}
-                  style={{ fontFamily: "Times New Roman" }}
-                >
-                  {n}
-                </button>
-              </Tooltip>
-            ))}
+            {isFromFavouriteArtist && (
+              <button
+                type="button"
+                className="h-8 rounded-full px-4 text-[11px] border border-neutral-300 text-neutral-700 hover:border-neutral-900 transition leading-tight whitespace-normal text-center"
+                style={{ fontFamily: "Roboto" }}
+              >
+                Record from one of your favourites
+              </button>
+            )}
           </div>
 
-          {/* Friends (solo si hay OTROS usuarios) */}
-          {(friends?.length || 0) > 0 && (
-            <button onClick={() => setOpenFriends(true)} className="flex items-center gap-2 mb-4 group">
-              <div className="flex -space-x-2">
-                {friends.slice(0, 3).map((f: any, i: number) => (
-                  <Image
-                    key={i}
-                    src={f.profiles?.avatar_url || "/default-user-icon.png"}
-                    width={26}
-                    height={26}
-                    alt="user"
-                    className="rounded-full border border-black"
-                  />
-                ))}
-              </div>
-              <span className="text-xs font-light text-gray-600 group-hover:text-black transition-colors flex items-center gap-1">
-                <WalcordPeopleIcon className="w-4 h-4" />
-                Some friends love this record
-              </span>
-            </button>
-          )}
-
-          {/* (Opcional) marca si el artista es favorito del usuario */}
-          {isFromFavouriteArtist && (
-            <div className="flex items-center gap-1 mb-2">
-              <p className="text-xs text-gray-500">Record from one of your Favourites</p>
+          {/* Your rating: 1 línea siempre */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-neutral-500">Your rating</p>
+              {userRating !== null && <span className="text-[11px] font-light text-neutral-500">Tap again to remove</span>}
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Modal con lista completa de amigos */}
-      <Modal open={openFriends} onClose={() => setOpenFriends(false)} title="Friends who love this record">
-        {friends.length === 0 ? (
-          <p className="text-sm text-gray-500 font-light" style={{ fontFamily: "Roboto" }}>
-            No friends yet.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {friends.map((f: any, i: number) => (
-              <li key={i} className="flex items-center gap-3">
-                <Image
-                  src={f.profiles?.avatar_url || "/default-user-icon.png"}
-                  width={32}
-                  height={32}
-                  alt="user"
-                  className="rounded-full border border-black"
-                />
-                <span className="text-sm" style={{ fontFamily: "Roboto" }}>
-                  {f.profiles?.username || "Walcord user"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Modal>
-
-      {/* ✅ Modal de Login (solo cuando el usuario no ha iniciado sesión) */}
-      <Modal open={loginOpen} onClose={() => setLoginOpen(false)} title={loginTitle}>
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600 font-light" style={{ fontFamily: "Roboto" }}>
-            Create an account or sign in to interact with Walcord.
-          </p>
-          <Link
-            href="/login"
-            className="block text-center rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm"
-            style={{ fontFamily: "Roboto" }}
-          >
-            Sign in
-          </Link>
-          <button
-            onClick={() => setLoginOpen(false)}
-            className="w-full text-center text-sm text-gray-500 underline"
-            style={{ fontFamily: "Roboto" }}
-          >
-            Continue browsing
-          </button>
-        </div>
-      </Modal>
-
-      {/* ───────────────────────────────
-          LISTENER TAKES (antes community)
-          ─────────────────────────────── */}
-      <section className="px-6 md:px-24 pt-0 pb-16">{/* ↑ pt-0 y pb más corto */}
-        <div className="mx-auto w-full max-w-[680px]">
-          <h2 className="text-xl mb-3" style={{ fontFamily: "Times New Roman" }}>
-            Listener Takes
-          </h2>
-
-          {/* Composer — obligatorio elegir RATE */}
-          <div ref={composerRef} className="bg-white border border-neutral-200 rounded-3xl p-4 shadow-[0_10px_30px_rgba(0,0,0,0.06)] mb-4">
-            <textarea
-              value={takeBody}
-              onChange={(e) => setTakeBody(e.target.value)}
-              placeholder="Share your thoughts about this record…"
-              className="w-full min-h-[90px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF] font-[family-name:Times_New_Roman,Times,serif]"
-              maxLength={280}
-              onFocus={() => setShowComposer(true)}
-            />
-            {/* Selector de rating compacto */}
-            {showComposer && (
-              <div className="mt-3">
-                <div className="text-[12px] text-neutral-600 mb-2 flex items-center gap-2">
-                  <span>Select your rating (required)</span>
-                  {hasMyTake && <span className="text-neutral-400">· you can still change it here</span>}
-                </div>
-                <div className="grid grid-cols-10 gap-1">
-                  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+            <div className="mt-3 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1.5 min-w-max pb-1">
+                {Array.from({ length: 10 }).map((_, idx) => {
+                  const n = idx + 1;
+                  const active = userRating === n;
+                  return (
                     <button
                       key={n}
-                      onClick={() => setTakeRate(n)}
-                      className={`h-9 rounded-full border text-sm ${takeRate===n ? "bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 hover:bg-neutral-50"}`}
+                      onClick={() => handleRate(n)}
+                      className={`w-8 h-8 rounded-full text-[12px] flex items-center justify-center border transition active:scale-95 ${
+                        active ? "bg-[#1F48AF] border-[#1F48AF] text-white" : "border-neutral-300 text-neutral-800 hover:bg-neutral-50"
+                      }`}
+                      style={{ fontFamily: "Times New Roman, serif" }}
                     >
                       {n}
                     </button>
-                  ))}
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <Modal open={loginOpen} onClose={() => setLoginOpen(false)} title={loginTitle}>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600 font-light" style={{ fontFamily: "Roboto" }}>
+              Create an account or sign in to interact with Walcord.
+            </p>
+            <Link
+              href="/login"
+              className="block text-center rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm"
+              style={{ fontFamily: "Roboto" }}
+            >
+              Sign in
+            </Link>
+            <button
+              onClick={() => setLoginOpen(false)}
+              className="w-full text-center text-sm text-gray-500 underline"
+              style={{ fontFamily: "Roboto" }}
+            >
+              Continue browsing
+            </button>
+          </div>
+        </Modal>
+
+        {/* ===== TAKES ===== */}
+        <section className="mt-7">
+          <div className="pb-5 border-b border-neutral-200">
+            <button
+              type="button"
+              onClick={() => {
+                if (!userId) {
+                  setLoginTitle("Sign in to share your take");
+                  setLoginOpen(true);
+                  return;
+                }
+                setComposerOpen((s) => !s);
+                if (!composerOpen) {
+                  setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+                }
+              }}
+              className="w-full flex items-center justify-between rounded-2xl border border-neutral-200 px-4 py-3 hover:border-neutral-900 transition"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-200 shrink-0">
+                  {meProfile?.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={meProfile.avatar_url} alt="You" className="h-full w-full object-cover" />
+                  ) : null}
+                </div>
+                <div className="min-w-0 text-left">
+                  <p className="text-[13px] font-medium text-neutral-900 truncate">{hasMyTake ? "Update your take" : "Write a listener take"}</p>
+                  <p className="text-[11px] font-light text-neutral-500">For the fans — not critics.</p>
+                </div>
+              </div>
+              <span className="text-[12px] text-neutral-600">{composerOpen ? "Close" : "Open"}</span>
+            </button>
+
+            {composerOpen && (
+              <div ref={composerRef} className="mt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-light text-neutral-500">Your rating for this take (required)</p>
+                    <button
+                      type="button"
+                      onClick={() => setRatePickerOpen((s) => !s)}
+                      className="mt-2 text-[12px] text-[#1F48AF] hover:opacity-80"
+                    >
+                      {takeRate == null ? "Select rating" : "Change rating"}
+                    </button>
+                  </div>
+                  {typeof takeRate === "number" ? <RatingBadge rate={takeRate} size={44} /> : null}
+                </div>
+
+                {ratePickerOpen && (
+                  <div className="mt-3 overflow-x-auto no-scrollbar">
+                    <div className="flex items-center gap-1.5 min-w-max pb-1">
+                      {Array.from({ length: 10 }).map((_, idx) => {
+                        const v = idx + 1;
+                        const active = takeRate === v;
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setTakeRate(v)}
+                            className={`w-8 h-8 rounded-full text-[12px] flex items-center justify-center border transition active:scale-95 ${
+                              active ? "bg-[#1F48AF] border-[#1F48AF] text-white" : "border-neutral-300 text-neutral-800 hover:bg-neutral-50"
+                            }`}
+                            style={{ fontFamily: "Times New Roman, serif" }}
+                          >
+                            {v}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-3">
+                  <textarea
+                    value={takeBody}
+                    onChange={(e) => setTakeBody(e.target.value)}
+                    placeholder="Say what this record means to you…"
+                    className="w-full min-h-[110px] resize-none rounded-2xl border border-neutral-200 px-3 py-3 text-[14px] font-light leading-relaxed text-neutral-900 outline-none focus:ring-2 focus:ring-[#1F48AF] placeholder:text-neutral-400"
+                  />
+                </div>
+
+                <div className="mt-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setComposerOpen(false);
+                      setRatePickerOpen(false);
+                    }}
+                    className="text-[11px] font-light text-neutral-500 hover:text-neutral-900"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={postTake}
+                    disabled={takePosting || takeBody.trim().length === 0 || takeRate == null}
+                    className="rounded-full px-5 h-9 text-xs text-white enabled:hover:opacity-90 disabled:opacity-40 transition"
+                    style={{ backgroundColor: "#1F48AF" }}
+                  >
+                    {takePosting ? "Posting…" : "Post take"}
+                  </button>
                 </div>
               </div>
             )}
-            <div className="mt-3 flex items-center justify-between">
-              <span className={`text-xs ${takeBody.length > 280 ? "text-red-600" : "text-neutral-500"}`}>
-                {280 - takeBody.length}
-              </span>
-              <button
-                onClick={postTake}
-                disabled={takePosting || takeBody.trim().length === 0 || takeBody.length > 280 || takeRate==null}
-                className={`text-xs px-4 py-2 rounded-full ${
-                  takeBody.trim().length && takeBody.length <= 280 && takeRate!=null
-                    ? "bg-[#1F48AF] text-white"
-                    : "bg-neutral-300 text-neutral-600 cursor-not-allowed"
-                }`}
-              >
-                {takePosting ? "Posting…" : "Share Take"}
-              </button>
-            </div>
           </div>
 
-          {/* Feed */}
-          {takesLoading ? (
-            <div className="text-sm text-neutral-500">Loading takes…</div>
-          ) : takes.length === 0 ? (
-            <div className="text-sm text-neutral-500">No takes yet.</div>
-          ) : (
-            <ul className="space-y-3">
-              {takes.map((it) => (
-                <li key={String(it.id)} className="border border-neutral-200 rounded-3xl p-4 shadow-[0_6px_24px_rgba(0,0,0,0.05)]">
-                  {/* Cabecera */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-[15px] font-light font-[family-name:Times_New_Roman,Times,serif]">
-                        {it.profile?.full_name || "—"}
+          <div className="mt-5">
+            {takesLoading ? (
+              <p className="text-sm text-neutral-500">Loading takes…</p>
+            ) : takes.length === 0 ? (
+              <p className="text-[12px] font-light text-neutral-500">No takes yet. Be the first.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-200">
+                {takes.map((it) => (
+                  <li key={String(it.id)} className="py-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-200 shrink-0">
+                          {it.profile?.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={it.profile.avatar_url} alt={it.profile?.full_name || "user"} className="h-full w-full object-cover" />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-neutral-900 truncate">
+                            {it.profile?.full_name || it.profile?.username || "walcord user"}
+                          </p>
+                          <p className="text-[11px] font-light text-neutral-500">
+                            {new Date(it.created_at).toLocaleDateString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-[11px] text-neutral-500">{new Date(it.created_at).toLocaleString()}</div>
+
+                      {typeof it.rate === "number" ? <RatingBadge rate={it.rate} size={46} /> : null}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
-                        RATE
+
+                    {editingId === it.id ? (
+                      <div className="mt-4">
+                        <textarea
+                          value={editingBody}
+                          onChange={(e) => setEditingBody(e.target.value)}
+                          className="w-full min-h-[110px] resize-none rounded-2xl border border-neutral-200 px-3 py-3 text-[14px] font-light leading-relaxed text-neutral-900 outline-none focus:ring-2 focus:ring-[#1F48AF]"
+                        />
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <button type="button" onClick={cancelEdit} className="h-8 rounded-full px-4 text-[11px] bg-neutral-200 text-neutral-700">
+                            Cancel
+                          </button>
+                          <button type="button" onClick={saveEdit} className="h-8 rounded-full px-4 text-[11px] text-white" style={{ backgroundColor: "#1F48AF" }}>
+                            Save
+                          </button>
+                        </div>
                       </div>
-                      {it.user_id === userId && (
-                        <>
-                          {editingId === it.id ? (
-                            <div className="flex items-center gap-2">
-                              <button onClick={saveEdit} className="text-[11px] px-2 py-0.5 rounded-full bg-[#1F48AF] text-white">Save</button>
-                              <button onClick={cancelEdit} className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-200">Cancel</button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => beginEdit(it)} className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-300 hover:bg-neutral-50">Edit</button>
-                              <button onClick={() => deleteTake(it.id)} className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-300 hover:bg-neutral-50">Delete</button>
-                            </div>
-                          )}
-                        </>
-                      )}
+                    ) : (
+                      <p className="mt-4 text-[14px] font-light leading-relaxed text-neutral-900">{it.body}</p>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleLike(it)}
+                          className={`inline-flex items-center rounded-full border px-5 py-1.5 text-[13px] font-normal transition ${
+                            it.liked_by_me ? "border-[#1F48AF] text-[#1F48AF]" : "border-neutral-400 text-neutral-800 hover:border-neutral-900"
+                          }`}
+                        >
+                          {it.liked_by_me ? "Liked" : "Like"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setLikesPanelOpen(true);
+                            await loadLikesUsers(it.id);
+                          }}
+                          className="text-[11px] font-light text-neutral-500 hover:text-neutral-900"
+                        >
+                          {it.likes_count || 0} {(it.likes_count || 0) === 1 ? "like" : "likes"}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const isOpen = !!openComments[it.id];
+                            const next = { ...openComments, [it.id]: !isOpen };
+                            setOpenComments(next);
+                            if (!isOpen && !commentsMap[it.id]) await loadComments(it.id);
+                            setReplyFor(it.id);
+                          }}
+                          className="text-[11px] font-light text-neutral-500 hover:text-neutral-900"
+                          aria-expanded={!!openComments[it.id]}
+                        >
+                          {it.comments_count || 0} {(it.comments_count || 0) === 1 ? "comment" : "comments"}
+                        </button>
+
+                        {it.user_id === userId && (
+                          <>
+                            {editingId === it.id ? null : (
+                              <>
+                                <button type="button" onClick={() => beginEdit(it)} className="text-[11px] font-light text-neutral-500 hover:text-neutral-900">
+                                  Edit
+                                </button>
+                                <button type="button" onClick={() => deleteTake(it.id)} className="text-[11px] font-light text-neutral-500 hover:text-neutral-900">
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Texto (o edición) */}
-                  {editingId === it.id ? (
-                    <textarea
-                      value={editingBody}
-                      onChange={(e)=>setEditingBody(e.target.value)}
-                      className="mt-3 w-full min-h-[90px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF] font-[family-name:Times_New_Roman,Times,serif]"
-                      maxLength={280}
-                    />
-                  ) : (
-                    <p className="mt-3 text-[16px] leading-7 font-[family-name:Times_New_Roman,Times,serif]">{it.body}</p>
-                  )}
+                    {openComments[it.id] && (
+                      <div className="mt-4 space-y-3">
+                        {commentsMap[it.id] && commentsMap[it.id]!.length > 0 ? (
+                          <ul className="space-y-2">
+                            {commentsMap[it.id]!.map((c) => (
+                              <li key={c.id} className="rounded-3xl border border-neutral-200 bg-white px-4 py-3">
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="h-7 w-7 overflow-hidden rounded-full bg-neutral-200 shrink-0">
+                                      {c.profile?.avatar_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={c.profile.avatar_url} alt="" className="h-full w-full object-cover" />
+                                      ) : null}
+                                    </div>
+                                    <p className="text-[13px] font-medium text-neutral-900 truncate">
+                                      {c.profile?.full_name || c.profile?.username || "walcord user"}
+                                    </p>
+                                  </div>
+                                  <p className="text-[11px] font-light text-neutral-500">
+                                    {new Date(c.created_at).toLocaleDateString("en-GB", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </p>
+                                </div>
+                                <p className="text-[13px] font-light leading-relaxed text-neutral-800">{c.body}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[12px] font-light text-neutral-500">No comments yet. Be the first to comment.</p>
+                        )}
+                      </div>
+                    )}
 
-                  {/* Acciones */}
-                  <div className="mt-3 flex items-center gap-3">
-                    <button
-                      onClick={() => toggleLike(it)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                        it.liked_by_me ? "bg[#1F48AF] bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
-                      }`}
-                    >
-                      Like · {it.likes_count || 0}
-                    </button>
-
-                    <button
-                      onClick={async () => {
-                        const isOpen = !!openComments[it.id];
-                        const next = { ...openComments, [it.id]: !isOpen };
-                        setOpenComments(next);
-                        if (!isOpen && !commentsMap[it.id]) await loadComments(it.id);
-                        setReplyFor(it.id);
-                      }}
-                      className="text-xs px-3 py-1.5 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
-                      aria-expanded={!!openComments[it.id]}
-                    >
-                      Comment · {it.comments_count || 0}
-                    </button>
-                  </div>
-
-                  {/* Lista de comentarios */}
-                  {openComments[it.id] && (
-                    <div className="mt-3">
-                      {commentsMap[it.id] && commentsMap[it.id]!.length > 0 ? (
-                        <ul className="space-y-2">
-                          {commentsMap[it.id]!.map((c) => (
-                            <li key={c.id} className="rounded-2xl bg-neutral-50 border border-neutral-200 px-3 py-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[13px] font-light font-[family-name:Times_New_Roman,Times,serif]">
-                                  {c.profile?.full_name || "—"}
-                                </span>
-                                <span className="text-[10px] text-neutral-500">{new Date(c.created_at).toLocaleString()}</span>
-                              </div>
-                              <p className="mt-1 text-[14px]">{c.body}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="text-[12px] text-neutral-500">Be the first to comment.</div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Reply inline */}
-                  {replyFor === it.id && (
-                    <div className="mt-3 border-t border-neutral-200 pt-3">
-                      <textarea
-                        value={replyBody}
-                        onChange={(e) => setReplyBody(e.target.value)}
-                        placeholder="Write a reply…"
-                        className="w-full min-h-[80px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] outline-none focus:ring-2 focus:ring-[#1F48AF]"
-                        maxLength={280}
-                      />
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className={`text-xs ${replyBody.length > 280 ? "text-red-600" : "text-neutral-500"}`}>
-                          {280 - replyBody.length}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => { setReplyFor(null); setReplyBody(""); }} className="text-xs px-3 py-1.5 rounded-full bg-neutral-200 text-neutral-700">
+                    {replyFor === it.id && (
+                      <div className="mt-4 rounded-3xl border border-neutral-200 bg-white px-4 py-4">
+                        <textarea
+                          value={replyBody}
+                          onChange={(e) => setReplyBody(e.target.value)}
+                          placeholder="Write a reply…"
+                          className="w-full min-h-[80px] resize-none border-none bg-transparent text-sm outline-none placeholder:text-neutral-400"
+                        />
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyFor(null);
+                              setReplyBody("");
+                            }}
+                            className="h-8 rounded-full px-4 text-[11px] bg-neutral-200 text-neutral-700"
+                          >
                             Cancel
                           </button>
                           <button
+                            type="button"
                             onClick={sendReply}
-                            disabled={!replyBody.trim().length || replyBody.length > 280}
-                            className={`text-xs px-3 py-1.5 rounded-full ${
-                              replyBody.trim().length && replyBody.length <= 280
-                                ? "bg-[#1F48AF] text-white"
-                                : "bg-neutral-300 text-neutral-600 cursor-not-allowed"
-                            }`}
+                            disabled={!replyBody.trim().length}
+                            className="rounded-full px-5 h-8 text-xs text-white enabled:hover:opacity-90 disabled:opacity-40 transition"
+                            style={{ backgroundColor: "#1F48AF" }}
                           >
                             Reply
                           </button>
                         </div>
                       </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* LIKES BOTTOM SHEET */}
+      <div className={`fixed inset-0 z-40 flex items-end justify-center ${likesPanelOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
+        <div
+          className={`absolute inset-0 bg-black/40 transition-opacity ${likesPanelOpen ? "opacity-100" : "opacity-0"}`}
+          onClick={() => {
+            setLikesPanelOpen(false);
+            setLikesUsers([]);
+            setLikesForRecId(null);
+          }}
+        />
+        <div
+          className={`relative w-full max-w-md rounded-t-3xl bg-white shadow-[0_-12px_40px_rgba(15,23,42,0.18)] transition-transform duration-300 ${
+            likesPanelOpen ? "translate-y-0" : "translate-y-full"
+          }`}
+          style={{
+            maxHeight: "70vh",
+            paddingTop: "14px",
+            paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+          }}
+        >
+          <div className="flex items-center justify-center mb-2">
+            <div className="h-1 w-10 rounded-full bg-neutral-300" />
+          </div>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-center text-neutral-500 mb-3">Likes</p>
+          <div className="px-4 pb-1 overflow-y-auto" style={{ maxHeight: "calc(70vh - 56px)" }}>
+            {loadingLikesUsers ? (
+              <p className="py-4 text-sm text-neutral-500 text-center">Loading…</p>
+            ) : likesUsers.length === 0 ? (
+              <p className="py-4 text-sm text-neutral-500 text-center">No likes yet.</p>
+            ) : (
+              likesUsers.map((u) => (
+                <div key={`${likesForRecId || "x"}-${u.user_id}`} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-neutral-200 overflow-hidden">
+                      {u.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={u.avatar_url} alt={u.username || ""} className="h-full w-full object-cover" />
+                      ) : null}
                     </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{u.username || "user"}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </section>
+      </div>
     </main>
   );
 }

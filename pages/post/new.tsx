@@ -1,13 +1,15 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
 /* =========================================================
    Walcord — New
-   - Tabs arriba: Experiences (por defecto) · Listener Takes
-   - Experiences = tu flujo actual (conciertos/experiencias)
-   - Listener Takes = buscador de discos + reseña (≤280) + RATING obligatorio
+   3 tabs:
+   1) Memories
+   2) Collection
+   3) Opinion
    ========================================================= */
 
 type TimeoutId = ReturnType<typeof setTimeout>;
@@ -45,38 +47,7 @@ const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
   { value: "Karaoke", label: "Karaoke" },
 ];
 
-const MAX_PHOTOS = 6;
-const MAX_VIDEOS = 1;
-const MAX_VIDEO_SECONDS = 15;
-
-/** Mensajes */
-const ONE_VIDEO_MSG = "Only one video is allowed (15 seconds or less).";
-const MAX_PHOTOS_MSG = "Maximum six photos.";
-const VIDEO_TOO_LONG_MSG = "The video must be 15 seconds or less.";
-const COULD_NOT_READ_VIDEO_MSG = "Could not read video duration.";
-const LIMIT_REACHED_MSG = "Limit reached. Remove some files to add more.";
-
-/** Lee duración del vídeo en segundos usando <video> */
-function readVideoDurationSec(file: File): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const v = document.createElement("video");
-    v.preload = "metadata";
-    v.onloadedmetadata = () => {
-      const d = v.duration;
-      URL.revokeObjectURL(url);
-      if (isFinite(d)) resolve(d);
-      else reject(new Error("No se pudo leer la duración del vídeo"));
-    };
-    v.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("No se pudo cargar el vídeo"));
-    };
-    v.src = url;
-  });
-}
-
-/** === Helpers de Storage (subida directa + URL pública) === */
+/** Helpers de Storage (subida directa + URL pública) */
 async function uploadDirect(bucket: string, path: string, file: File) {
   const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
     contentType: file.type || "application/octet-stream",
@@ -89,7 +60,19 @@ function getPublicUrl(bucket: string, path: string) {
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
-/* ====== Tipos para la pestaña Listener Takes ====== */
+/** Avatar resolver: si avatar_url es URL -> úsala; si es path -> conviértelo a publicUrl del bucket */
+function isHttpUrl(v: string) {
+  return /^https?:\/\//i.test(v);
+}
+// cambia "avatars" si tu bucket se llama distinto
+function resolveAvatarUrl(raw: string | null, bucket = "avatars") {
+  if (!raw) return null;
+  if (isHttpUrl(raw)) return raw;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(raw);
+  return data?.publicUrl || null;
+}
+
+/* ====== Tipos records ====== */
 type RecordRow = {
   id: string;
   title: string;
@@ -99,18 +82,52 @@ type RecordRow = {
   cover_color: string | null;
 };
 
-type TopTab = "experiences" | "takes";
+type RecordSearchRow = RecordRow;
 
-export default function NewPostPage() {
+type TopTab = "memories" | "collection" | "opinion";
+
+export default function NewPage() {
   /* ==========================================
-     TABS arriba (Experiences · Listener Takes)
+     Top tabs
      ========================================== */
-  const [topTab, setTopTab] = useState<TopTab>("experiences");
+  const [topTab, setTopTab] = useState<TopTab>("memories");
 
   /* ==========================================
-     EXPERIENCES (tu flujo actual intacto)
+     Auth + profile
      ========================================== */
-  // Tipo de post
+  const [meId, setMeId] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const u = (await supabase.auth.getUser()).data.user;
+      const uid = u?.id || null;
+      setMeId(uid);
+
+      if (!uid) return;
+
+      // FIX: tu tabla profiles usa "id" (uuid) como PK (no "user_id")
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("avatar_url, username, full_name")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (error) console.log("profiles read error:", error);
+
+      const raw = (data as any)?.avatar_url || null;
+      const resolved = resolveAvatarUrl(raw, "avatars"); // <-- cambia bucket si no es "avatars"
+      setAvatarUrl(resolved);
+
+      setDisplayName((data as any)?.full_name || (data as any)?.username || null);
+    })();
+  }, []);
+
+  /* ==========================================
+     MUSICAL MEMORIES
+     - cover tipo postcard claro (Change + picker)
+     ========================================== */
   const [postType, setPostType] = useState<PostType>("concert");
   const [experience, setExperience] = useState<Experience | "">("");
 
@@ -119,10 +136,8 @@ export default function NewPostPage() {
   const [artistResults, setArtistResults] = useState<ArtistItem[]>([]);
   const [artistSearching, setArtistSearching] = useState(false);
   const [artist, setArtist] = useState<ArtistItem | null>(null);
-  const [artistError, setArtistError] = useState<string>(""); // ⚠️ solo opciones existentes
+  const [artistError, setArtistError] = useState<string>("");
   const artistDebouncer = useRef<TimeoutId | null>(null);
-
-  // Flag para evitar que onBlur borre el valor mientras se hace clic en la opción
   const isPickingOptionRef = useRef(false);
 
   // Ubicación/fecha/caption
@@ -133,17 +148,18 @@ export default function NewPostPage() {
   const [tourName, setTourName] = useState<string>("");
   const [caption, setCaption] = useState("");
 
-  // Medios
+  // Media
   const [files, setFiles] = useState<MediaFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
-  // Refs para inputs separados
   const imagesInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Cargar países
+  // Cover selection
+  const [selectedCoverIdx, setSelectedCoverIdx] = useState<number>(0);
+  const [showCoverPicker, setShowCoverPicker] = useState(false);
+
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
@@ -154,7 +170,6 @@ export default function NewPostPage() {
     })();
   }, []);
 
-  // Buscar artistas (sólo si es concert)
   useEffect(() => {
     if (postType !== "concert") {
       setArtist(null);
@@ -181,7 +196,7 @@ export default function NewPostPage() {
           .limit(25);
         if (!error) {
           setArtistResults((data as ArtistItem[]) || []);
-          setArtistError(""); // limpiar error al recibir resultados
+          setArtistError("");
         }
       } finally {
         setArtistSearching(false);
@@ -189,126 +204,60 @@ export default function NewPostPage() {
     }, 200);
   }, [artistQ, postType]);
 
-  /** Util: limpia el valor de un input file para permitir re-selección */
   const resetInput = (ref: React.RefObject<HTMLInputElement>) => {
     if (ref.current) ref.current.value = "";
   };
 
-  /** Añadir ficheros: función genérica para DnD (mezcla) */
   const addIncomingFiles = async (incoming: FileList | null) => {
     if (!incoming?.length) return;
 
-    // Split por tipo
-    const newImages: File[] = [];
-    const newVideos: File[] = [];
-
+    const newItems: MediaFile[] = [];
     for (const f of Array.from(incoming)) {
-      if (f.type.startsWith("image/")) newImages.push(f);
-      else if (f.type.startsWith("video/")) newVideos.push(f);
+      if (f.type.startsWith("image/")) newItems.push({ file: f, kind: "image" });
+      else if (f.type.startsWith("video/")) newItems.push({ file: f, kind: "video" });
     }
+    if (!newItems.length) return;
 
-    // === Vídeos ===
-    if (newVideos.length) {
-      if (newVideos.length > 1) {
-        alert(ONE_VIDEO_MSG);
-        return;
-      }
-      if (files.some((f) => f.kind === "video")) {
-        alert(ONE_VIDEO_MSG);
-        return;
-      }
-      const pickedVideo = newVideos[0];
-      try {
-        const secs = await readVideoDurationSec(pickedVideo);
-        if (secs > MAX_VIDEO_SECONDS + 0.01) {
-          alert(VIDEO_TOO_LONG_MSG);
-          return;
-        }
-      } catch {
-        alert(COULD_NOT_READ_VIDEO_MSG);
-        return;
-      }
-      setFiles((prev) => [...prev, { file: pickedVideo, kind: "video" }]);
-    }
-
-    // === Imágenes ===
-    if (newImages.length) {
-      setFiles((prev) => {
-        const currentImages = prev.filter((x) => x.kind === "image").length;
-        const room = Math.max(0, MAX_PHOTOS - currentImages);
-        const toAdd = newImages
-          .slice(0, room)
-          .map((f) => ({ file: f, kind: "image" as const }));
-        if (newImages.length > room) alert(MAX_PHOTOS_MSG);
-        return [...prev, ...toAdd];
-      });
-    }
+    setFiles((prev) => [...prev, ...newItems]);
   };
 
-  /** Picker exclusivo para imágenes (mejor feedback de límites) */
   const onPickImages = async (list: FileList | null) => {
     if (!list?.length) return;
     const imgs = Array.from(list).filter((f) => f.type.startsWith("image/"));
-    setFiles((prev) => {
-      const currentImages = prev.filter((x) => x.kind === "image").length;
-      const room = Math.max(0, MAX_PHOTOS - currentImages);
-      if (room <= 0) {
-        alert(LIMIT_REACHED_MSG);
-        resetInput(imagesInputRef);
-        return prev;
-      }
-      const toAdd = imgs
-        .slice(0, room)
-        .map((file) => ({ file, kind: "image" as const }));
-      if (imgs.length > room) alert(MAX_PHOTOS_MSG);
+    if (!imgs.length) {
       resetInput(imagesInputRef);
-      return [...prev, ...toAdd];
-    });
+      return;
+    }
+    setFiles((prev) => [...prev, ...imgs.map((file) => ({ file, kind: "image" as const }))]);
+    resetInput(imagesInputRef);
   };
 
-  /** Picker exclusivo para vídeo (valida duración y único) */
   const onPickVideo = async (list: FileList | null) => {
     if (!list?.length) return;
-    const picked = list[0];
-    if (!picked.type.startsWith("video/")) {
+    const vids = Array.from(list).filter((f) => f.type.startsWith("video/"));
+    if (!vids.length) {
       resetInput(videoInputRef);
       return;
     }
-    if (files.some((f) => f.kind === "video")) {
-      alert(ONE_VIDEO_MSG);
-      resetInput(videoInputRef);
-      return;
-    }
-    try {
-      const secs = await readVideoDurationSec(picked);
-      if (secs > MAX_VIDEO_SECONDS + 0.01) {
-        alert(VIDEO_TOO_LONG_MSG);
-        resetInput(videoInputRef);
-        return;
-      }
-    } catch {
-      alert(COULD_NOT_READ_VIDEO_MSG);
-      resetInput(videoInputRef);
-      return;
-    }
-    setFiles((prev) => [...prev, { file: picked, kind: "video" }]);
+    setFiles((prev) => [...prev, ...vids.map((file) => ({ file, kind: "video" as const }))]);
     resetInput(videoInputRef);
   };
 
-  const removeFileAt = (idx: number) =>
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
-  const imageCount = useMemo(
-    () => files.filter((f) => f.kind === "image").length,
-    [files]
-  );
-  const videoFile = useMemo(
-    () => files.find((f) => f.kind === "video")?.file || null,
-    [files]
-  );
+  const removeFileAt = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
+  const imageFiles = useMemo(() => files.filter((f) => f.kind === "image").map((x) => x.file), [files]);
+  const videoFiles = useMemo(() => files.filter((f) => f.kind === "video").map((x) => x.file), [files]);
+
+  useEffect(() => {
+    setSelectedCoverIdx((prev) => {
+      if (!imageFiles.length) return 0;
+      return Math.min(prev, imageFiles.length - 1);
+    });
+  }, [imageFiles.length]);
 
   const previews = useMemo(
     () =>
-      files.slice(0, MAX_PHOTOS + MAX_VIDEOS).map((m) => ({
+      files.map((m) => ({
         kind: m.kind,
         url: URL.createObjectURL(m.file),
         name: m.file.name,
@@ -316,39 +265,32 @@ export default function NewPostPage() {
     [files]
   );
 
-  // Submit EXPERIENCES
-  const onSubmitExperience = async () => {
-    // Validaciones de campos obligatorios
+  const currentCoverThumb = useMemo(() => {
+    if (!imageFiles.length) return null;
+    const idx = Math.min(selectedCoverIdx, imageFiles.length - 1);
+    const f = imageFiles[idx];
+    if (!f) return null;
+    return { idx, url: URL.createObjectURL(f) };
+  }, [imageFiles, selectedCoverIdx]);
+
+  const canPublishMemories =
+    !submitting &&
+    ((postType === "concert" && !!artist) || (postType === "experience" && !!experience)) &&
+    !!countryCode &&
+    !!city.trim() &&
+    !!dateStr &&
+    (imageFiles.length > 0 || videoFiles.length > 0);
+
+  const onSubmitMemories = async () => {
     if (postType === "concert" && !artist) {
       setArtistError("Please choose an existing artist from the list.");
       return alert("Please select artist");
     }
-    if (postType === "experience" && !experience)
-      return alert("Please select an experience type");
+    if (postType === "experience" && !experience) return alert("Please select an experience type");
     if (!countryCode) return alert("Please select country");
     if (!city.trim()) return alert("Please type city");
     if (!dateStr) return alert("Please select date");
-    if (imageCount < 1 && !videoFile)
-      return alert("Please add photos and/or a video");
-
-    const isOnlyVideo = !!videoFile && imageCount === 0;
-    const hasPhotos = imageCount > 0;
-
-    // Si hay vídeo, validar duración justo antes de subir
-    let videoDurationSec: number | null = null;
-    if (videoFile) {
-      try {
-        const secs = await readVideoDurationSec(videoFile);
-        if (secs > MAX_VIDEO_SECONDS + 0.01) {
-          alert(VIDEO_TOO_LONG_MSG);
-          return;
-        }
-        videoDurationSec = Math.round(secs);
-      } catch {
-        alert(COULD_NOT_READ_VIDEO_MSG);
-        return;
-      }
-    }
+    if (imageFiles.length < 1 && videoFiles.length < 1) return alert("Please add photos and/or videos");
 
     setSubmitting(true);
     setDone(null);
@@ -359,105 +301,74 @@ export default function NewPostPage() {
       const userId = authData?.user?.id;
       if (!userId) throw new Error("Not authenticated");
 
-      if (isOnlyVideo) {
-        // === SOLO VÍDEO → clips
-        const ext = (videoFile!.name.split(".").pop() || "mp4").toLowerCase();
-        const base = `user_${userId}/${Date.now()}_${Math.random()
-          .toString(36)
-          .slice(2)}`;
-        const videoPath = `${base}/video.${ext}`;
-        const { path: storedPath } = await uploadDirect("clips", videoPath, videoFile!);
-        const video_url = getPublicUrl("clips", storedPath);
+      const { data: concertIns, error: concertErr } = await supabase
+        .from("concerts")
+        .insert({
+          user_id: userId,
+          artist_id: postType === "concert" ? artist?.id : null,
+          country_code: countryCode,
+          city: city.trim(),
+          event_date: dateStr,
+          tour_name: tourName.trim() || null,
+          caption: caption.trim() || null,
+          post_type: postType,
+          experience: postType === "experience" ? experience : null,
+        })
+        .select("id")
+        .single();
 
-        const { error: clipsErr } = await supabase.from("clips").insert([
-          {
-            user_id: userId,
-            video_url,
-            poster_url: null,
-            caption: caption || null,
-            artist_name: postType === "concert" ? artist?.name || null : null,
-            venue: tourName || null,
-            city: city || null,
-            country: countryCode || null,
-            event_date: dateStr || null,
-            duration_seconds: videoDurationSec, // <-- CLAVE PARA EL FEED
-            kind: postType, // 'concert' | 'experience'
-            experience: postType === "experience" ? experience : null,
-          },
-        ]);
-        if (clipsErr)
-          throw new Error(
-            `No se pudo registrar el vídeo en clips: ${clipsErr.message}`
-          );
-      } else {
-        // === HAY FOTOS (con o sin vídeo) → concerts + concert_media; si también hay vídeo, además clips
-        const { data: concertIns, error: concertErr } = await supabase
-          .from("concerts")
-          .insert({
-            user_id: userId,
-            artist_id: postType === "concert" ? artist?.id : null,
-            country_code: countryCode,
-            city: city.trim(),
-            event_date: dateStr,
-            tour_name: tourName.trim() || null,
-            caption: caption.trim() || null,
-            post_type: postType,
-            experience: postType === "experience" ? experience : null,
-          })
-          .select("id")
-          .single();
-        if (concertErr) throw new Error(`No se pudo crear el concierto: ${concertErr.message}`);
-        const concertId: string = (concertIns as any).id;
+      if (concertErr) throw new Error(`No se pudo crear el concierto: ${concertErr.message}`);
+      const concertId: string = (concertIns as any).id;
 
-        // Subir fotos → concert_media
-        if (hasPhotos) {
-          const images = files
-            .filter((f) => f.kind === "image")
-            .slice(0, MAX_PHOTOS);
-          const uploads: string[] = [];
-          for (const m of images) {
-            const ext = (m.file.name.split(".").pop() || "jpg").toLowerCase();
-            const baseName = m.file.name
-              .replace(/[^\w.\-]+/g, "_")
-              .replace(/\.[a-z0-9]{2,4}$/i, "");
-            const path = `${concertId}/${Date.now()}_${Math.random()
-              .toString(36)
-              .slice(2)}_${baseName}.${ext}`;
-            const { path: storedPath } = await uploadDirect(
-              "concert_media",
-              path,
-              m.file
-            );
-            uploads.push(getPublicUrl("concert_media", storedPath));
-          }
-          if (uploads.length) {
-            const payload = uploads.map((url) => ({
-              concert_id: concertId,
-              url,
-              media_type: "image",
-            }));
-            const { error: mediaErr } = await supabase
-              .from("concert_media")
-              .insert(payload);
-            if (mediaErr)
-              throw new Error(
-                `No se pudieron guardar las imágenes: ${mediaErr.message}`
-              );
-          }
+      let coverUrlToSave: string | null = null;
+
+      // Fotos -> concert_media + cover
+      if (imageFiles.length) {
+        const uploads: string[] = [];
+        for (const file of imageFiles) {
+          const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+          const baseName = file.name
+            .replace(/[^\w.\-]+/g, "_")
+            .replace(/\.[a-z0-9]{2,6}$/i, "");
+          const path = `${concertId}/${Date.now()}_${Math.random().toString(36).slice(2)}_${baseName}.${ext}`;
+          const { path: storedPath } = await uploadDirect("concert_media", path, file);
+          uploads.push(getPublicUrl("concert_media", storedPath));
         }
 
-        // Si además hay vídeo, también guardarlo en clips
-        if (videoFile) {
-          const ext = (videoFile.name.split(".").pop() || "mp4").toLowerCase();
+        coverUrlToSave = uploads[Math.min(selectedCoverIdx, uploads.length - 1)] || uploads[0];
+
+        const { error: mediaErr } = await supabase.from("concert_media").insert(
+          uploads.map((url) => ({
+            concert_id: concertId,
+            url,
+            media_type: "image",
+          }))
+        );
+        if (mediaErr) throw new Error(`No se pudieron guardar las imágenes: ${mediaErr.message}`);
+
+        const { data: coverRow } = await supabase
+          .from("concert_media")
+          .select("id, url")
+          .eq("concert_id", concertId)
+          .eq("url", coverUrlToSave)
+          .maybeSingle();
+
+        await supabase
+          .from("concerts")
+          .update({
+            cover_url: coverUrlToSave,
+            cover_media_id: coverRow?.id || null,
+          })
+          .eq("id", concertId);
+      }
+
+      // Vídeos -> clips + concert_media (para viewer)
+      if (videoFiles.length) {
+        for (const vf of videoFiles) {
+          const ext = (vf.name.split(".").pop() || "mp4").toLowerCase();
           const base = `user_${userId}/${concertId}`;
-          const videoPath = `${base}/video_${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}.${ext}`;
-          const { path: storedPath } = await uploadDirect(
-            "clips",
-            videoPath,
-            videoFile
-          );
+          const videoPath = `${base}/video_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+          const { path: storedPath } = await uploadDirect("clips", videoPath, vf);
           const video_url = getPublicUrl("clips", storedPath);
 
           const { error: clipsErr } = await supabase.from("clips").insert([
@@ -466,20 +377,27 @@ export default function NewPostPage() {
               video_url,
               poster_url: null,
               caption: caption || null,
-              artist_name:
-                postType === "concert" ? artist?.name || null : null,
+              artist_name: postType === "concert" ? artist?.name || null : null,
               venue: tourName || null,
               city: city || null,
               country: countryCode || null,
               event_date: dateStr || null,
-              duration_seconds: videoDurationSec, // <-- CLAVE PARA EL FEED
+              duration_seconds: null,
               kind: postType,
               experience: postType === "experience" ? experience : null,
             },
           ]);
-          if (clipsErr)
-            throw new Error(
-              `No se pudo registrar el vídeo en clips: ${clipsErr.message}`
+          if (clipsErr) throw new Error(`No se pudo registrar el vídeo en clips: ${clipsErr.message}`);
+
+          await supabase
+            .from("concert_media")
+            .upsert(
+              {
+                concert_id: concertId,
+                url: video_url,
+                media_type: "video",
+              } as any,
+              { onConflict: "concert_id,url" }
             );
         }
       }
@@ -498,6 +416,8 @@ export default function NewPostPage() {
       setFiles([]);
       setExperience("");
       setArtistError("");
+      setSelectedCoverIdx(0);
+      setShowCoverPicker(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e: any) {
       alert(e?.message ?? "Error");
@@ -506,49 +426,115 @@ export default function NewPostPage() {
     }
   };
 
-  const canPublishExperience =
-    !submitting &&
-    ((postType === "concert" && !!artist) ||
-      (postType === "experience" && !!experience)) &&
-    !!countryCode &&
-    !!city.trim() &&
-    !!dateStr &&
-    (imageCount > 0 || !!videoFile);
+  /* ==========================================
+     MUSICAL COLLECTION
+     - 1 photo + record
+     ========================================== */
+  const [collectionRecordQ, setCollectionRecordQ] = useState("");
+  const [collectionSearching, setCollectionSearching] = useState(false);
+  const [collectionResults, setCollectionResults] = useState<RecordSearchRow[]>([]);
+  const [selectedCollectionRecord, setSelectedCollectionRecord] = useState<RecordSearchRow | null>(null);
+  const collectionDebouncer = useRef<TimeoutId | null>(null);
+
+  const [collectionPhoto, setCollectionPhoto] = useState<File | null>(null);
+  const collectionPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [postingCollection, setPostingCollection] = useState(false);
+
+  useEffect(() => {
+    const term = collectionRecordQ.trim();
+    if (topTab !== "collection") return;
+    if (!term || term.length < 2) {
+      setCollectionResults([]);
+      setCollectionSearching(false);
+      return;
+    }
+    setCollectionSearching(true);
+    if (collectionDebouncer.current) clearTimeout(collectionDebouncer.current);
+
+    collectionDebouncer.current = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from("records")
+          .select("id, title, artist_name, release_year, vibe_color, cover_color")
+          .or(`title.ilike.%${term}%,artist_name.ilike.%${term}%`)
+          .order("release_year", { ascending: false })
+          .limit(25);
+
+        if (!error) setCollectionResults((data as RecordSearchRow[]) || []);
+      } finally {
+        setCollectionSearching(false);
+      }
+    }, 220);
+  }, [collectionRecordQ, topTab]);
+
+  const canPublishCollection = !!meId && !!selectedCollectionRecord && !!collectionPhoto && !postingCollection;
+
+  const onSubmitCollection = async () => {
+    if (!meId) return alert("Sign in to continue.");
+    if (!selectedCollectionRecord) return alert("Please choose a record.");
+    if (!collectionPhoto) return alert("Please add a photo.");
+
+    setPostingCollection(true);
+    try {
+      const ext = (collectionPhoto.name.split(".").pop() || "jpg").toLowerCase();
+      const baseName = collectionPhoto.name
+        .replace(/[^\w.\-]+/g, "_")
+        .replace(/\.[a-z0-9]{2,6}$/i, "");
+      const path = `user_${meId}/${Date.now()}_${Math.random().toString(36).slice(2)}_${baseName}.${ext}`;
+
+      const { path: storedPath } = await uploadDirect("collection_media", path, collectionPhoto);
+      const photo_url = getPublicUrl("collection_media", storedPath);
+
+      const { error } = await supabase.from("music_collections").insert({
+        user_id: meId,
+        record_id: selectedCollectionRecord.id,
+        photo_url,
+        caption: null,
+      });
+
+      if (error) throw error;
+
+      alert("Saved to your collection.");
+      setSelectedCollectionRecord(null);
+      setCollectionRecordQ("");
+      setCollectionResults([]);
+      setCollectionPhoto(null);
+      if (collectionPhotoInputRef.current) collectionPhotoInputRef.current.value = "";
+    } catch (e: any) {
+      alert(e?.message ?? "Error");
+    } finally {
+      setPostingCollection(false);
+    }
+  };
 
   /* ==========================================
-     LISTENER TAKES — buscador de discos + reseña
-     (con RATING obligatorio y enlace rating_id)
+     MUSICAL OPINION
+     - siempre intuitivo: eliges record -> escribes -> rating -> Publish
+     - muestra profile picture real
      ========================================== */
-  const [meId, setMeId] = useState<string | null>(null);
-  useEffect(() => {
-    (async () => {
-      const u = (await supabase.auth.getUser()).data.user;
-      setMeId(u?.id || null);
-    })();
-  }, []);
-
   const [recordQ, setRecordQ] = useState("");
   const [recordSearching, setRecordSearching] = useState(false);
   const [recordResults, setRecordResults] = useState<RecordRow[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<RecordRow | null>(null);
   const recordDebouncer = useRef<TimeoutId | null>(null);
+
   const [takeBody, setTakeBody] = useState("");
   const [postingTake, setPostingTake] = useState(false);
-
-  // ⭐ NEW: rating para el take
   const [takeRate, setTakeRate] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!recordQ.trim() || recordQ.trim().length < 2) {
+    const term = recordQ.trim();
+    if (topTab !== "opinion") return;
+
+    if (!term || term.length < 2) {
       setRecordResults([]);
+      setRecordSearching(false);
       return;
     }
     setRecordSearching(true);
     if (recordDebouncer.current) clearTimeout(recordDebouncer.current);
     recordDebouncer.current = setTimeout(async () => {
       try {
-        const term = recordQ.trim();
-        // Búsqueda por título o artista (case-insensitive)
         const { data, error } = await supabase
           .from("records")
           .select("id, title, artist_name, release_year, vibe_color, cover_color")
@@ -560,60 +546,48 @@ export default function NewPostPage() {
         setRecordSearching(false);
       }
     }, 220);
-  }, [recordQ]);
+  }, [recordQ, topTab]);
 
   const canPublishTake =
-    !!meId &&
-    !!selectedRecord &&
-    takeBody.trim().length > 0 &&
-    takeBody.length <= 280 &&
-    takeRate != null &&
-    !postingTake;
+    !!meId && !!selectedRecord && takeBody.trim().length > 0 && takeRate != null && !postingTake;
 
   const submitTake = async () => {
     if (!meId) return alert("Sign in to continue.");
     if (!selectedRecord) return alert("Please choose a record.");
     const clean = takeBody.trim();
-    if (!clean || clean.length > 280) return;
+    if (!clean) return;
+
     if (takeRate == null) {
-      alert("Please select a rating (1–10) to publish your Listener Take.");
+      alert("Please select a rating (1–10).");
       return;
     }
 
     setPostingTake(true);
     try {
-      // 1) upsert del rating del usuario para este record y obtener su id
       const { data: ratingRow, error: ratingErr } = await supabase
         .from("ratings")
-        .upsert(
-          { user_id: meId, record_id: selectedRecord.id, rate: takeRate },
-          { onConflict: "user_id,record_id" }
-        )
+        .upsert({ user_id: meId, record_id: selectedRecord.id, rate: takeRate }, { onConflict: "user_id,record_id" })
         .select("id")
         .single();
 
       if (ratingErr || !ratingRow) throw new Error("Error saving the rating.");
 
-      // 2) insertar la recomendación enlazando rating_id
-      const { error } = await supabase
-        .from("recommendations")
-        .insert({
-          user_id: meId,
-          target_type: "record",
-          target_id: selectedRecord.id,
-          body: clean,
-          rating_id: ratingRow.id, // 🔗 vínculo
-        });
+      const { error } = await supabase.from("recommendations").insert({
+        user_id: meId,
+        target_type: "record",
+        target_id: selectedRecord.id,
+        body: clean,
+        rating_id: ratingRow.id,
+      });
 
       if (error) throw error;
 
-      // Reset UI de takes
       setTakeBody("");
       setSelectedRecord(null);
       setRecordQ("");
       setRecordResults([]);
       setTakeRate(null);
-      alert("Your take has been shared.");
+      alert("Published.");
     } catch (e: any) {
       alert(e?.message ?? "Error");
     } finally {
@@ -622,32 +596,66 @@ export default function NewPostPage() {
   };
 
   /* ==========================================
-     RENDER
+     Descriptions (sin guiones)
      ========================================== */
+  const tabTitle = useMemo(() => {
+    if (topTab === "memories") return "Memories";
+    if (topTab === "collection") return "Collection";
+    return "Opinion";
+  }, [topTab]);
+
+  const tabDescription = useMemo(() => {
+    if (topTab === "memories") {
+      return "Share your concert memories with photos and videos so you can keep them forever.";
+    }
+    if (topTab === "collection") {
+      return "Share your physical record collection with a photo of the record you own. It is a way to remember the chapters of your life through the music you lived with.";
+    }
+    return "Share what stayed with you and how the record made you feel. Keep it thoughtful and always invite a positive conversation around music.";
+  }, [topTab]);
+
+  /* ==========================================
+     Publish button (1 solo botón, QUIETO dentro del layout)
+     - NO fixed (no se mueve contigo al hacer scroll)
+     ========================================== */
+  const renderPublishButton = () => {
+    const disabled =
+      topTab === "memories"
+        ? !canPublishMemories
+        : topTab === "collection"
+          ? !canPublishCollection
+          : !canPublishTake;
+
+    const onClick =
+      topTab === "memories" ? onSubmitMemories : topTab === "collection" ? onSubmitCollection : submitTake;
+
+    const label =
+      topTab === "memories"
+        ? submitting
+          ? "Publishing…"
+          : "Publish"
+        : topTab === "collection"
+          ? postingCollection
+            ? "Publishing…"
+            : "Publish"
+          : postingTake
+            ? "Publishing…"
+            : "Publish";
+
+    return (
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="rounded-full bg-[#1F48AF] px-6 h-11 text-xs text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition hover:shadow disabled:opacity-40"
+        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+      >
+        {label}
+      </button>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white">
-      {/* Banner */}
-      <header className="w-full h-24 bg-[#1F48AF] flex items-end justify-between px-4 sm:px-6 pb-3 pt-[env(safe-area-inset-top)]">
-        <button
-          onClick={() => history.back()}
-          aria-label="Back"
-          className="inline-flex items-center gap-2 rounded-full bg-white/95 text-black px-3 py-1.5 text-xs border border-white/60 hover:bg-white transition-all"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M19 12H5m6 7-7-7 7-7"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="hidden sm:inline">Back</span>
-        </button>
-        <div className="text-white/90 text-sm pr-1">New</div>
-      </header>
-
-      {/* Caja */}
       <main className="mx-auto w-full max-w-[760px] px-4 sm:px-6 py-6 sm:py-8">
         <div className="rounded-2xl border border-neutral-200 bg-white shadow-[0_6px_22px_rgba(0,0,0,0.06)]">
           {/* Header */}
@@ -662,684 +670,94 @@ export default function NewPostPage() {
               Share in The Wall
             </h1>
 
-            {/* ====== Tabs superiores (estilo cápsula) ====== */}
+            {/* Tabs */}
             <div className="mt-3">
-              <div className="inline-flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  onClick={() => setTopTab("experiences")}
-                  className={`px-5 py-2 rounded-full text-sm border ${
-                    topTab === "experiences"
+                  onClick={() => setTopTab("memories")}
+                  className={`flex-1 px-3 py-2 rounded-full text-[12px] border ${
+                    topTab === "memories"
                       ? "bg-[#1F48AF] text-white border-[#1F48AF]"
                       : "bg-white text-black border-neutral-200"
                   }`}
                   style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
                 >
-                  Musical Memories
+                  Memories
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setTopTab("takes")}
-                  className={`px-5 py-2 rounded-full text-sm border ${
-                    topTab === "takes"
+                  onClick={() => setTopTab("collection")}
+                  className={`flex-1 px-3 py-2 rounded-full text-[12px] border ${
+                    topTab === "collection"
                       ? "bg-[#1F48AF] text-white border-[#1F48AF]"
                       : "bg-white text-black border-neutral-200"
                   }`}
                   style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
                 >
-                  Musical Opinion
+                  Collection
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTopTab("opinion")}
+                  className={`flex-1 px-3 py-2 rounded-full text-[12px] border ${
+                    topTab === "opinion"
+                      ? "bg-[#1F48AF] text-white border-[#1F48AF]"
+                      : "bg-white text-black border-neutral-200"
+                  }`}
+                  style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                >
+                  Opinion
                 </button>
               </div>
             </div>
+
+            {/* Description */}
+            <div className="mt-4">
+              <div
+                className="text-[14px] text-neutral-800"
+                style={{ fontFamily: '"Times New Roman", Times, serif', fontWeight: 400 }}
+              >
+                {tabTitle}
+              </div>
+              <p
+                className="mt-1 text-xs text-neutral-600"
+                style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+              >
+                {tabDescription}
+              </p>
+
+              {/* Publish button QUIETO (no fixed) */}
+              <div className="mt-4 flex justify-end">{renderPublishButton()}</div>
+            </div>
           </div>
 
-          {/* ====== CONTENIDO POR TAB ====== */}
-          {topTab === "experiences" ? (
-            /* ===================== EXPERIENCES ===================== */
-            <>
-              {/* Layout */}
-              <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-7 px-5 sm:px-6 pb-6 sm:pb-7 mt-4">
-                {/* Izquierda */}
-                <div>
-                  {/* Selector interno Concerts / Other musical experiences */}
-                  <div className="mb-5">
-                    <div className="inline-flex rounded-2xl border border-neutral-200 overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPostType("concert");
-                          setArtistError("");
-                        }}
-                        className={`px-4 py-2 text-sm ${
-                          postType === "concert"
-                            ? "bg-[#1F48AF] text-white"
-                            : "bg-white text-black"
-                        }`}
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
-                      >
-                        Concerts
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPostType("experience");
-                          setArtistError("");
-                        }}
-                        className={`px-4 py-2 text-sm border-l border-neutral-200 ${
-                          postType === "experience"
-                            ? "bg-[#1F48AF] text-white"
-                            : "bg-white text-black"
-                        }`}
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
-                      >
-                        Other musical experiences
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Concerts → buscador */}
-                  {postType === "concert" ? (
-                    <>
-                      {artist ? (
-                        <div className="mb-5 sm:mb-6 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm">
-                          <div className="leading-tight">
-                            <div
-                              style={{
-                                fontFamily:
-                                  '"Times New Roman", Times, serif',
-                              }}
-                            >
-                              {artist.name}
-                            </div>
-                            <div
-                              className="text-sm text-neutral-500"
-                              style={{
-                                fontFamily: "Roboto, Arial, sans-serif",
-                                fontWeight: 300,
-                              }}
-                            >
-                              Artist selected
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setArtist(null);
-                              setArtistError("");
-                            }}
-                            className="text-sm text-[#1F48AF] hover:underline"
-                            style={{
-                              fontFamily: "Roboto, Arial, sans-serif",
-                              fontWeight: 300,
-                            }}
-                          >
-                            Change
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="mb-5 sm:mb-6">
-                          <label
-                            className="block text-xs uppercase tracking-widest text-neutral-600"
-                            style={{
-                              fontFamily: "Roboto, Arial, sans-serif",
-                              fontWeight: 300,
-                            }}
-                          >
-                            Artist
-                          </label>
-                          <div className="mt-2 relative">
-                            <input
-                              value={artistQ}
-                              onChange={(e) => {
-                                setArtistQ(e.target.value);
-                                setArtistError("");
-                              }}
-                              onBlur={() => {
-                                // ⚠️ Evitar limpiar si el blur viene de hacer click en una opción
-                                if (isPickingOptionRef.current) return;
-                                if (!artist && artistQ.trim()) {
-                                  setArtistQ("");
-                                  setArtistError(
-                                    "Please choose an existing artist from the list."
-                                  );
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  if (artistResults.length > 0) {
-                                    const pick = artistResults[0];
-                                    setArtist(pick);
-                                    setArtistQ("");
-                                    setArtistResults([]);
-                                    setArtistError("");
-                                  } else {
-                                    setArtistError(
-                                      "No artists found. Only existing artists can be selected."
-                                    );
-                                  }
-                                }
-                              }}
-                              placeholder="Search artist name…"
-                              className="w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm italic"
-                              style={{
-                                fontFamily: "Roboto, Arial, sans-serif",
-                                fontWeight: 300,
-                              }}
-                            />
-                            {(artistSearching || artistResults.length > 0) && (
-                              <div
-                                className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-xl max-h-[320px] overflow-y-auto"
-                                // Activa flag en mousedown para que se ejecute antes que el blur
-                                onMouseDown={() => {
-                                  isPickingOptionRef.current = true;
-                                }}
-                                onMouseUp={() => {
-                                  // liberar el flag justo después de seleccionar
-                                  setTimeout(() => {
-                                    isPickingOptionRef.current = false;
-                                  }, 0);
-                                }}
-                              >
-                                {artistSearching && (
-                                  <div
-                                    className="px-4 py-3 text-sm text-neutral-500"
-                                    style={{
-                                      fontFamily: "Roboto, Arial, sans-serif",
-                                      fontWeight: 300,
-                                    }}
-                                  >
-                                    Searching…
-                                  </div>
-                                )}
-                                {!artistSearching &&
-                                  artistResults.map((r) => (
-                                    <button
-                                      key={r.id}
-                                      onClick={() => {
-                                        setArtist(r);
-                                        setArtistQ("");
-                                        setArtistResults([]);
-                                        setArtistError("");
-                                      }}
-                                      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 transition"
-                                    >
-                                      <div className="min-w-0">
-                                        <div
-                                          className="truncate"
-                                          style={{
-                                            fontFamily:
-                                              '"Times New Roman", Times, serif',
-                                          }}
-                                        >
-                                          {r.name}
-                                        </div>
-                                      </div>
-                                    </button>
-                                  ))}
-                                {!artistSearching &&
-                                  artistResults.length === 0 &&
-                                  artistQ.trim().length >= 2 && (
-                                    <div
-                                      className="px-4 py-3 text-sm text-neutral-500"
-                                      style={{
-                                        fontFamily:
-                                          "Roboto, Arial, sans-serif",
-                                        fontWeight: 300,
-                                      }}
-                                    >
-                                      No artists found. Only existing artists
-                                      can be selected.
-                                    </div>
-                                  )}
-                              </div>
-                            )}
-                            {artistError && (
-                              <p
-                                className="mt-2 text-xs text-red-600"
-                                style={{
-                                  fontFamily: "Roboto, Arial, sans-serif",
-                                  fontWeight: 300,
-                                }}
-                              >
-                                {artistError}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    // Experiences → selector con el MISMO estilo que Country
-                    <div className="mb-5 sm:mb-6">
-                      <label
-                        className="block text-xs uppercase tracking-widest text-neutral-600"
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
-                      >
-                        Experience type
-                      </label>
-                      <div className="mt-2 relative">
-                        <select
-                          value={experience}
-                          onChange={(e) =>
-                            setExperience(e.target.value as Experience)
-                          }
-                          className="w-full appearance-none rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 pr-10 shadow-sm outline-none focus:ring-2 focus:ring-[#1F48AF]"
-                          style={{
-                            fontFamily: "Roboto, Arial, sans-serif",
-                            fontWeight: 300,
-                          }}
-                        >
-                          <option value="" disabled>
-                            Select one…
-                          </option>
-                          {EXPERIENCE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
-                          ▾
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Country */}
-                  <div className="mb-5 sm:mb-6">
-                    <label
-                      className="block text-xs uppercase tracking-widest text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    >
-                      Country
-                    </label>
-                    <div className="mt-2 relative">
-                      <select
-                        value={countryCode}
-                        onChange={(e) => setCountryCode(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 pr-10 shadow-sm outline-none focus:ring-2 focus:ring-[#1F48AF]"
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
-                      >
-                        <option value="">Select country…</option>
-                        {countries.map((c) => (
-                          <option key={c.code} value={c.code}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
-                        ▾
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* City */}
-                  <div className="mb-5 sm:mb-6">
-                    <label
-                      className="block text-xs uppercase tracking-widest text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial",
-                        fontWeight: 300,
-                      }}
-                    >
-                      City
-                    </label>
-                    <input
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="Type your city…"
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
-                      style={{
-                        fontFamily: "Roboto, Arial",
-                        fontWeight: 300,
-                      }}
-                    />
-                  </div>
-
-                  {/* Date */}
-                  <div className="mb-5 sm:mb-6">
-                    <label
-                      className="block text-xs uppercase tracking-widest text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    >
-                      Date
-                    </label>
-                    <input
-                      type="date"
-                      value={dateStr}
-                      onChange={(e) => setDateStr(e.target.value)}
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    />
-                  </div>
-
-                  {/* Name of the event */}
-                  <div className="mb-5 sm:mb-6">
-                    <label
-                      className="block text-xs uppercase tracking-widest text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    >
-                      Name of the event
-                    </label>
-                    <input
-                      value={tourName}
-                      onChange={(e) => setTourName(e.target.value)}
-                      placeholder="Tour name…"
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    />
-                  </div>
-
-                  {/* Caption (oculto por ahora) */}
-                  <div className="hidden">
-                    <label
-                      className="block text-xs uppercase tracking-widest text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    >
-                      Caption (optional)
-                    </label>
-                    <textarea
-                      value={caption}
-                      onChange={(e) => setCaption(e.target.value)}
-                      rows={6}
-                      placeholder="Write something…"
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Derecha: Photos and videos */}
-                <div>
-                  <label
-                    className="block text-xs uppercase tracking-widest text-neutral-600"
-                    style={{
-                      fontFamily: "Roboto, Arial, sans-serif",
-                      fontWeight: 300,
-                    }}
-                  >
-                    Photos and videos
-                  </label>
-
-                  {/* Zona DnD (mantiene validaciones) */}
-                  <div
-                    onDragEnter={() => setIsDragging(true)}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={async (ev) => {
-                      ev.preventDefault();
-                      setIsDragging(false);
-                      await addIncomingFiles(ev.dataTransfer?.files ?? null);
-                    }}
-                    onDragOver={(ev) => ev.preventDefault()}
-                    className={[
-                      "mt-2 rounded-2xl border border-dashed p-4 sm:p-5 bg.white/70 backdrop-blur transition".replace(
-                        "bg.white",
-                        "bg-white"
-                      ),
-                      isDragging
-                        ? "border-[#1F48AF] ring-2 ring-[#1F48AF]/40"
-                        : "border-neutral-300",
-                    ].join(" ")}
-                  >
-                    {/* Controles separados: imágenes y vídeo */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        ref={imagesInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => onPickImages(e.target.files)}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (imageCount >= MAX_PHOTOS) {
-                            alert(LIMIT_REACHED_MSG);
-                            return;
-                          }
-                          imagesInputRef.current?.click();
-                        }}
-                        disabled={imageCount >= MAX_PHOTOS}
-                        className="text-sm rounded-xl bg-[#1F48AF] px-4 py-2 text-white shadow-sm transition hover:shadow disabled:opacity-40"
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
-                      >
-                        {imageCount >= MAX_PHOTOS
-                          ? "Max photos reached"
-                          : "Add photos"}
-                      </button>
-
-                      <input
-                        ref={videoInputRef}
-                        type="file"
-                        accept="video/*"
-                        onChange={(e) => onPickVideo(e.target.files)}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (videoFile) {
-                            alert(ONE_VIDEO_MSG);
-                            return;
-                          }
-                          videoInputRef.current?.click();
-                        }}
-                        disabled={!!videoFile}
-                        className="text-sm rounded-xl bg-black px-4 py-2 text-white shadow-sm transition hover:shadow disabled:opacity-40"
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
-                      >
-                        {videoFile ? "Video added" : "Add 1 video (≤15s)"}
-                      </button>
-
-                      {!!files.length && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFiles([]);
-                            resetInput(imagesInputRef);
-                            resetInput(videoInputRef);
-                          }}
-                          className="text-sm text-[#1F48AF] hover:underline ml-auto"
-                          style={{
-                            fontFamily: "Roboto, Arial, sans-serif",
-                            fontWeight: 300,
-                          }}
-                        >
-                          Clear all
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Nota de ayuda y contador */}
-                    <p
-                      className="mt-2 text-xs text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    >
-                      You can upload up to six photos and one video (15s max).
-                      Non-compliant files will be rejected automatically.
-                    </p>
-                    <span
-                      className="mt-1 inline-block text-xs text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    >
-                      {imageCount}/{MAX_PHOTOS} photos · {videoFile ? 1 : 0}/
-                      {MAX_VIDEOS} video
-                    </span>
-
-                    {/* Estado vacío para DnD */}
-                    {!files.length && (
-                      <p
-                        className="mt-2 text-xs text-neutral-500 italic"
-                        style={{ fontFamily: "Roboto, Arial", fontWeight: 300 }}
-                      >
-                        Drag & drop images or a video, or use the buttons above.
-                      </p>
-                    )}
-
-                    {/* Previews */}
-                    {previews.length > 0 && (
-                      <div className="mt-4 grid grid-cols-3 gap-2">
-                        {previews.map((p, i) => (
-                          <div key={i} className="relative group">
-                            {p.kind === "image" ? (
-                              <img
-                                src={p.url}
-                                alt=""
-                                className="h-28 w-full rounded-xl object-cover"
-                              />
-                            ) : (
-                              <video
-                                src={p.url}
-                                className="h-28 w-full rounded-xl object-cover"
-                                muted
-                              />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => removeFileAt(i)}
-                              className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-black/70 text-white text-xs leading-6 text-center shadow opacity-0 group-hover:opacity-100"
-                              aria-label="Remove file"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {/* Actions */}
-              <div className="px-5 sm:px-6 pb-6 sm:pb-7">
-                <div className="mt-2 flex items-center gap-3">
-                  <button
-                    onClick={onSubmitExperience}
-                    disabled={!canPublishExperience}
-                    className="rounded-xl bg-[#1F48AF] px-6 py-3 text-white shadow-sm transition hover:shadow disabled:opacity-40"
-                    style={{
-                      fontFamily: "Roboto, Arial, sans-serif",
-                      fontWeight: 300,
-                    }}
-                  >
-                    {submitting ? "Publishing…" : "Publish"}
-                  </button>
-                  {done && (
-                    <span
-                      className="text-sm text-green-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
-                    >
-                      {done}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            /* ===================== LISTENER TAKES ===================== */
-            <section className="px-5 sm:px-6 pb-8 sm:pb-10 mt-5">
-              {/* Buscador de discos */}
-              <div className="max-w-[680px]">
-                {selectedRecord ? (
+          {/* ===================== MEMORIES ===================== */}
+          {topTab === "memories" ? (
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-7 px-5 sm:px-6 pb-6 sm:pb-7 mt-5">
+              {/* Left */}
+              <div>
+                {/* Artist */}
+                {artist ? (
                   <div className="mb-5 sm:mb-6 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm">
                     <div className="leading-tight">
+                      <div style={{ fontFamily: '"Times New Roman", Times, serif' }}>{artist.name}</div>
                       <div
-                        className="truncate"
-                        style={{
-                          fontFamily: '"Times New Roman", Times, serif',
-                        }}
+                        className="text-sm text-neutral-500"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
                       >
-                        {selectedRecord.title}
+                        Artist selected
                       </div>
-                      <div
-                        className="text-xs text-neutral-500"
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
-                      >
-                        {selectedRecord.artist_name || "—"}
-                        {selectedRecord.release_year
-                          ? ` · ${selectedRecord.release_year}`
-                          : ""}
-                      </div>
-                    </div>
-                    <div
-                      className="w-10 h-10 rounded-lg"
-                      style={{
-                        backgroundColor:
-                          selectedRecord.vibe_color || "#F4F4F4",
-                      }}
-                      title="Album aesthetic"
-                    >
-                      <div
-                        className="w-3.5 h-3.5 rounded-sm shadow-sm m-3"
-                        style={{
-                          backgroundColor:
-                            selectedRecord.cover_color || "#000",
-                        }}
-                      />
                     </div>
                     <button
                       onClick={() => {
-                        setSelectedRecord(null);
-                        setTakeRate(null);
+                        setArtist(null);
+                        setArtistError("");
                       }}
                       className="text-sm text-[#1F48AF] hover:underline"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
-                      }}
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
                     >
                       Change
                     </button>
@@ -1348,10 +766,563 @@ export default function NewPostPage() {
                   <div className="mb-5 sm:mb-6">
                     <label
                       className="block text-xs uppercase tracking-widest text-neutral-600"
-                      style={{
-                        fontFamily: "Roboto, Arial, sans-serif",
-                        fontWeight: 300,
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      Artist
+                    </label>
+                    <div className="mt-2 relative">
+                      <input
+                        value={artistQ}
+                        onChange={(e) => {
+                          setArtistQ(e.target.value);
+                          setArtistError("");
+                        }}
+                        onBlur={() => {
+                          if (isPickingOptionRef.current) return;
+                          if (!artist && artistQ.trim()) {
+                            setArtistQ("");
+                            setArtistError("Please choose an existing artist from the list.");
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (artistResults.length > 0) {
+                              const pick = artistResults[0];
+                              setArtist(pick);
+                              setArtistQ("");
+                              setArtistResults([]);
+                              setArtistError("");
+                            } else {
+                              setArtistError("No artists found. Only existing artists can be selected.");
+                            }
+                          }
+                        }}
+                        placeholder="Search artist name…"
+                        className="w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm italic"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      />
+
+                      {(artistSearching || artistResults.length > 0) && (
+                        <div
+                          className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-xl max-h-[320px] overflow-y-auto"
+                          onMouseDown={() => {
+                            isPickingOptionRef.current = true;
+                          }}
+                          onMouseUp={() => {
+                            setTimeout(() => {
+                              isPickingOptionRef.current = false;
+                            }, 0);
+                          }}
+                        >
+                          {artistSearching && (
+                            <div
+                              className="px-4 py-3 text-sm text-neutral-500"
+                              style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                            >
+                              Searching…
+                            </div>
+                          )}
+                          {!artistSearching &&
+                            artistResults.map((r) => (
+                              <button
+                                key={r.id}
+                                onClick={() => {
+                                  setArtist(r);
+                                  setArtistQ("");
+                                  setArtistResults([]);
+                                  setArtistError("");
+                                }}
+                                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 transition"
+                              >
+                                <div className="min-w-0">
+                                  <div className="truncate" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                                    {r.name}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+
+                      {artistError && (
+                        <p
+                          className="mt-2 text-xs text-red-600"
+                          style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                        >
+                          {artistError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Country */}
+                <div className="mb-5 sm:mb-6">
+                  <label
+                    className="block text-xs uppercase tracking-widest text-neutral-600"
+                    style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                  >
+                    Country
+                  </label>
+                  <div className="mt-2 relative">
+                    <select
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 pr-10 shadow-sm outline-none focus:ring-2 focus:ring-[#1F48AF]"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      <option value="">Select country…</option>
+                      {countries.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                      ▾
+                    </span>
+                  </div>
+                </div>
+
+                {/* City */}
+                <div className="mb-5 sm:mb-6">
+                  <label
+                    className="block text-xs uppercase tracking-widest text-neutral-600"
+                    style={{ fontFamily: "Roboto, Arial", fontWeight: 300 }}
+                  >
+                    City
+                  </label>
+                  <input
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Type your city…"
+                    className="mt-2 w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
+                    style={{ fontFamily: "Roboto, Arial", fontWeight: 300 }}
+                  />
+                </div>
+
+                {/* Date */}
+                <div className="mb-5 sm:mb-6">
+                  <label
+                    className="block text-xs uppercase tracking-widest text-neutral-600"
+                    style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                  >
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={dateStr}
+                    onChange={(e) => setDateStr(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
+                    style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                  />
+                </div>
+
+                {/* Event name */}
+                <div className="mb-5 sm:mb-6">
+                  <label
+                    className="block text-xs uppercase tracking-widest text-neutral-600"
+                    style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                  >
+                    Name of the event
+                  </label>
+                  <input
+                    value={tourName}
+                    onChange={(e) => setTourName(e.target.value)}
+                    placeholder="Tour name…"
+                    className="mt-2 w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
+                    style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                  />
+                </div>
+
+                {/* caption hidden */}
+                <div className="hidden">
+                  <textarea value={caption} onChange={(e) => setCaption(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Right */}
+              <div>
+                <label
+                  className="block text-xs uppercase tracking-widest text-neutral-600"
+                  style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                >
+                  Photos and videos
+                </label>
+
+                <div
+                  onDrop={async (ev) => {
+                    ev.preventDefault();
+                    await addIncomingFiles(ev.dataTransfer?.files ?? null);
+                  }}
+                  onDragOver={(ev) => ev.preventDefault()}
+                  className="mt-2 rounded-2xl border border-dashed p-4 sm:p-5 bg-white/70 backdrop-blur transition border-neutral-300"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={imagesInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => onPickImages(e.target.files)}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => imagesInputRef.current?.click()}
+                      className="text-sm rounded-xl bg-[#1F48AF] px-4 py-2 text-white shadow-sm transition hover:shadow"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      Add photos
+                    </button>
+
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept="video/*"
+                      multiple
+                      onChange={(e) => onPickVideo(e.target.files)}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      className="text-sm rounded-xl bg-black px-4 py-2 text-white shadow-sm transition hover:shadow"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      Add videos
+                    </button>
+
+                    {!!files.length && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiles([]);
+                          resetInput(imagesInputRef);
+                          resetInput(videoInputRef);
+                          setSelectedCoverIdx(0);
+                          setShowCoverPicker(false);
+                        }}
+                        className="text-sm text-[#1F48AF] hover:underline ml-auto"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+
+                  {previews.length > 0 && (
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      {previews.map((p, i) => (
+                        <div key={i} className="relative group">
+                          {p.kind === "image" ? (
+                            <img src={p.url} alt="" className="h-28 w-full rounded-xl object-cover" />
+                          ) : (
+                            <video src={p.url} className="h-28 w-full rounded-xl object-cover" muted />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeFileAt(i)}
+                            className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-black/70 text-white text-xs leading-6 text-center shadow opacity-0 group-hover:opacity-100"
+                            aria-label="Remove file"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* POSTCARD COVER (CLARO, visible si hay fotos) */}
+                  {imageFiles.length > 0 && (
+                    <div className="mt-4">
+                      <div
+                        className="text-[11px] uppercase tracking-[0.16em] text-neutral-600"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      >
+                        Postcard cover
+                      </div>
+
+                      {/* Bloque visual 2 cuadrados + Change */}
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-20 w-20 rounded-2xl overflow-hidden border border-neutral-200 bg-white">
+                            {currentCoverThumb ? (
+                              <img src={currentCoverThumb.url} alt="" className="h-full w-full object-cover" />
+                            ) : null}
+                          </div>
+                          <div className="relative w-20 h-20 rounded-2xl shadow-md border border-neutral-200 bg-white">
+                            <div
+                              className="absolute rounded-[10px] bg-neutral-900"
+                              style={{ inset: "24%", opacity: 0.12 }}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowCoverPicker((s) => !s)}
+                          className="text-[10px] rounded-full border border-[#1F48AF] text-[#1F48AF] px-4 py-1.5 leading-none tracking-[0.14em] uppercase bg-white hover:bg-[#1F48AF] hover:text-white transition"
+                        >
+                          Change
+                        </button>
+                      </div>
+
+                      {/* Selector horizontal */}
+                      {showCoverPicker && (
+                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                          {imageFiles.map((f, idx) => {
+                            const url = URL.createObjectURL(f);
+                            const active = idx === selectedCoverIdx;
+                            return (
+                              <button
+                                key={`${f.name}-${idx}`}
+                                type="button"
+                                onClick={() => setSelectedCoverIdx(idx)}
+                                className={`shrink-0 rounded-xl border overflow-hidden ${
+                                  active ? "border-[#1F48AF]" : "border-neutral-200"
+                                }`}
+                                aria-pressed={active}
+                              >
+                                <img src={url} alt="" className="h-20 w-20 object-cover" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {/* ===================== COLLECTION ===================== */}
+          {topTab === "collection" ? (
+            <section className="px-5 sm:px-6 pb-8 sm:pb-10 mt-5">
+              <div className="max-w-[680px]">
+                {selectedCollectionRecord ? (
+                  <div className="mb-5 sm:mb-6 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm">
+                    <div className="leading-tight min-w-0">
+                      <div className="truncate" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                        {selectedCollectionRecord.title}
+                      </div>
+                      <div
+                        className="text-xs text-neutral-500"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      >
+                        {selectedCollectionRecord.artist_name || "—"}
+                        {selectedCollectionRecord.release_year ? ` · ${selectedCollectionRecord.release_year}` : ""}
+                      </div>
+                    </div>
+
+                    <div
+                      className="relative w-10 h-10 rounded-lg shrink-0 border border-neutral-200 overflow-hidden"
+                      style={{ backgroundColor: selectedCollectionRecord.vibe_color || "#F4F4F4" }}
+                      title="Album aesthetic"
+                    >
+                      <div
+                        className="absolute rounded-[5px]"
+                        style={{
+                          backgroundColor: selectedCollectionRecord.cover_color || "#000",
+                          inset: "32%",
+                          opacity: 0.95,
+                        }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedCollectionRecord(null)}
+                      className="text-sm text-[#1F48AF] hover:underline"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mb-5 sm:mb-6">
+                    <label
+                      className="block text-xs uppercase tracking-widest text-neutral-600"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      Record
+                    </label>
+                    <div className="mt-2 relative">
+                      <input
+                        value={collectionRecordQ}
+                        onChange={(e) => setCollectionRecordQ(e.target.value)}
+                        placeholder="Search title or artist…"
+                        className="w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      />
+
+                      {(collectionSearching || collectionResults.length > 0) && (
+                        <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-xl max-h-[360px] overflow-y-auto">
+                          {collectionSearching && (
+                            <div
+                              className="px-4 py-3 text-sm text-neutral-500"
+                              style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                            >
+                              Searching…
+                            </div>
+                          )}
+                          {!collectionSearching &&
+                            collectionResults.map((r) => (
+                              <button
+                                key={r.id}
+                                onClick={() => {
+                                  setSelectedCollectionRecord(r);
+                                  setCollectionResults([]);
+                                  setCollectionRecordQ("");
+                                }}
+                                className="w-full text-left px-4 py-3 hover:bg-neutral-50 transition"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="truncate" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                                      {r.title}
+                                    </div>
+                                    <div
+                                      className="text-xs text-neutral-500"
+                                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                                    >
+                                      {r.artist_name || "—"}
+                                      {r.release_year ? ` · ${r.release_year}` : ""}
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    className="relative w-9 h-9 rounded-lg shrink-0 border border-neutral-200 overflow-hidden"
+                                    style={{ backgroundColor: r.vibe_color || "#F4F4F4" }}
+                                  >
+                                    <div
+                                      className="absolute rounded-[5px]"
+                                      style={{
+                                        backgroundColor: r.cover_color || "#000",
+                                        inset: "32%",
+                                        opacity: 0.95,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Photo */}
+                <div className="mb-5">
+                  <label
+                    className="block text-xs uppercase tracking-widest text-neutral-600"
+                    style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                  >
+                    Photo (with your record)
+                  </label>
+
+                  <input
+                    ref={collectionPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setCollectionPhoto(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+
+                  <div className="mt-2 rounded-2xl border border-neutral-200 bg-white/70 backdrop-blur p-4 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => collectionPhotoInputRef.current?.click()}
+                        className="text-sm rounded-xl bg-[#1F48AF] px-4 py-2 text-white shadow-sm transition hover:shadow"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      >
+                        {collectionPhoto ? "Change photo" : "Add photo"}
+                      </button>
+
+                      {collectionPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCollectionPhoto(null);
+                            if (collectionPhotoInputRef.current) collectionPhotoInputRef.current.value = "";
+                          }}
+                          className="text-sm text-[#1F48AF] hover:underline"
+                          style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    {collectionPhoto && (
+                      <div className="mt-3">
+                        <img
+                          src={URL.createObjectURL(collectionPhoto)}
+                          alt=""
+                          className="w-full max-h-[360px] rounded-2xl object-cover border border-neutral-200"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {/* ===================== OPINION ===================== */}
+          {topTab === "opinion" ? (
+            <section className="px-5 sm:px-6 pb-8 sm:pb-10 mt-5">
+              <div className="max-w-[680px]">
+                {/* Record picker */}
+                {selectedRecord ? (
+                  <div className="mb-5 sm:mb-6 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm">
+                    <div className="leading-tight min-w-0">
+                      <div className="truncate" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                        {selectedRecord.title}
+                      </div>
+                      <div
+                        className="text-xs text-neutral-500"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      >
+                        {selectedRecord.artist_name || "—"}
+                        {selectedRecord.release_year ? ` · ${selectedRecord.release_year}` : ""}
+                      </div>
+                    </div>
+
+                    <div
+                      className="relative w-10 h-10 rounded-lg shrink-0 border border-neutral-200 overflow-hidden"
+                      style={{ backgroundColor: selectedRecord.vibe_color || "#F4F4F4" }}
+                      title="Album aesthetic"
+                    >
+                      <div
+                        className="absolute rounded-[5px]"
+                        style={{
+                          backgroundColor: selectedRecord.cover_color || "#000",
+                          inset: "32%",
+                          opacity: 0.95,
+                        }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setSelectedRecord(null);
+                        setTakeRate(null);
                       }}
+                      className="text-sm text-[#1F48AF] hover:underline"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mb-5 sm:mb-6">
+                    <label
+                      className="block text-xs uppercase tracking-widest text-neutral-600"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
                     >
                       Record
                     </label>
@@ -1361,20 +1332,14 @@ export default function NewPostPage() {
                         onChange={(e) => setRecordQ(e.target.value)}
                         placeholder="Search title or artist…"
                         className="w-full rounded-xl border border-neutral-200 bg-white/70 backdrop-blur px-4 py-3 outline-none focus:ring-2 focus:ring-[#1F48AF] shadow-sm"
-                        style={{
-                          fontFamily: "Roboto, Arial, sans-serif",
-                          fontWeight: 300,
-                        }}
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
                       />
                       {(recordSearching || recordResults.length > 0) && (
                         <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-xl max-h-[360px] overflow-y-auto">
                           {recordSearching && (
                             <div
                               className="px-4 py-3 text-sm text-neutral-500"
-                              style={{
-                                fontFamily: "Roboto, Arial, sans-serif",
-                                fontWeight: 300,
-                              }}
+                              style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
                             >
                               Searching…
                             </div>
@@ -1390,113 +1355,112 @@ export default function NewPostPage() {
                                 }}
                                 className="w-full text-left px-4 py-3 hover:bg-neutral-50 transition"
                               >
-                                <div
-                                  className="font-normal"
-                                  style={{
-                                    fontFamily:
-                                      '"Times New Roman", Times, serif',
-                                  }}
-                                >
-                                  {r.title}
-                                </div>
-                                <div
-                                  className="text-xs text-neutral-500"
-                                  style={{
-                                    fontFamily: "Roboto, Arial, sans-serif",
-                                    fontWeight: 300,
-                                  }}
-                                >
-                                  {r.artist_name || "—"}
-                                  {r.release_year ? ` · ${r.release_year}` : ""}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="truncate" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+                                      {r.title}
+                                    </div>
+                                    <div
+                                      className="text-xs text-neutral-500"
+                                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                                    >
+                                      {r.artist_name || "—"}
+                                      {r.release_year ? ` · ${r.release_year}` : ""}
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    className="relative w-9 h-9 rounded-lg shrink-0 border border-neutral-200 overflow-hidden"
+                                    style={{ backgroundColor: r.vibe_color || "#F4F4F4" }}
+                                  >
+                                    <div
+                                      className="absolute rounded-[5px]"
+                                      style={{
+                                        backgroundColor: r.cover_color || "#000",
+                                        inset: "32%",
+                                        opacity: 0.95,
+                                      }}
+                                    />
+                                  </div>
                                 </div>
                               </button>
                             ))}
-                          {!recordSearching &&
-                            recordResults.length === 0 &&
-                            recordQ.trim().length >= 2 && (
-                              <div
-                                className="px-4 py-3 text-sm text-neutral-500"
-                                style={{
-                                  fontFamily: "Roboto, Arial, sans-serif",
-                                  fontWeight: 300,
-                                }}
-                              >
-                                No records found.
-                              </div>
-                            )}
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Composer de la reseña */}
-                <div className="bg-white border border-neutral-200 rounded-3xl p-4 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+                {/* Composer (sin open/close) */}
+                <div className="rounded-3xl border border-neutral-200 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.06)] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full overflow-hidden bg-neutral-200 shrink-0 border border-neutral-200">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={() => setAvatarUrl(null)}
+                        />
+                      ) : (
+                        <div className="h-full w-full" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div
+                        className="text-[13px] text-neutral-900 truncate"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      >
+                        {displayName ? displayName : "Write your opinion"}
+                      </div>
+                      <div
+                        className="text-[11px] text-neutral-500"
+                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                      >
+                        For the fans, not critics.
+                      </div>
+                    </div>
+                  </div>
+
                   <textarea
                     value={takeBody}
                     onChange={(e) => setTakeBody(e.target.value)}
-                    placeholder="Share your thoughts about this record…"
-                    className="w-full min-h-[110px] border border-neutral-300 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF] font-[family-name:Times_New_Roman,Times,serif]"
-                    maxLength={280}
+                    placeholder={selectedRecord ? "Share what stayed with you…" : "Select a record to start writing."}
+                    disabled={!selectedRecord}
+                    className="mt-3 w-full min-h-[140px] border border-neutral-200 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF]"
+                    style={{ fontFamily: '"Times New Roman", Times, serif' }}
                   />
 
-                  {/* ⭐ Selector de rating obligatorio (1–10) */}
                   <div className="mt-3">
-                    <div className="text-[12px] text-neutral-600 mb-2 flex items-center gap-2">
-                      <span>Select your rating (required)</span>
+                    <div
+                      className="text-[11px] text-neutral-600 mb-2"
+                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
+                    >
+                      Rating (required)
                     </div>
                     <div className="grid grid-cols-10 gap-1">
-                      {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                         <button
                           key={n}
+                          type="button"
                           onClick={() => setTakeRate(n)}
-                          className={`h-9 rounded-full border text-sm ${
-                            takeRate===n ? "bg-[#1F48AF] text-white border-[#1F48AF]" : "border-neutral-300 hover:bg-neutral-50"
-                          }`}
-                          aria-pressed={takeRate===n}
-                          aria-label={`Rate ${n}`}
+                          disabled={!selectedRecord}
+                          className={`h-9 rounded-full border text-sm transition ${
+                            takeRate === n
+                              ? "bg-[#1F48AF] text-white border-[#1F48AF]"
+                              : "border-neutral-300 hover:bg-neutral-50"
+                          } ${!selectedRecord ? "opacity-50 cursor-not-allowed" : ""}`}
+                          aria-pressed={takeRate === n}
                         >
                           {n}
                         </button>
                       ))}
                     </div>
                   </div>
-
-                  <div className="mt-3 flex items-center justify-between">
-                    <span
-                      className={`text-xs ${
-                        takeBody.length > 280
-                          ? "text-red-600"
-                          : "text-neutral-500"
-                      }`}
-                    >
-                      {280 - takeBody.length}
-                    </span>
-                    <button
-                      onClick={submitTake}
-                      disabled={!canPublishTake}
-                      className={`text-xs px-4 py-2 rounded-full ${
-                        canPublishTake
-                          ? "bg-[#1F48AF] text-white"
-                          : "bg-neutral-300 text-neutral-600 cursor-not-allowed"
-                      }`}
-                    >
-                      {postingTake ? "Posting…" : "Share Take"}
-                    </button>
-                  </div>
                 </div>
-
-                <p
-                  className="mt-3 text-xs text-neutral-500"
-                  style={{
-                    fontFamily: "Roboto, Arial, sans-serif",
-                    fontWeight: 300,
-                  }}
-                >
-                </p>
               </div>
             </section>
-          )}
+          ) : null}
         </div>
       </main>
     </div>
