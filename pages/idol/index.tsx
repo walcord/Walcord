@@ -546,7 +546,7 @@ const TheIdolPage: React.FC = () => {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-[calc(env(safe-area-inset-top)+24px)] sm:pt-[calc(env(safe-area-inset-top)+32px)] pb-[calc(env(safe-area-inset-bottom)+96px)]">
+      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-[calc(env(safe-area-inset-top)+64px)] sm:pt-[calc(env(safe-area-inset-top)+72px)] pb-[calc(env(safe-area-inset-bottom)+160px)]">
         {/* HEADER */}
         <header>
           <h1
@@ -614,7 +614,7 @@ const TheIdolPage: React.FC = () => {
 
       {/* VIDEO MODAL */}
       {activeVideo && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white px-4">
           <div className="relative w-full max-w-3xl rounded-3xl border border-neutral-200 bg-white shadow-[0_18px_60px_rgba(0,0,0,0.30)]">
             <button
               type="button"
