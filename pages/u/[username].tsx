@@ -118,19 +118,46 @@ export default function ExternalProfilePage() {
         .order('event_date', { ascending: false });
 
       if (!error && byView && byView.length > 0) {
-        setConcerts(
-          (byView as any[]).map((r) => ({
-            id: r.concert_id,
-            user_id: r.user_id,
-            artist_id: r.artist_id,
-            artist_name: r.artist_name,
-            country_code: r.country_code,
-            country_name: r.country_name ?? null,
-            city: r.city ?? null,
-            event_date: r.event_date,
-            cover_url: r.cover_url ?? null,
-          }))
-        );
+        let mapped: CardRow[] = (byView as any[]).map((r) => ({
+          id: r.concert_id,
+          user_id: r.user_id,
+          artist_id: r.artist_id,
+          artist_name: r.artist_name,
+          country_code: r.country_code,
+          country_name: r.country_name ?? null,
+          city: r.city ?? null,
+          event_date: r.event_date,
+          cover_url: r.cover_url ?? null,
+        }));
+
+        // ✅ Fallback: si la view devuelve cover_url null, buscamos el último media real
+        const missingIds = mapped.filter((x) => !x.cover_url).map((x) => x.id);
+
+        if (missingIds.length > 0) {
+          const { data: mediaRows } = await supabase
+            .from('concert_media')
+            .select('concert_id, url, created_at')
+            .in('concert_id', missingIds)
+            .order('created_at', { ascending: false });
+
+          if (mediaRows?.length) {
+            const firstByConcert = new Map<string, string>();
+
+            for (const row of mediaRows as any[]) {
+              if (!row?.concert_id || !row?.url) continue;
+              if (!firstByConcert.has(row.concert_id)) {
+                firstByConcert.set(row.concert_id, row.url);
+              }
+            }
+
+            mapped = mapped.map((x) => ({
+              ...x,
+              cover_url: x.cover_url ?? firstByConcert.get(x.id) ?? null,
+            }));
+          }
+        }
+
+        setConcerts(mapped);
         setConcertsLoading(false);
         return;
       }
