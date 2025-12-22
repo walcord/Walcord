@@ -446,7 +446,7 @@ const ReviewPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-white">
+      <main className="min-h-[100dvh] bg-white">
         <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-10 pb-16">
           <p className="text-sm text-neutral-500">Loading review…</p>
         </div>
@@ -456,7 +456,7 @@ const ReviewPage: React.FC = () => {
 
   if (!review) {
     return (
-      <main className="min-h-screen bg-white">
+      <main className="min-h-[100dvh] bg-white">
         <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-10 pb-16">
           <p className="text-sm text-neutral-500">This review could not be found.</p>
         </div>
@@ -465,8 +465,22 @@ const ReviewPage: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-16">
+    <main className="min-h-[100dvh] bg-white">
+      {/* TOP — back button */}
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between bg-white">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
+
+      <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-2 sm:pt-3 pb-24">
         {/* MAIN CARD */}
         <article className="rounded-[32px] border border-neutral-200 bg-white px-5 py-5 sm:px-7 sm:py-7 shadow-[0_22px_70px_rgba(0,0,0,0.10)]">
           {/* Header: user + date + rating */}
@@ -611,26 +625,35 @@ const ReviewPage: React.FC = () => {
       </div>
 
       {/* LIKES BOTTOM SHEET */}
-      <div className={`fixed inset-0 z-40 flex items-end justify-center ${likesPanelOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
+      <div
+        className={`fixed inset-0 z-40 flex items-end justify-center ${
+          likesPanelOpen ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+      >
         <div
           className={`absolute inset-0 bg-black/40 transition-opacity ${likesPanelOpen ? "opacity-100" : "opacity-0"}`}
           onClick={closeLikesPanel}
         />
+
         <div
           className={`relative w-full max-w-md rounded-t-3xl bg-white shadow-[0_-12px_40px_rgba(15,23,42,0.18)] transition-transform duration-300 ${
             likesPanelOpen ? "translate-y-0" : "translate-y-full"
           }`}
           style={{
-            maxHeight: "70vh",
+            maxHeight: "calc(100dvh - (env(safe-area-inset-top) + 72px))",
             paddingTop: "14px",
-            paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 92px)",
           }}
         >
           <div className="flex items-center justify-center mb-2">
             <div className="h-1 w-10 rounded-full bg-neutral-300" />
           </div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-center text-neutral-500 mb-3">Likes</p>
-          <div className="px-4 pb-1 overflow-y-auto" style={{ maxHeight: "calc(70vh - 56px)" }}>
+
+          <div
+            className="px-4 pb-1 overflow-y-auto"
+            style={{ maxHeight: "calc(100dvh - (env(safe-area-inset-top) + 72px + 92px + 56px))" }}
+          >
             {loadingLikesUsers ? (
               <p className="py-4 text-sm text-neutral-500 text-center">Loading…</p>
             ) : likesUsers.length === 0 ? (
