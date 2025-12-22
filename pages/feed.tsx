@@ -654,7 +654,16 @@ function ConcertTile({ row }: { row: RowConcert }) {
           <img
             src={cover}
             alt=""
+            loading="eager"
+            decoding="async"
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            style={{
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)",
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              imageOrientation: "from-image" as any,
+            }}
           />
         ) : null}
 
@@ -713,7 +722,16 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
           <img
             src={cover}
             alt=""
+            loading="eager"
+            decoding="async"
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            style={{
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)",
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              imageOrientation: "from-image" as any,
+            }}
           />
         ) : null}
 
@@ -1075,8 +1093,9 @@ export default function FeedPage() {
           className={`absolute left-0 right-0 top-0 bg-white border-b border-neutral-200 shadow-[0_20px_60px_rgba(0,0,0,0.18)] transition-transform duration-300 ease-out ${
             searchOpen ? "translate-y-0" : "-translate-y-full"
           }`}
+          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
         >
-          <div className="mx-auto max-w-[980px] px-4 md:px-6 pt-4 pb-5">
+          <div className="mx-auto max-w-[980px] px-4 md:px-6 pt-0 pb-5">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[18px]" style={{ fontFamily: "Times New Roman, serif" }}>
                 Search
