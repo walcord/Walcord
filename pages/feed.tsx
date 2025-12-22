@@ -990,9 +990,12 @@ export default function FeedPage() {
   const closeSearch = () => setSearchOpen(false);
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5]">
+    <div
+      className="min-h-screen bg-white"
+      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 18px)" }}
+    >
       {/* Header */}
-      <div className="mx-auto max-w-[980px] px-5 md:px-6 pt-6 sm:pt-8 pb-3">
+      <div className="mx-auto max-w-[980px] px-4 md:px-6 pt-4 sm:pt-6 pb-3">
         <div className="flex items-end justify-between gap-3">
           <div className="w-full">
             <h1
@@ -1045,7 +1048,7 @@ export default function FeedPage() {
       </div>
 
       {/* ✅ Horizontal swipe container (como Profile) */}
-      <main className="mx-auto max-w-[980px] px-5 md:px-6 pb-16">
+      <main className="mx-auto max-w-[980px] px-4 md:px-6 pb-16">
         <div ref={scrollRef} onScroll={handleHorizontalScroll} className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar">
           {/* PANEL 1 — GENERAL */}
           <div className="snap-center min-w-full">
@@ -1073,7 +1076,7 @@ export default function FeedPage() {
             searchOpen ? "translate-y-0" : "-translate-y-full"
           }`}
         >
-          <div className="mx-auto max-w-[980px] px-5 md:px-6 pt-4 pb-5">
+          <div className="mx-auto max-w-[980px] px-4 md:px-6 pt-4 pb-5">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[18px]" style={{ fontFamily: "Times New Roman, serif" }}>
                 Search
