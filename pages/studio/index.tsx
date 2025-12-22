@@ -136,6 +136,34 @@ const TheStudioPage = () => {
     useState<RecordOfTheWeek | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
 
+  // ✅ FIX Xcode/WebView: al entrar en la página, fuerza arriba para que el headline se vea
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
+    }
+  }, []);
+
+  // ✅ Smooth: cuando hay modal, bloquea scroll del body para evitar saltos/feeling “arcaico”
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const prevOverflow = document.body.style.overflow;
+    const prevTouch = (document.body.style as any).webkitOverflowScrolling;
+
+    if (activeVideo) {
+      document.body.style.overflow = "hidden";
+      (document.body.style as any).webkitOverflowScrolling = "auto";
+    } else {
+      document.body.style.overflow = prevOverflow;
+      (document.body.style as any).webkitOverflowScrolling = prevTouch;
+    }
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      (document.body.style as any).webkitOverflowScrolling = prevTouch;
+    };
+  }, [activeVideo]);
+
   useEffect(() => {
     const fetchStudioData = async () => {
       try {
@@ -233,7 +261,8 @@ const TheStudioPage = () => {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-[calc(env(safe-area-inset-top)+24px)] sm:pt-[calc(env(safe-area-inset-top)+32px)] pb-[calc(env(safe-area-inset-bottom)+96px)]">
+      {/* ✅ Layout app: SIN safe-area arriba (evita huecazo), y +padding abajo para no chocar con tab bar */}
+      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-[calc(env(safe-area-inset-bottom)+120px)]">
         {/* HEADER */}
         <header>
           <h1
@@ -611,11 +640,17 @@ const TheStudioPage = () => {
         </section>
       </div>
 
-      {/* OVERLAY DE VÍDEO – marco editorial compacto */}
+      {/* ✅ VIDEO MODAL: sin blur, sin gris, sin fondo blanco -> mantiene lo de atrás */}
       {activeVideo && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
-          <div className="relative w-full max-w-3xl rounded-3xl border border-neutral-200 bg-white shadow-[0_18px_60px_rgba(0,0,0,0.30)]">
-            {/* Botón de cierre flotando sobre el marco */}
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center px-4"
+          style={{ backgroundColor: "transparent" }}
+          onClick={() => setActiveVideo(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl rounded-3xl border border-neutral-200 bg-white shadow-[0_26px_90px_rgba(0,0,0,0.35)]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               onClick={() => setActiveVideo(null)}
@@ -658,7 +693,6 @@ const StudioRow: React.FC<StudioRowProps> = ({
 }) => {
   const hasItems = items && items.length > 0;
 
-  // ⚡ Cambio clave: si no hay items, no renderizamos nada
   if (!hasItems) {
     return null;
   }
