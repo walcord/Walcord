@@ -85,7 +85,13 @@ function isVideoUrl(url?: string | null): boolean {
 
 const Avatar = ({ src, alt, size = 24 }: { src?: string | null; alt?: string; size?: number }) => (
   <div className="rounded-full overflow-hidden bg-neutral-100 shrink-0" style={{ width: size, height: size }}>
-    {src ? <img src={src} alt={alt || "user"} className="w-full h-full object-cover" /> : null}
+    {src ? (
+      <img
+        src={src}
+        alt={alt || "user"}
+        className="w-full h-full object-cover object-center"
+      />
+    ) : null}
   </div>
 );
 
@@ -124,7 +130,14 @@ function GradeBadge({ value }: { value: number | null }) {
       >
         <div
           className="absolute rounded-full"
-          style={{ width: 4, height: 4, left: "50%", top: "50%", transform: "translate(-50%, -translateY(-50%))", background: "#1F48AF" }}
+          style={{
+            width: 4,
+            height: 4,
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "#1F48AF"
+          }}
         />
       </div>
     </div>
@@ -554,7 +567,7 @@ function ArtistSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (a: 
                 className="p-3 hover:bg-neutral-50 flex items-center gap-3 cursor-pointer"
                 onClick={() => onPick(a)}
               >
-                {a.image_url ? <img src={a.image_url} alt={a.name} className="w-8 h-8 rounded object-cover shrink-0" /> : null}
+                {a.image_url ? <img src={a.image_url} alt={a.name} className="w-8 h-8 rounded object-cover object-center shrink-0" /> : null}
                 <div className="text-sm">{a.name}</div>
               </li>
             ))}
@@ -656,7 +669,7 @@ function ConcertTile({ row }: { row: RowConcert }) {
             alt=""
             loading="eager"
             decoding="async"
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
             style={{
               transform: "translateZ(0)",
               WebkitTransform: "translateZ(0)",
@@ -724,7 +737,7 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
             alt=""
             loading="eager"
             decoding="async"
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
             style={{
               transform: "translateZ(0)",
               WebkitTransform: "translateZ(0)",
