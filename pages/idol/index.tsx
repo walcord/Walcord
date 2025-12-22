@@ -551,12 +551,13 @@ const TheIdolPage: React.FC = () => {
   const selectedArtistChip = artistChips.find((a) => a.id === selectedArtistId);
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-[100svh] bg-white">
       <div
-        className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8"
+        className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6"
         style={{
-          // ✅ evita choque con la barra inferior del WebView + tab bar
-          paddingBottom: "calc(env(safe-area-inset-bottom) + 140px)",
+          // ✅ iOS WebView: safe-area arriba + white space; abajo suficiente para NO chocar con tab bar
+          paddingTop: "calc(env(safe-area-inset-top) + 22px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 200px)",
         }}
       >
         {/* HEADER */}
@@ -622,6 +623,9 @@ const TheIdolPage: React.FC = () => {
             />
           </section>
         )}
+
+        {/* ✅ Spacer extra final por seguridad contra overlays */}
+        <div aria-hidden className="h-8" />
       </div>
 
       {/* VIDEO MODAL */}

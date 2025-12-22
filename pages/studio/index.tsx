@@ -260,9 +260,15 @@ const TheStudioPage = () => {
   };
 
   return (
-    <main className="min-h-screen bg-white">
-      {/* ✅ Layout app: SIN safe-area arriba (evita huecazo), y +padding abajo para no chocar con tab bar */}
-      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-[calc(env(safe-area-inset-bottom)+120px)]">
+    <main className="min-h-[100svh] bg-white">
+      {/* ✅ iOS WebView: safe-area arriba + white space, y padding abajo suficiente para NO chocar con tu tab bar */}
+      <div
+        className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6"
+        style={{
+          paddingTop: "calc(env(safe-area-inset-top) + 22px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 190px)",
+        }}
+      >
         {/* HEADER */}
         <header>
           <h1
@@ -638,6 +644,9 @@ const TheStudioPage = () => {
             </div>
           )}
         </section>
+
+        {/* ✅ Spacer extra por si algún layout raro del WebView aún pisa contenido */}
+        <div aria-hidden className="h-8" />
       </div>
 
       {/* ✅ VIDEO MODAL: sin blur, sin gris, sin fondo blanco -> mantiene lo de atrás */}
