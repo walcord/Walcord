@@ -68,7 +68,6 @@ const ReviewPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // 1) Recommendation (base de la review)
       const { data: rec, error: recError } = await supabase
         .from("recommendations")
         .select("id, user_id, target_type, target_id, body, created_at, rating_id")
@@ -81,7 +80,6 @@ const ReviewPage: React.FC = () => {
         return;
       }
 
-      // 2) Rating asociado (record_id + nota)
       let recordId: string = (rec.target_id as string) || "";
       let ratingValue = 0;
 
@@ -98,7 +96,6 @@ const ReviewPage: React.FC = () => {
         }
       }
 
-      // 3) Record
       const { data: record, error: recordError } = await supabase
         .from("records")
         .select("id, title, release_year, vibe_color, cover_color, artist_id")
@@ -111,7 +108,6 @@ const ReviewPage: React.FC = () => {
         return;
       }
 
-      // 4) Artist
       let artistName = "Unknown artist";
       if (record.artist_id) {
         const { data: artistData } = await supabase
@@ -122,7 +118,6 @@ const ReviewPage: React.FC = () => {
         if (artistData?.name) artistName = artistData.name as string;
       }
 
-      // 5) User profile
       let userName = "walcord user";
       let userUsername: string | null = null;
       let avatarUrl: string | null | undefined = null;
@@ -144,29 +139,22 @@ const ReviewPage: React.FC = () => {
         }
       }
 
-      // 6) Likes count en recommendation_likes
       let likes = 0;
       const { count: likesCount, error: likesError } = await supabase
         .from("recommendation_likes")
         .select("id", { count: "exact", head: true })
         .eq("recommendation_id", rec.id as string);
 
-      if (!likesError && typeof likesCount === "number") {
-        likes = likesCount;
-      }
+      if (!likesError && typeof likesCount === "number") likes = likesCount;
 
-      // 7) Comments count en recommendation_comments
       let commentsCount = 0;
       const { count: commentsCountVal, error: commentsCountError } = await supabase
         .from("recommendation_comments")
         .select("id", { count: "exact", head: true })
         .eq("recommendation_id", rec.id as string);
 
-      if (!commentsCountError && typeof commentsCountVal === "number") {
-        commentsCount = commentsCountVal;
-      }
+      if (!commentsCountError && typeof commentsCountVal === "number") commentsCount = commentsCountVal;
 
-      // 8) ¿Liked by me?
       if (user) {
         const { data: myLike } = await supabase
           .from("recommendation_likes")
@@ -192,7 +180,7 @@ const ReviewPage: React.FC = () => {
         id: rec.id as string,
         body: (rec.body as string) ?? "",
         createdAt,
-        rating: ratingValue ?? 0,
+        rating: typeof ratingValue === "number" ? ratingValue : 0,
         userId: (rec.user_id as string) ?? null,
         userName: userName || "walcord user",
         userUsername,
@@ -364,10 +352,7 @@ const ReviewPage: React.FC = () => {
           setReview((prev) => (prev ? { ...prev, likes: Math.max(0, prev.likes - 1) } : prev));
         }
       } else {
-        const payload = {
-          recommendation_id: review.id,
-          user_id: user.id,
-        };
+        const payload = { recommendation_id: review.id, user_id: user.id };
         const { error } = await supabase.from("recommendation_likes").insert([payload]);
 
         if (!error) {
@@ -467,7 +452,7 @@ const ReviewPage: React.FC = () => {
   return (
     <main className="min-h-[100dvh] bg-white">
       {/* TOP — back button */}
-      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between bg-white">
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between bg-white">
         <button
           onClick={() => router.back()}
           aria-label="Go back"
@@ -480,45 +465,43 @@ const ReviewPage: React.FC = () => {
         <div className="w-[60px]" />
       </div>
 
+      {/* ✅ TOP META BAR (bulletproof para iOS) */}
+      <div className="mx-auto max-w-[820px] px-5 md:px-6">
+        <div className="mt-1 mb-3 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleGoToProfile}
+            disabled={!review.userUsername}
+            className={`flex items-center gap-3 text-left ${
+              review.userUsername ? "hover:opacity-90" : ""
+            } disabled:opacity-100`}
+            aria-label={review.userUsername ? `Open @${review.userUsername} profile` : "Profile"}
+          >
+            <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-200">
+              {review.userAvatarUrl && (
+                <img src={review.userAvatarUrl} alt={review.userName || "walcord user"} className="h-full w-full object-cover" />
+              )}
+            </div>
+            <div>
+              <p className="text-[13px] font-medium text-neutral-900">{review.userName || "walcord user"}</p>
+              <p className="text-[11px] font-light text-neutral-500">{review.createdAt}</p>
+            </div>
+          </button>
+
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-full border border-neutral-900 text-[13px] font-medium text-neutral-900 bg-white">
+            {typeof review.rating === "number" ? review.rating : 0}
+            <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#1F48AF] bg-white">
+              <div className="h-1.5 w-1.5 rounded-full bg-[#1F48AF]" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-2 sm:pt-3 pb-24">
         {/* MAIN CARD */}
         <article className="rounded-[32px] border border-neutral-200 bg-white px-5 py-5 sm:px-7 sm:py-7 shadow-[0_22px_70px_rgba(0,0,0,0.10)]">
-          {/* Header: user + date + rating */}
-          <div className="flex items-start justify-between gap-4">
-            <button
-              type="button"
-              onClick={handleGoToProfile}
-              disabled={!review.userUsername}
-              className={`flex items-center gap-3 text-left ${
-                review.userUsername ? "hover:opacity-90" : ""
-              } disabled:opacity-100`}
-              aria-label={review.userUsername ? `Open @${review.userUsername} profile` : "Profile"}
-            >
-              <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-200">
-                {review.userAvatarUrl && (
-                  <img
-                    src={review.userAvatarUrl}
-                    alt={review.userName || "walcord user"}
-                    className="h-full w-full object-cover"
-                  />
-                )}
-              </div>
-              <div>
-                <p className="text-[13px] font-medium text-neutral-900">{review.userName || "walcord user"}</p>
-                <p className="text-[11px] font-light text-neutral-500">{review.createdAt}</p>
-              </div>
-            </button>
-
-            <div className="relative flex h-11 w-11 items-center justify-center rounded-full border border-neutral-900 text-[13px] font-medium text-neutral-900">
-              {typeof review.rating === "number" ? review.rating : 0}
-              <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#1F48AF] bg-white">
-                <div className="h-1.5 w-1.5 rounded-full bg-[#1F48AF]" />
-              </div>
-            </div>
-          </div>
-
           {/* Record context */}
-          <section className="mt-5 flex items-center gap-4">
+          <section className="flex items-center gap-4">
             <button type="button" onClick={handleGoToRecord} className="group flex items-center gap-4 text-left">
               <div className="relative w-[60px] sm:w-[72px]">
                 <div className="pt-[100%]" />
