@@ -145,6 +145,12 @@ const TheIdolPage: React.FC = () => {
 
   const [artistSearch, setArtistSearch] = useState<string>("");
 
+  // ✅ FIX XCODE: fuerza que el WebView empiece arriba y se vea el headline
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
   /* ---------------- CARGA: ARTISTAS DESTACADOS ------------------- */
   useEffect(() => {
     const loadFeaturedArtists = async () => {
@@ -546,7 +552,13 @@ const TheIdolPage: React.FC = () => {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-[calc(env(safe-area-inset-top)+64px)] sm:pt-[calc(env(safe-area-inset-top)+72px)] pb-[calc(env(safe-area-inset-bottom)+160px)]">
+      <div
+        className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8"
+        style={{
+          // ✅ evita choque con la barra inferior del WebView + tab bar
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 140px)",
+        }}
+      >
         {/* HEADER */}
         <header>
           <h1
@@ -614,8 +626,14 @@ const TheIdolPage: React.FC = () => {
 
       {/* VIDEO MODAL */}
       {activeVideo && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white px-4">
-          <div className="relative w-full max-w-3xl rounded-3xl border border-neutral-200 bg-white shadow-[0_18px_60px_rgba(0,0,0,0.30)]">
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-transparent px-4"
+          onClick={handleCloseVideo}
+        >
+          <div
+            className="relative w-full max-w-3xl rounded-3xl border border-neutral-200 bg-white shadow-[0_18px_60px_rgba(0,0,0,0.30)]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               onClick={handleCloseVideo}
