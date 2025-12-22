@@ -233,7 +233,7 @@ const TheStudioPage = () => {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-16">
+      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-[calc(env(safe-area-inset-top)+24px)] sm:pt-[calc(env(safe-area-inset-top)+32px)] pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {/* HEADER */}
         <header>
           <h1
@@ -613,7 +613,7 @@ const TheStudioPage = () => {
 
       {/* OVERLAY DE VÍDEO – marco editorial compacto */}
       {activeVideo && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-sm px-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
           <div className="relative w-full max-w-3xl rounded-3xl border border-neutral-200 bg-white shadow-[0_18px_60px_rgba(0,0,0,0.30)]">
             {/* Botón de cierre flotando sobre el marco */}
             <button
