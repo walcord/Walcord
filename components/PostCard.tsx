@@ -17,6 +17,14 @@ function isVideoUrl(url?: string | null): boolean {
   return /\.(mp4|mov|webm|m4v|avi|mkv|ogg)$/i.test(clean);
 }
 
+/** Cache-buster para evitar que iOS/WebView deje imágenes "a medias" o sin cargar */
+function withCacheBust(url?: string | null): string | null {
+  if (!url) return null;
+  if (isVideoUrl(url)) return null;
+  const join = url.includes('?') ? '&' : '?';
+  return `${url}${join}_=${Date.now()}`;
+}
+
 /** UTIL: confirm seguro para web/app */
 function safeConfirm(message: string): boolean {
   if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
@@ -42,9 +50,11 @@ export default function PostCard({ post }: Props) {
   // ⬇️ SOLO usamos fotos, nunca vídeos, tanto para concerts como para otros posts
   const initialBg = isConcert
     ? !isVideoUrl(post?.cover_url)
-      ? post?.cover_url ?? null
+      ? withCacheBust(post?.cover_url ?? null)
       : null
-    : ((post?.image_urls as string[] | undefined) || []).find(url => !isVideoUrl(url)) ?? null;
+    : withCacheBust(
+        ((post?.image_urls as string[] | undefined) || []).find(url => !isVideoUrl(url)) ?? null
+      );
 
   const [bgUrl, setBgUrl] = useState<string | null>(initialBg);
   const [vibe, setVibe] = useState<string | null>(post?.record?.vibe_color ?? null);
@@ -57,6 +67,9 @@ export default function PostCard({ post }: Props) {
   const [reported, setReported] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+
+  // ✅ retry para imágenes (iOS/WebView a veces no carga el último tile)
+  const [imgRetry, setImgRetry] = useState(0);
 
   // Menu portal positioning (para que NO se recorte en móvil)
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -149,7 +162,7 @@ export default function PostCard({ post }: Props) {
       const effectiveCoverUrl =
         existingCoverUrl && !isVideoUrl(existingCoverUrl) ? existingCoverUrl : null;
 
-      if (effectiveCoverUrl) setBgUrl(effectiveCoverUrl);
+      if (effectiveCoverUrl) setBgUrl(withCacheBust(effectiveCoverUrl));
 
       // Hydrate artist / country names
       if (!artistName && post?.artist_id) {
@@ -369,7 +382,22 @@ export default function PostCard({ post }: Props) {
           : null}
 
         {bgUrl && !isVideoUrl(bgUrl) && (
-          <img src={bgUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img
+            src={bgUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+              // ✅ retry 1 vez con otro cache-buster; si vuelve a fallar, quitamos bgUrl
+              if (imgRetry < 1) {
+                setImgRetry((n) => n + 1);
+                setBgUrl(withCacheBust(bgUrl));
+              } else {
+                setBgUrl(null);
+              }
+            }}
+          />
         )}
         <div className="absolute inset-0 bg-black/10" />
 
