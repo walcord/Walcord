@@ -232,9 +232,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-black font-[Roboto]">
+    <main className="min-h-screen bg-white text-black font-[Roboto] pb-[calc(env(safe-area-inset-bottom)+96px)]">
       {/* TOP — en móvil sin márgenes enormes */}
-      <div className="w-full px-5 sm:px-12 pt-8 pb-4 flex justify-end">
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex justify-end">
         <button
           onClick={() => router.push('/settings')}
           aria-label="Open settings"
