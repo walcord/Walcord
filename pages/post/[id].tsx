@@ -76,7 +76,7 @@ export default function ConcertViewer() {
   const user = useUser();
 
   const [concert, setConcert] = useState<Concert | null>(null);
-  const [artistName, setArtistName] = useState<string>('');
+  const [artistName,ssetArtistName] = useState<string>('');
   const [countryName, setCountryName] = useState<string>('');
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -733,8 +733,22 @@ export default function ConcertViewer() {
 
   /* ========= RENDER ========= */
   return (
-    <div className="min-h-screen bg-white">
-      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-28 pt-8 sm:pt-10">
+    <div className="min-h-[100dvh] bg-white">
+      {/* TOP — back button (safe-area + espacio para que NO corte en iOS) */}
+      <div className="w-full px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between bg-white">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
+
+      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-28 pt-2 sm:pt-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -998,7 +1012,6 @@ export default function ConcertViewer() {
                     </div>
                     <span>{a.username || 'user'}</span>
 
-                    {/* quitar X en externo */}
                     {isOwner && (
                       <button
                         type="button"
@@ -1016,7 +1029,6 @@ export default function ConcertViewer() {
               <p className="text-[13px] text-neutral-500 italic">No people added.</p>
             )}
 
-            {/* INPUT + búsqueda SOLO si owner (en externo es visualizer puro) */}
             {isOwner && user?.id && (
               <div className="relative">
                 <div className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-[13px] flex flex-wrap items-center gap-2 focus-within:ring-1 focus-within:ring-[#1F48AF]">
@@ -1315,7 +1327,6 @@ export default function ConcertViewer() {
                   </svg>
                 </button>
 
-                {/* Indicador minimalista 1 / N */}
                 <div
                   className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-white/85"
                   style={{ bottom: 'calc(env(safe-area-inset-bottom) + 22px)' }}
