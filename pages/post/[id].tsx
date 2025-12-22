@@ -765,7 +765,6 @@ export default function ConcertViewer() {
   /* ========= RENDER ========= */
   return (
     <div className="min-h-screen bg-white">
-      {/* ✅ CHANGE 1: más padding real para que la bottom bar no tape interacción */}
       <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-[calc(env(safe-area-inset-bottom)+140px)] pt-0">
         {/* TOP — back button (safe-area) */}
         <div className="w-full pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between">
@@ -1187,7 +1186,6 @@ export default function ConcertViewer() {
             ))}
           </div>
 
-          {/* ✅ CHANGE 2: composer sticky por encima de la bottom bar */}
           {user?.id && (
             <div
               className="sticky z-20 bg-white pt-3 pb-2"
