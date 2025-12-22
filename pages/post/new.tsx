@@ -99,6 +99,13 @@ export default function NewPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
 
+  // ✅ FIX Xcode/WebView: fuerza arriba para que el header no quede bajo el notch
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       const u = (await supabase.auth.getUser()).data.user;
@@ -656,7 +663,14 @@ export default function NewPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <main className="mx-auto w-full max-w-[760px] px-4 sm:px-6 py-6 sm:py-8">
+      {/* ✅ SAFE AREA FIX (top) + espacio real para tab bar (bottom) */}
+      <main
+        className="mx-auto w-full max-w-[760px] px-4 sm:px-6"
+        style={{
+          paddingTop: "calc(env(safe-area-inset-top) + 24px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 140px)",
+        }}
+      >
         <div className="rounded-2xl border border-neutral-200 bg-white shadow-[0_6px_22px_rgba(0,0,0,0.06)]">
           {/* Header */}
           <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-0">
