@@ -129,13 +129,19 @@ export default function ExternalProfilePage() {
       }
 
       const normalized: CardRow[] = (data || []).map((c: any) => {
-        const latest =
+        const rawLatest =
           (c.concert_media || [])
             .filter((m: any) => !!m?.url)
             .sort(
               (a: any, b: any) =>
                 new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
             )[0]?.url ?? null;
+
+        // ✅ iOS/WebView cache-buster (evita que “a veces” se quede gris)
+        const latest =
+          rawLatest
+            ? `${rawLatest}${rawLatest.includes('?') ? '&' : '?'}_=${Date.now()}`
+            : null;
 
         return {
           id: c.id,
@@ -253,8 +259,19 @@ export default function ExternalProfilePage() {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto] pb-[calc(env(safe-area-inset-bottom)+96px)]">
-      {/* TOP — en móvil sin márgenes enormes (sin botón/settings en external) */}
-      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex justify-end" />
+      {/* TOP — back button */}
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
 
       {/* MAIN LAYOUT — en móvil pegado a bordes, en desktop mantiene aire */}
       <div className="px-5 sm:px-12 grid grid-cols-1 lg:grid-cols-[1fr_1.35fr] gap-10 items-start">
