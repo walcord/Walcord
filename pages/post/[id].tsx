@@ -71,12 +71,18 @@ const cap = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) :
 /* ========= Viewer ========= */
 export default function ConcertViewer() {
   const router = useRouter();
-  const { id } = router.query;
   const supabase = useSupabaseClient();
   const user = useUser();
 
+  const concertId = useMemo(() => {
+    const raw = (router.query as any)?.id;
+    if (Array.isArray(raw)) return raw[0] ? String(raw[0]) : null;
+    if (!raw) return null;
+    return String(raw);
+  }, [router.query]);
+
   const [concert, setConcert] = useState<Concert | null>(null);
-  const [artistName,ssetArtistName] = useState<string>('');
+  const [artistName, setArtistName] = useState<string>('');
   const [countryName, setCountryName] = useState<string>('');
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,25 +150,43 @@ export default function ConcertViewer() {
     [user?.id, concert?.user_id]
   );
 
+  /* ======= FIX CRÍTICO: Loading infinito =======
+     - Si cualquier loader falla o “revienta”, antes NO llegaba a setLoading(false)
+     - Ahora: try/catch/finally + flag mounted para iOS WebView */
   useEffect(() => {
-    if (!id) return;
+    if (!concertId) return;
+
+    let mounted = true;
+
     (async () => {
+      if (!mounted) return;
       setLoading(true);
-      const c = await loadConcert(String(id));
-      if (c) {
-        await Promise.all([loadMedia(String(id), c), loadSocial(String(id)), loadAttendees(String(id))]);
+
+      try {
+        const c = await loadConcert(String(concertId));
+        if (c) {
+          await Promise.all([loadMedia(String(concertId), c), loadSocial(String(concertId)), loadAttendees(String(concertId))]);
+        }
+      } catch (e) {
+        // si algo casca, NO nos quedamos en loading forever
+        console.error('ConcertViewer load error:', e);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      setLoading(false);
     })();
+
+    return () => {
+      mounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user?.id]);
+  }, [concertId, user?.id]);
 
   useEffect(() => {
-    if (!likesPanelOpen || !id) return;
+    if (!likesPanelOpen || !concertId) return;
     (async () => {
-      await loadLikesUsers(String(id));
+      await loadLikesUsers(String(concertId));
     })();
-  }, [likesPanelOpen, id, user?.id]);
+  }, [likesPanelOpen, concertId, user?.id]);
 
   /* ====== Buscar perfiles para People I went with (estilo FutureConcerts) ======
      IMPORTANTE: solo owner puede buscar/seleccionar. */
@@ -200,13 +224,13 @@ export default function ConcertViewer() {
 
   /* ========= LOADERS ========= */
 
-  async function loadConcert(concertId: string): Promise<Concert | null> {
+  async function loadConcert(concertIdParam: string): Promise<Concert | null> {
     const { data } = await supabase
       .from('concerts')
       .select(
         'id,user_id,artist_id,country_code,city,event_date,tour_name,caption,created_at,post_type,experience,record_id,cover_url,cover_media_id'
       )
-      .eq('id', concertId)
+      .eq('id', concertIdParam)
       .single();
 
     if (!data) return null;
@@ -279,11 +303,11 @@ export default function ConcertViewer() {
     setSelectedRecordId(initialId || null);
   }
 
-  async function loadMedia(concertId: string, baseConcert?: Concert) {
+  async function loadMedia(concertIdParam: string, baseConcert?: Concert) {
     const { data } = await supabase
       .from('concert_media')
       .select('id, url, media_type, created_at')
-      .eq('concert_id', concertId)
+      .eq('concert_id', concertIdParam)
       .order('created_at', { ascending: true });
 
     const rows: any[] = Array.isArray(data) ? data : [];
@@ -341,22 +365,22 @@ export default function ConcertViewer() {
     );
   }
 
-  async function loadSocial(concertId: string) {
+  async function loadSocial(concertIdParam: string) {
     const { count } = await supabase
       .from('concert_likes')
       .select('user_id', { count: 'exact', head: true })
-      .eq('concert_id', concertId);
+      .eq('concert_id', concertIdParam);
     setLikesCount(count || 0);
 
     const { data: mine } = user?.id
-      ? await supabase.from('concert_likes').select('user_id').eq('concert_id', concertId).eq('user_id', user.id).maybeSingle()
+      ? await supabase.from('concert_likes').select('user_id').eq('concert_id', concertIdParam).eq('user_id', user.id).maybeSingle()
       : ({ data: null } as any);
     setILike(!!mine);
 
     const { data: comm } = await supabase
       .from('concert_comments')
       .select('id, concert_id, user_id, comment, created_at, profiles(username, avatar_url)')
-      .eq('concert_id', concertId)
+      .eq('concert_id', concertIdParam)
       .order('created_at', { ascending: true });
 
     const mapped: CommentRow[] = (comm || []).map((r: any) => ({
@@ -371,13 +395,13 @@ export default function ConcertViewer() {
     setComments(mapped);
   }
 
-  async function loadLikesUsers(concertId: string) {
+  async function loadLikesUsers(concertIdParam: string) {
     setLoadingLikesUsers(true);
     try {
       const { data, error } = await supabase
         .from('concert_likes')
         .select('user_id, profiles(username, avatar_url)')
-        .eq('concert_id', concertId)
+        .eq('concert_id', concertIdParam)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -406,8 +430,12 @@ export default function ConcertViewer() {
     }
   }
 
-  async function loadAttendees(concertId: string) {
-    const { data } = await supabase.from('concerts_atendees').select('id, profiles(username, avatar_url)').eq('concert_id', concertId).order('created_at', { ascending: true });
+  async function loadAttendees(concertIdParam: string) {
+    const { data } = await supabase
+      .from('concerts_atendees')
+      .select('id, profiles(username, avatar_url)')
+      .eq('concert_id', concertIdParam)
+      .order('created_at', { ascending: true });
 
     const rows: Attendee[] =
       (data || []).map((r: any) => ({
@@ -440,7 +468,10 @@ export default function ConcertViewer() {
 
   const imageList = useMemo(() => media.filter(m => m.type === 'image'), [media]);
 
-  const currentPalette = useMemo(() => (selectedRecordId ? recordOptions.find(r => r.id === selectedRecordId) || null : null), [recordOptions, selectedRecordId]);
+  const currentPalette = useMemo(
+    () => (selectedRecordId ? recordOptions.find(r => r.id === selectedRecordId) || null : null),
+    [recordOptions, selectedRecordId]
+  );
 
   const currentVibe = currentPalette?.vibe_color || '#0E1A3A';
   const currentCoverColor = currentPalette?.cover_color || '#FFFFFF';
@@ -460,28 +491,28 @@ export default function ConcertViewer() {
   /* ========= HANDLERS ========= */
 
   const handleLike = async () => {
-    if (!user?.id || !id) return;
+    if (!user?.id || !concertId) return;
     if (userLiked) {
-      await supabase.from('concert_likes').delete().eq('concert_id', id).eq('user_id', user.id);
+      await supabase.from('concert_likes').delete().eq('concert_id', concertId).eq('user_id', user.id);
       setILike(false);
       setLikesCount(c => Math.max(0, c - 1));
     } else {
-      await supabase.from('concert_likes').upsert({ concert_id: String(id), user_id: user.id });
+      await supabase.from('concert_likes').upsert({ concert_id: String(concertId), user_id: user.id });
       setILike(true);
       setLikesCount(c => c + 1);
     }
   };
 
   const handleSendComment = async () => {
-    if (!user?.id || !id || !commentText.trim()) return;
+    if (!user?.id || !concertId || !commentText.trim()) return;
     const payload = {
-      concert_id: String(id),
+      concert_id: String(concertId),
       user_id: user.id,
       comment: commentText.trim(),
     };
     await supabase.from('concert_comments').insert(payload);
     setCommentText('');
-    await loadSocial(String(id));
+    await loadSocial(String(concertId));
     // @ts-expect-error location global
     location.hash = 'comments';
   };
@@ -733,22 +764,22 @@ export default function ConcertViewer() {
 
   /* ========= RENDER ========= */
   return (
-    <div className="min-h-[100dvh] bg-white">
-      {/* TOP — back button (safe-area + espacio para que NO corte en iOS) */}
-      <div className="w-full px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between bg-white">
-        <button
-          onClick={() => router.back()}
-          aria-label="Go back"
-          title="Back"
-          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
-        >
-          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
-          <span>Back</span>
-        </button>
-        <div className="w-[60px]" />
-      </div>
+    <div className="min-h-screen bg-white">
+      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-28 pt-0">
+        {/* TOP — back button (safe-area) */}
+        <div className="w-full pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            aria-label="Go back"
+            title="Back"
+            className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+          >
+            <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+            <span>Back</span>
+          </button>
+          <div className="w-[60px]" />
+        </div>
 
-      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-28 pt-2 sm:pt-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -769,24 +800,14 @@ export default function ConcertViewer() {
           >
             <div className="h-9 w-9 rounded-full bg-neutral-200 overflow-hidden shrink-0">
               {postAuthor.avatar_url ? (
-                <img
-                  src={postAuthor.avatar_url}
-                  alt={postAuthor.username || 'user'}
-                  className="h-full w-full object-cover"
-                />
+                <img src={postAuthor.avatar_url} alt={postAuthor.username || 'user'} className="h-full w-full object-cover" />
               ) : null}
             </div>
             <div className="min-w-0 flex-1 text-left">
-              <p
-                className="text-[12px] uppercase tracking-[0.16em] text-neutral-500"
-                style={{ fontFamily: 'Roboto, system-ui, sans-serif' }}
-              >
+              <p className="text-[12px] uppercase tracking-[0.16em] text-neutral-500" style={{ fontFamily: 'Roboto, system-ui, sans-serif' }}>
                 Posted by
               </p>
-              <p
-                className="text-[14px] text-black truncate"
-                style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 400 }}
-              >
+              <p className="text-[14px] text-black truncate" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 400 }}>
                 {postAuthor.username}
               </p>
             </div>
@@ -798,10 +819,7 @@ export default function ConcertViewer() {
         <div className="flex flex-col gap-3">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
-              <h1
-                className="text-lg sm:text-2xl text-black"
-                style={{ fontFamily: '"Times New Roman", Times, serif' }}
-              >
+              <h1 className="text-lg sm:text-2xl text-black" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
                 {headerTitle}
               </h1>
               <div
@@ -812,9 +830,7 @@ export default function ConcertViewer() {
                 {(concert?.city || countryName || concert?.country_code) && (
                   <>
                     <span className="h-px w-6 bg-neutral-300" />
-                    <span>
-                      {[concert?.city, countryName || concert?.country_code].filter(Boolean).join(', ')}
-                    </span>
+                    <span>{[concert?.city, countryName || concert?.country_code].filter(Boolean).join(', ')}</span>
                   </>
                 )}
                 {dateLabel &&
@@ -836,10 +852,7 @@ export default function ConcertViewer() {
               <div className="flex items-center justify-start">
                 <div className="flex items-center gap-2 sm:gap-2">
                   {recordOptions.length > 0 && (
-                    <div
-                      className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl shadow-md"
-                      style={{ backgroundColor: currentVibe }}
-                    >
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl shadow-md" style={{ backgroundColor: currentVibe }}>
                       <div
                         className="absolute rounded-[10px]"
                         style={{
@@ -874,8 +887,7 @@ export default function ConcertViewer() {
         </div>
 
         {/* pickers MEMORY — SOLO si owner */}
-        {isOwner &&
-        ((showRecordPicker && recordOptions.length > 0) || (showCoverPicker && coverOptions.length > 0)) ? (
+        {isOwner && ((showRecordPicker && recordOptions.length > 0) || (showCoverPicker && coverOptions.length > 0)) ? (
           <section className="mt-3 mb-4 space-y-3">
             {showRecordPicker && recordOptions.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -885,9 +897,7 @@ export default function ConcertViewer() {
                     type="button"
                     onClick={() => handleSelectRecord(r.id)}
                     className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs ${
-                      r.id === selectedRecordId
-                        ? 'bg-[#1F48AF] text-white border-[#1F48AF]'
-                        : 'border-neutral-300 text-neutral-700 hover:bg-neutral-100'
+                      r.id === selectedRecordId ? 'bg-[#1F48AF] text-white border-[#1F48AF]' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-100'
                     }`}
                   >
                     {r.title}
@@ -903,9 +913,7 @@ export default function ConcertViewer() {
                     key={c.id}
                     type="button"
                     onClick={() => handleSelectCover(c.id)}
-                    className={`overflow-hidden rounded-xl border ${
-                      c.id === selectedCoverId ? 'border-[#1F48AF]' : 'border-neutral-200'
-                    }`}
+                    className={`overflow-hidden rounded-xl border ${c.id === selectedCoverId ? 'border-[#1F48AF]' : 'border-neutral-200'}`}
                   >
                     <img src={c.url} alt="" className="h-20 w-20 object-cover" />
                   </button>
@@ -918,7 +926,7 @@ export default function ConcertViewer() {
         <div className="mt-4 h-px w-full bg-neutral-200" />
 
         {/* card editorial: diary + people */}
-        <section className="mt-5 mb-7 rounded-2xl border border-neutral-200 bg-white/80 shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 py-4 sm:px-6 sm:py-5 grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)] items-start">
+        <section className="mt-5 mb-7 rounded-2xl border border-neutral-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 py-4 sm:px-6 sm:py-5 grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)] items-start">
           <div>
             <p className="text-[11px] uppercase tracking-[0.16em] text-neutral-500 mb-1">Tour diary</p>
             {isOwner ? (
@@ -956,10 +964,7 @@ export default function ConcertViewer() {
                   </>
                 ) : (
                   <>
-                    <p
-                      className="text-[14px] sm:text-[15px] leading-6 text-black/90 break-words [overflow-wrap:anywhere]"
-                      style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
-                    >
+                    <p className="text-[14px] sm:text-[15px] leading-6 text-black/90 break-words [overflow-wrap:anywhere]" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
                       {concert.caption}
                     </p>
                     <button
@@ -977,10 +982,7 @@ export default function ConcertViewer() {
               </>
             ) : diaryText ? (
               <>
-                <p
-                  className="text-[14px] sm:text-[15px] leading-6 text-black/90 break-words [overflow-wrap:anywhere]"
-                  style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
-                >
+                <p className="text-[14px] sm:text-[15px] leading-6 text-black/90 break-words [overflow-wrap:anywhere]" style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}>
                   {diaryExpanded || !diaryShouldTruncate ? diaryText : diaryPreview}
                 </p>
                 {diaryShouldTruncate && (
@@ -1006,12 +1008,11 @@ export default function ConcertViewer() {
                 {attendees.map(a => (
                   <div key={a.id} className="flex items-center gap-2 rounded-full border border-neutral-200 px-3 py-1 text-xs bg-white">
                     <div className="h-6 w-6 rounded-full bg-neutral-200 overflow-hidden shrink-0">
-                      {a.avatar_url ? (
-                        <img src={a.avatar_url} alt={a.username || ''} className="h-full w-full object-cover" />
-                      ) : null}
+                      {a.avatar_url ? <img src={a.avatar_url} alt={a.username || ''} className="h-full w-full object-cover" /> : null}
                     </div>
                     <span>{a.username || 'user'}</span>
 
+                    {/* quitar X en externo */}
                     {isOwner && (
                       <button
                         type="button"
@@ -1029,17 +1030,14 @@ export default function ConcertViewer() {
               <p className="text-[13px] text-neutral-500 italic">No people added.</p>
             )}
 
+            {/* INPUT + búsqueda SOLO si owner (en externo es visualizer puro) */}
             {isOwner && user?.id && (
               <div className="relative">
                 <div className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-[13px] flex flex-wrap items-center gap-2 focus-within:ring-1 focus-within:ring-[#1F48AF]">
                   {selectedPeople.map(p => (
                     <div key={p.id} className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-2 py-1 text-[11px]">
                       <div className="w-5 h-5 rounded-full overflow-hidden bg-neutral-300 flex items-center justify-center text-[10px]">
-                        {p.avatar_url ? (
-                          <img src={p.avatar_url} alt={p.username || ''} className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{(p.username || 'U').charAt(0).toUpperCase()}</span>
-                        )}
+                        {p.avatar_url ? <img src={p.avatar_url} alt={p.username || ''} className="w-full h-full object-cover" /> : <span>{(p.username || 'U').charAt(0).toUpperCase()}</span>}
                       </div>
                       <span>{p.username}</span>
                       <button type="button" onClick={() => handleRemovePerson(p.id)} className="text-[11px] text-neutral-500 hover:text-black">
@@ -1067,11 +1065,7 @@ export default function ConcertViewer() {
                           className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-neutral-50"
                         >
                           <div className="w-6 h-6 rounded-full overflow-hidden bg-neutral-200 flex items-center justify-center text-[10px]">
-                            {p.avatar_url ? (
-                              <img src={p.avatar_url} alt={p.username || ''} className="w-full h-full object-cover" />
-                            ) : (
-                              <span>{(p.username || 'U').charAt(0).toUpperCase()}</span>
-                            )}
+                            {p.avatar_url ? <img src={p.avatar_url} alt={p.username || ''} className="w-full h-full object-cover" /> : <span>{(p.username || 'U').charAt(0).toUpperCase()}</span>}
                           </div>
                           <div className="min-w-0">
                             <p className="text-[12px] truncate">{p.username || 'user'}</p>
@@ -1125,12 +1119,7 @@ export default function ConcertViewer() {
                         className="focus:outline-none block w-full h-full"
                         aria-label="Expand image"
                       >
-                        <img
-                          src={m.url}
-                          alt="concert-media"
-                          className="w-full h-auto max-h-[460px] rounded-2xl object-contain"
-                          loading="lazy"
-                        />
+                        <img src={m.url} alt="concert-media" className="w-full h-auto max-h-[460px] rounded-2xl object-contain" loading="lazy" />
                       </button>
                     </div>
                   );
@@ -1172,14 +1161,7 @@ export default function ConcertViewer() {
                 <circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.9" />
                 <circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.7" />
                 <circle cx="24" cy="24" r="10" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.5" />
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="6"
-                  fill={userLiked ? 'currentColor' : 'transparent'}
-                  stroke="currentColor"
-                  strokeWidth="1"
-                />
+                <circle cx="24" cy="24" r="6" fill={userLiked ? 'currentColor' : 'transparent'} stroke="currentColor" strokeWidth="1" />
                 <circle cx="24" cy="24" r="1.5" fill={userLiked ? 'white' : 'currentColor'} />
               </svg>
             </button>
@@ -1198,7 +1180,7 @@ export default function ConcertViewer() {
                   <div className="text-sm">
                     <span className="font-medium">{c.username || 'user'}</span> {c.comment}
                   </div>
-                  <div className="text-xs text-neutral-500">{new Date(c.created_at).toLocaleString()}</div>
+                  <div className="text-xs text-neutral-500">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</div>
                 </div>
               </div>
             ))}
@@ -1220,7 +1202,7 @@ export default function ConcertViewer() {
         </section>
       </main>
 
-      {/* LIKES BOTTOM SHEET */}
+      {/* LIKES BOTTOM SHEET (fondo blanco puro + safe-area bottom) */}
       <div className={`fixed inset-0 z-40 flex items-end justify-center ${likesPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div className={`absolute inset-0 bg-black/40 transition-opacity ${likesPanelOpen ? 'opacity-100' : 'opacity-0'}`} onClick={closeLikesPanel} />
         <div
@@ -1231,6 +1213,7 @@ export default function ConcertViewer() {
             maxHeight: '70vh',
             paddingTop: '14px',
             paddingBottom: 'max(env(safe-area-inset-bottom), 16px)',
+            backgroundColor: '#FFFFFF',
           }}
         >
           <div className="flex items-center justify-center mb-2">
@@ -1327,6 +1310,7 @@ export default function ConcertViewer() {
                   </svg>
                 </button>
 
+                {/* Indicador minimalista 1 / N */}
                 <div
                   className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-white/85"
                   style={{ bottom: 'calc(env(safe-area-inset-bottom) + 22px)' }}
