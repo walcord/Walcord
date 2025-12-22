@@ -765,7 +765,8 @@ export default function ConcertViewer() {
   /* ========= RENDER ========= */
   return (
     <div className="min-h-screen bg-white">
-      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-28 pt-0">
+      {/* ✅ CHANGE 1: más padding real para que la bottom bar no tape interacción */}
+      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-[calc(env(safe-area-inset-bottom)+140px)] pt-0">
         {/* TOP — back button (safe-area) */}
         <div className="w-full pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between">
           <button
@@ -1186,17 +1187,25 @@ export default function ConcertViewer() {
             ))}
           </div>
 
+          {/* ✅ CHANGE 2: composer sticky por encima de la bottom bar */}
           {user?.id && (
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-                placeholder="Write a comment…"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [overflow-wrap:anywhere]"
-              />
-              <button type="button" onClick={handleSendComment} className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm">
-                Send
-              </button>
+            <div
+              className="sticky z-20 bg-white pt-3 pb-2"
+              style={{
+                bottom: 'calc(env(safe-area-inset-bottom) + 96px)',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  placeholder="Write a comment…"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [overflow-wrap:anywhere]"
+                />
+                <button type="button" onClick={handleSendComment} className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm">
+                  Send
+                </button>
+              </div>
             </div>
           )}
         </section>
