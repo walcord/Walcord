@@ -165,7 +165,11 @@ export default function ConcertViewer() {
       try {
         const c = await loadConcert(String(concertId));
         if (c) {
-          await Promise.all([loadMedia(String(concertId), c), loadSocial(String(concertId)), loadAttendees(String(concertId))]);
+          await Promise.all([
+            loadMedia(String(concertId), c),
+            loadSocial(String(concertId)),
+            loadAttendees(String(concertId)),
+          ]);
         }
       } catch (e) {
         // si algo casca, NO nos quedamos en loading forever
@@ -765,7 +769,7 @@ export default function ConcertViewer() {
   /* ========= RENDER ========= */
   return (
     <div className="min-h-screen bg-white">
-      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-[calc(env(safe-area-inset-bottom)+140px)] pt-0">
+      <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-[calc(env(safe-area-inset-bottom)+240px)] pt-0">
         {/* TOP — back button (safe-area) */}
         <div className="w-full pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between">
           <button
@@ -1147,14 +1151,16 @@ export default function ConcertViewer() {
         )}
 
         {/* SOCIAL */}
-        <section className="mt-6 w-full max-w-2xl">
+        <section className="mt-6 w-full max-w-2xl relative z-10">
           <div className="flex items-center gap-4">
             <button
+              type="button"
               onClick={handleLike}
               aria-label={userLiked ? 'Unlike' : 'Like'}
               className={`inline-flex items-center justify-center transition-transform active:scale-95 ${
-                userLiked ? 'text-[#1F48AF]' : 'text-neutral-600 hover:text-neutral-800'
+                userLiked ? 'text-[#1F48AF]' : 'text-neutral-700'
               }`}
+              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <svg width="32" height="32" viewBox="0 0 48 48" aria-hidden="true">
                 <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -1185,29 +1191,32 @@ export default function ConcertViewer() {
               </div>
             ))}
           </div>
-
-          {user?.id && (
-            <div
-              className="sticky z-20 bg-white pt-3 pb-2"
-              style={{
-                bottom: 'calc(env(safe-area-inset-bottom) + 96px)',
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  value={commentText}
-                  onChange={e => setCommentText(e.target.value)}
-                  placeholder="Write a comment…"
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [overflow-wrap:anywhere]"
-                />
-                <button type="button" onClick={handleSendComment} className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm">
-                  Send
-                </button>
-              </div>
-            </div>
-          )}
         </section>
       </main>
+
+      {/* COMMENT COMPOSER — FIX iOS (NO sticky, ES fixed como Listener Take) */}
+      {user?.id && (
+        <div
+          className="fixed left-0 right-0 z-30 bg-white/95 backdrop-blur-sm border-t border-neutral-200"
+          style={{
+            bottom: 'calc(env(safe-area-inset-bottom) + 96px)',
+          }}
+        >
+          <div className="mx-auto w-full max-w-2xl px-4 sm:px-8 py-3">
+            <div className="flex items-center gap-2">
+              <input
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                placeholder="Write a comment…"
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [overflow-wrap:anywhere]"
+              />
+              <button type="button" onClick={handleSendComment} className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm">
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LIKES BOTTOM SHEET (fondo blanco puro + safe-area bottom) */}
       <div className={`fixed inset-0 z-40 flex items-end justify-center ${likesPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>

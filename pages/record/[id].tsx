@@ -658,7 +658,22 @@ export default function RecordProfile() {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-14">
+      {/* TOP — back button */}
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
+
+      {/* Wrapper with comfortable top + strong bottom spacing for iOS tab bar */}
+      <div className="mx-auto max-w-[820px] px-5 md:px-6 pt-2 sm:pt-3 pb-[calc(env(safe-area-inset-bottom)+140px)]">
         {/* ===== RECORD HEADER ===== */}
         <section className="pb-6 border-b border-neutral-200">
           {/* Cover centrado, bordes más cuadrados */}
@@ -819,7 +834,9 @@ export default function RecordProfile() {
                   ) : null}
                 </div>
                 <div className="min-w-0 text-left">
-                  <p className="text-[13px] font-medium text-neutral-900 truncate">{hasMyTake ? "Update your take" : "Write a listener take"}</p>
+                  <p className="text-[13px] font-medium text-neutral-900 truncate">
+                    {hasMyTake ? "Update your take" : "Write a listener take"}
+                  </p>
                   <p className="text-[11px] font-light text-neutral-500">For the fans — not critics.</p>
                 </div>
               </div>
@@ -914,7 +931,11 @@ export default function RecordProfile() {
                         <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-200 shrink-0">
                           {it.profile?.avatar_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={it.profile.avatar_url} alt={it.profile?.full_name || "user"} className="h-full w-full object-cover" />
+                            <img
+                              src={it.profile.avatar_url}
+                              alt={it.profile?.full_name || "user"}
+                              className="h-full w-full object-cover"
+                            />
                           ) : null}
                         </div>
                         <div className="min-w-0">
@@ -942,10 +963,19 @@ export default function RecordProfile() {
                           className="w-full min-h-[110px] resize-none rounded-2xl border border-neutral-200 px-3 py-3 text-[14px] font-light leading-relaxed text-neutral-900 outline-none focus:ring-2 focus:ring-[#1F48AF]"
                         />
                         <div className="mt-3 flex items-center justify-end gap-2">
-                          <button type="button" onClick={cancelEdit} className="h-8 rounded-full px-4 text-[11px] bg-neutral-200 text-neutral-700">
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            className="h-8 rounded-full px-4 text-[11px] bg-neutral-200 text-neutral-700"
+                          >
                             Cancel
                           </button>
-                          <button type="button" onClick={saveEdit} className="h-8 rounded-full px-4 text-[11px] text-white" style={{ backgroundColor: "#1F48AF" }}>
+                          <button
+                            type="button"
+                            onClick={saveEdit}
+                            className="h-8 rounded-full px-4 text-[11px] text-white"
+                            style={{ backgroundColor: "#1F48AF" }}
+                          >
                             Save
                           </button>
                         </div>
@@ -998,10 +1028,18 @@ export default function RecordProfile() {
                           <>
                             {editingId === it.id ? null : (
                               <>
-                                <button type="button" onClick={() => beginEdit(it)} className="text-[11px] font-light text-neutral-500 hover:text-neutral-900">
+                                <button
+                                  type="button"
+                                  onClick={() => beginEdit(it)}
+                                  className="text-[11px] font-light text-neutral-500 hover:text-neutral-900"
+                                >
                                   Edit
                                 </button>
-                                <button type="button" onClick={() => deleteTake(it.id)} className="text-[11px] font-light text-neutral-500 hover:text-neutral-900">
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTake(it.id)}
+                                  className="text-[11px] font-light text-neutral-500 hover:text-neutral-900"
+                                >
                                   Delete
                                 </button>
                               </>
@@ -1087,7 +1125,11 @@ export default function RecordProfile() {
       </div>
 
       {/* LIKES BOTTOM SHEET */}
-      <div className={`fixed inset-0 z-40 flex items-end justify-center ${likesPanelOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
+      <div
+        className={`fixed inset-0 z-40 flex items-end justify-center ${
+          likesPanelOpen ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+      >
         <div
           className={`absolute inset-0 bg-black/40 transition-opacity ${likesPanelOpen ? "opacity-100" : "opacity-0"}`}
           onClick={() => {
