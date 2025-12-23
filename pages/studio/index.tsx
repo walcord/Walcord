@@ -417,7 +417,7 @@ const TheStudioPage = () => {
                 Record of the week
               </h2>
               <p className="mt-2 max-w-xl text-sm font-light text-neutral-600">
-                One record, once a week. No algorithm, just taste.
+                Our considered recommendation for you. 
               </p>
             </div>
           </div>
@@ -533,7 +533,7 @@ const TheStudioPage = () => {
                 Articles
               </h2>
               <p className="mt-2 max-w-xl text-sm font-light text-neutral-600">
-                Writing on music, cities and the people who listen.
+                Writing thoughts on the latest music events. 
               </p>
               <button
                 type="button"
