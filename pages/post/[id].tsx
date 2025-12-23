@@ -150,9 +150,7 @@ export default function ConcertViewer() {
     [user?.id, concert?.user_id]
   );
 
-  /* ======= FIX CRÍTICO: Loading infinito =======
-     - Si cualquier loader falla o “revienta”, antes NO llegaba a setLoading(false)
-     - Ahora: try/catch/finally + flag mounted para iOS WebView */
+  /* ======= FIX CRÍTICO: Loading infinito ======= */
   useEffect(() => {
     if (!concertId) return;
 
@@ -172,7 +170,6 @@ export default function ConcertViewer() {
           ]);
         }
       } catch (e) {
-        // si algo casca, NO nos quedamos en loading forever
         console.error('ConcertViewer load error:', e);
       } finally {
         if (mounted) setLoading(false);
@@ -192,8 +189,7 @@ export default function ConcertViewer() {
     })();
   }, [likesPanelOpen, concertId, user?.id]);
 
-  /* ====== Buscar perfiles para People I went with (estilo FutureConcerts) ======
-     IMPORTANTE: solo owner puede buscar/seleccionar. */
+  /* ====== Buscar perfiles para People I went with ====== */
   useEffect(() => {
     if (!isOwner) {
       setCompanySuggestions([]);
@@ -721,47 +717,6 @@ export default function ConcertViewer() {
     }
   };
 
-  const handleOpenMediaPicker = () => {
-    if (!isOwner || !fileInputRef.current) return;
-    fileInputRef.current.click();
-  };
-
-  const handleMediaFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isOwner) return;
-    if (!concert || !e.target.files || !e.target.files.length) return;
-    const files = Array.from(e.target.files);
-    setUploadingMedia(true);
-    try {
-      for (const file of files) {
-        const isVideo = file.type.startsWith('video/');
-        const path = `concerts/${concert.id}/${Date.now()}-${file.name}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('concert-media')
-          .upload(path, file, { cacheControl: '3600', upsert: false });
-
-        if (uploadError || !uploadData) continue;
-
-        const { data: publicUrlData } = supabase.storage.from('concert-media').getPublicUrl(uploadData.path);
-
-        const publicUrl = publicUrlData?.publicUrl;
-        if (!publicUrl) continue;
-
-        await supabase.from('concert_media').insert({
-          concert_id: concert.id,
-          url: publicUrl,
-          media_type: isVideo ? 'video' : 'image',
-        } as any);
-      }
-
-      await loadMedia(concert.id, concert);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } finally {
-      setUploadingMedia(false);
-    }
-  };
-
   const closeLikesPanel = () => {
     setLikesPanelOpen(false);
   };
@@ -769,6 +724,7 @@ export default function ConcertViewer() {
   /* ========= RENDER ========= */
   return (
     <div className="min-h-screen bg-white">
+      {/* ✅ MÁS ESPACIO BLANCO ABAJO (scrollable) para que NUNCA choque con la bottom bar */}
       <main className="mx-auto w-full max-w-4xl px-4 sm:px-8 pb-[calc(env(safe-area-inset-bottom)+240px)] pt-0">
         {/* TOP — back button (safe-area) */}
         <div className="w-full pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between">
@@ -783,16 +739,6 @@ export default function ConcertViewer() {
           </button>
           <div className="w-[60px]" />
         </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="image/*,video/*"
-          className="hidden"
-          onChange={handleMediaFilesSelected}
-          disabled={!isOwner}
-        />
 
         {/* EXTERNAL USER HEADER (solo cuando NO eres owner) */}
         {!isOwner && postAuthor?.username && (
@@ -1016,7 +962,6 @@ export default function ConcertViewer() {
                     </div>
                     <span>{a.username || 'user'}</span>
 
-                    {/* quitar X en externo */}
                     {isOwner && (
                       <button
                         type="button"
@@ -1034,7 +979,6 @@ export default function ConcertViewer() {
               <p className="text-[13px] text-neutral-500 italic">No people added.</p>
             )}
 
-            {/* INPUT + búsqueda SOLO si owner (en externo es visualizer puro) */}
             {isOwner && user?.id && (
               <div className="relative">
                 <div className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-[13px] flex flex-wrap items-center gap-2 focus-within:ring-1 focus-within:ring-[#1F48AF]">
@@ -1150,15 +1094,16 @@ export default function ConcertViewer() {
           <p className="text-sm text-black/60 mt-5">No media.</p>
         )}
 
-        {/* SOCIAL */}
-        <section className="mt-6 w-full max-w-2xl relative z-10">
+        {/* SOCIAL + COMMENTS */}
+        <section className="mt-6 w-full max-w-2xl">
+          {/* Like row */}
           <div className="flex items-center gap-4">
             <button
               type="button"
               onClick={handleLike}
               aria-label={userLiked ? 'Unlike' : 'Like'}
               className={`inline-flex items-center justify-center transition-transform active:scale-95 ${
-                userLiked ? 'text-[#1F48AF]' : 'text-neutral-700'
+                userLiked ? 'text-[#1F48AF]' : 'text-neutral-600 hover:text-neutral-800'
               }`}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
@@ -1171,12 +1116,14 @@ export default function ConcertViewer() {
                 <circle cx="24" cy="24" r="1.5" fill={userLiked ? 'white' : 'currentColor'} />
               </svg>
             </button>
+
             <button type="button" onClick={() => setLikesPanelOpen(true)} className="text-sm text-neutral-700 hover:text-black">
               {likesCount} {likesCount === 1 ? 'like' : 'likes'}
             </button>
           </div>
 
-          <div id="comments" className="mt-4 space-y-3">
+          {/* Existing comments list */}
+          <div id="comments" className="mt-5 space-y-3">
             {comments.map(c => (
               <div key={c.id} className="flex gap-3 items-start">
                 <div className="h-8 w-8 rounded-full bg-neutral-200 overflow-hidden shrink-0">
@@ -1191,34 +1138,45 @@ export default function ConcertViewer() {
               </div>
             ))}
           </div>
+
+          {/* ✅ Listener Take style composer (NO fixed, NO sticky) */}
+          {user?.id && (
+            <div className="mt-7">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-neutral-500 mb-3">Comments</p>
+
+              <div className="rounded-2xl border border-neutral-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] p-4">
+                <textarea
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  placeholder="Share your thoughts about this concert…"
+                  className="w-full min-h-[110px] resize-none outline-none bg-transparent text-[14px] leading-6 text-black/80"
+                  style={{ fontFamily: 'Roboto, system-ui, sans-serif', fontWeight: 300 }}
+                />
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSendComment}
+                    disabled={!commentText.trim()}
+                    className="rounded-full bg-[#1F48AF] text-white px-5 py-2 text-[12px] tracking-[0.14em] uppercase disabled:opacity-40"
+                  >
+                    Post comment
+                  </button>
+                </div>
+              </div>
+
+              {comments.length === 0 && (
+                <p className="mt-3 text-[13px] text-neutral-500">No comments yet. Be the first to comment.</p>
+              )}
+            </div>
+          )}
+
+          {/* ✅ Spacer real extra para scroll en iOS (barra inferior + teclado) */}
+          <div className="h-[140px]" />
         </section>
       </main>
 
-      {/* COMMENT COMPOSER — FIX iOS (NO sticky, ES fixed como Listener Take) */}
-      {user?.id && (
-        <div
-          className="fixed left-0 right-0 z-30 bg-white/95 backdrop-blur-sm border-t border-neutral-200"
-          style={{
-            bottom: 'calc(env(safe-area-inset-bottom) + 96px)',
-          }}
-        >
-          <div className="mx-auto w-full max-w-2xl px-4 sm:px-8 py-3">
-            <div className="flex items-center gap-2">
-              <input
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-                placeholder="Write a comment…"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none break-words [overflow-wrap:anywhere]"
-              />
-              <button type="button" onClick={handleSendComment} className="rounded-xl bg-[#1F48AF] text-white px-4 py-2 text-sm">
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* LIKES BOTTOM SHEET (fondo blanco puro + safe-area bottom) */}
+      {/* LIKES BOTTOM SHEET */}
       <div className={`fixed inset-0 z-40 flex items-end justify-center ${likesPanelOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div className={`absolute inset-0 bg-black/40 transition-opacity ${likesPanelOpen ? 'opacity-100' : 'opacity-0'}`} onClick={closeLikesPanel} />
         <div
@@ -1326,7 +1284,6 @@ export default function ConcertViewer() {
                   </svg>
                 </button>
 
-                {/* Indicador minimalista 1 / N */}
                 <div
                   className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-white/85"
                   style={{ bottom: 'calc(env(safe-area-inset-bottom) + 22px)' }}
