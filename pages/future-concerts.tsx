@@ -56,7 +56,9 @@ export default function FutureConcertsPage() {
   // People I am going with
   const [peopleInput, setPeopleInput] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<MentionProfile[]>([]);
-  const [companySuggestions, setCompanySuggestions] = useState<MentionProfile[]>([]);
+  const [companySuggestions, setCompanySuggestions] = useState<
+    MentionProfile[]
+  >([]);
   const [companySearching, setCompanySearching] = useState(false);
   const companyDebouncer = useRef<TimeoutId | null>(null);
 
@@ -169,7 +171,7 @@ export default function FutureConcertsPage() {
     const { data } = await supabase
       .from("future_concerts")
       .select(
-        "id, artist, city, venue, seat_label, companions, notes, country_code, event_date, created_at",
+        "id, artist, city, venue, seat_label, companions, notes, country_code, event_date, created_at"
       )
       .eq("user_id", uid)
       .order("event_date", { ascending: true });
@@ -202,7 +204,7 @@ export default function FutureConcertsPage() {
       .from("future_concerts")
       .insert([payload])
       .select(
-        "id, artist, city, venue, seat_label, companions, notes, country_code, event_date, created_at",
+        "id, artist, city, venue, seat_label, companions, notes, country_code, event_date, created_at"
       )
       .single();
 
@@ -211,8 +213,8 @@ export default function FutureConcertsPage() {
         [...prev, data as FutureRow].sort(
           (a, b) =>
             new Date(a.event_date).getTime() -
-            new Date(b.event_date).getTime(),
-        ),
+            new Date(b.event_date).getTime()
+        )
       );
     }
 
@@ -234,10 +236,7 @@ export default function FutureConcertsPage() {
   async function removeItem(id: string) {
     const backup = items;
     setItems((prev) => prev.filter((i) => i.id !== id));
-    const { error } = await supabase
-      .from("future_concerts")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("future_concerts").delete().eq("id", id);
     if (error) setItems(backup);
   }
 
@@ -268,12 +267,12 @@ export default function FutureConcertsPage() {
         .map((y) => parseInt(y, 10))
         .sort((a, b) => a - b)
         .map((y) => y.toString()),
-    [groupedByYear],
+    [groupedByYear]
   );
 
   return (
     <div className="bg-white min-h-screen text-black font-[Roboto]">
-      <main className="mx-auto w-full max-w-[520px] px-4 pt-6 pb-16">
+      <main className="mx-auto w-full max-w-[520px] px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+6.5rem)]">
         {/* HEADER EDITORIAL */}
         <header className="mb-4">
           <div className="flex items-center justify-between">
@@ -590,8 +589,7 @@ export default function FutureConcertsPage() {
                               <p
                                 className="text-[15px] leading-5 truncate"
                                 style={{
-                                  fontFamily:
-                                    '"Times New Roman", Times, serif',
+                                  fontFamily: '"Times New Roman", Times, serif',
                                   fontWeight: 400,
                                 }}
                               >

@@ -523,7 +523,21 @@ export default function ArtistProfile() {
 
   return (
     <main className="min-h-screen bg-white text-black">
-      <div className="mx-auto w-full max-w-[1040px] px-4 sm:px-6 pt-8 pb-24">
+      {/* TOP — back button */}
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
+
+      <div className="mx-auto w-full max-w-[1040px] px-4 sm:px-6 pt-2 pb-[calc(env(safe-area-inset-bottom)+6.5rem)]">
         {/* CABECERA ARTISTA */}
         <section className="mx-auto w-full max-w-[720px]">
           <h1
@@ -754,10 +768,7 @@ export default function ArtistProfile() {
               {loadingMoments ? (
                 <div className="space-y-4">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-32 bg-neutral-100 rounded-3xl"
-                    />
+                    <div key={i} className="h-32 bg-neutral-100 rounded-3xl" />
                   ))}
                 </div>
               ) : filteredMoments.length === 0 ? (
@@ -794,10 +805,7 @@ export default function ArtistProfile() {
               {loadingConcerts ? (
                 <div className="mx-auto w-full max-w-[900px] grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-5">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-40 bg-neutral-100 rounded-2xl"
-                    />
+                    <div key={i} className="h-40 bg-neutral-100 rounded-2xl" />
                   ))}
                 </div>
               ) : concerts.length === 0 ? (
