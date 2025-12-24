@@ -174,7 +174,9 @@ export default function FavouriteRecords() {
       return;
     }
 
-    setFavouriteIds((prev) => (prev.includes(recordId) ? prev : [...prev, recordId]));
+    setFavouriteIds((prev) =>
+      prev.includes(recordId) ? prev : [...prev, recordId]
+    );
     const rec = allRecords.find((r) => r.id === recordId);
     if (rec) {
       setFavouriteRecords((prev) => {
@@ -230,7 +232,9 @@ export default function FavouriteRecords() {
     setSearchOpen(true);
     setEditMode(false);
     setTimeout(() => {
-      const el = document.getElementById("recordSearchInput") as HTMLInputElement | null;
+      const el = document.getElementById(
+        "recordSearchInput"
+      ) as HTMLInputElement | null;
       el?.focus();
     }, 0);
   };
@@ -250,9 +254,9 @@ export default function FavouriteRecords() {
   const showing: RecordRow[] = search ? matchedRecords : favouriteRecords;
 
   return (
-    <main className="min-h-screen bg-white text-black font-[Roboto]">
+    <main className="min-h-screen bg-white text-black font-[Roboto] pb-[calc(env(safe-area-inset-bottom)+6.5rem)]">
       {/* Header (replica Favourite Artists) */}
-      <div className="w-full px-5 sm:px-6 pt-9">
+      <div className="w-full px-5 sm:px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col">
             <div
@@ -277,7 +281,9 @@ export default function FavouriteRecords() {
             <div className="mt-4 h-[1px] w-24 bg-black/55" />
 
             {readonly && targetUsername && (
-              <p className="text-sm text-neutral-600 mt-4">Viewing @{targetUsername}</p>
+              <p className="text-sm text-neutral-600 mt-4">
+                Viewing @{targetUsername}
+              </p>
             )}
           </div>
 
@@ -319,7 +325,9 @@ export default function FavouriteRecords() {
             />
 
             <div className="mt-4 flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">Results</div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
+                Results
+              </div>
 
               <button
                 onClick={closeSearch}
@@ -353,14 +361,19 @@ export default function FavouriteRecords() {
                       >
                         <div
                           className="w-4 h-4 rounded-[4px]"
-                          style={{ backgroundColor: record.cover_color || "#FFFFFF" }}
+                          style={{
+                            backgroundColor: record.cover_color || "#FFFFFF",
+                          }}
                         />
                       </div>
 
                       <div className="min-w-0">
                         <div
                           className="text-[15px] leading-tight truncate"
-                          style={{ fontFamily: "Times New Roman, serif", opacity: 0.92 }}
+                          style={{
+                            fontFamily: "Times New Roman, serif",
+                            opacity: 0.92,
+                          }}
                         >
                           {record.title}
                         </div>
@@ -395,9 +408,11 @@ export default function FavouriteRecords() {
 
       {/* Body */}
       {loading ? (
-        <p className="text-center text-gray-500 text-sm mt-14 mb-32">Loading records...</p>
+        <p className="text-center text-gray-500 text-sm mt-14 mb-32">
+          Loading records...
+        </p>
       ) : showing.length > 0 ? (
-        <div className="w-full px-5 sm:px-6 mt-10 pb-36">
+        <div className="w-full px-5 sm:px-6 mt-10 pb-24">
           <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
             Your favourites · {favouriteRecords.length}
           </div>
@@ -408,7 +423,10 @@ export default function FavouriteRecords() {
               const fav = isFavourite(record.id);
 
               return (
-                <div key={record.id} className="flex flex-col items-center text-center">
+                <div
+                  key={record.id}
+                  className="flex flex-col items-center text-center"
+                >
                   <div className="relative">
                     <div
                       onClick={() => goToRecordProfile(record.id)}
@@ -420,7 +438,9 @@ export default function FavouriteRecords() {
                       {/* cover square */}
                       <div
                         className="w-[54px] h-[54px] sm:w-[58px] sm:h-[58px] rounded-[10px]"
-                        style={{ backgroundColor: record.cover_color || "#FFFFFF" }}
+                        style={{
+                          backgroundColor: record.cover_color || "#FFFFFF",
+                        }}
                       />
                     </div>
 
@@ -432,14 +452,19 @@ export default function FavouriteRecords() {
                         aria-label="Remove from favourites"
                         title="Remove"
                       >
-                        <span className="text-[22px] leading-none font-light text-black/70">×</span>
+                        <span className="text-[22px] leading-none font-light text-black/70">
+                          ×
+                        </span>
                       </button>
                     )}
                   </div>
 
                   <p
                     className="mt-4 text-[16px] leading-tight line-clamp-2"
-                    style={{ fontFamily: "Times New Roman, serif", opacity: 0.92 }}
+                    style={{
+                      fontFamily: "Times New Roman, serif",
+                      opacity: 0.92,
+                    }}
                   >
                     {record.title}
                   </p>
@@ -447,7 +472,9 @@ export default function FavouriteRecords() {
                     {record.artist_name}
                   </p>
                   {record.release_year ? (
-                    <p className="mt-0.5 text-[12px] text-black/40 font-light">{record.release_year}</p>
+                    <p className="mt-0.5 text-[12px] text-black/40 font-light">
+                      {record.release_year}
+                    </p>
                   ) : null}
                 </div>
               );
