@@ -468,44 +468,34 @@ export default function ListenerTakesPage() {
 
   return (
     <div className="bg-white min-h-screen text-black font-[Roboto]">
+      {/* TOP — back button (TU BLOQUE EXACTO) */}
+      <div className="sticky top-0 z-50 bg-white">
+        <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            aria-label="Go back"
+            title="Back"
+            className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+          >
+            <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+            <span>Back</span>
+          </button>
+          <div className="w-[60px]" />
+        </div>
+      </div>
+
       <main
         className="mx-auto w-full max-w-[780px] px-4"
         style={{
-          paddingTop: 'calc(18px + env(safe-area-inset-top))',
+          paddingTop: '0px',
           paddingBottom: 'calc(120px + env(safe-area-inset-bottom))',
         }}
       >
         {/* HEADER EDITORIAL */}
         <header className="mb-5">
           <div className="flex items-center justify-between gap-3">
-            {/* LEFT: Back button */}
-            <button
-              type="button"
-              onClick={() => router.back()}
-              aria-label="Back"
-              className="w-9 h-9 rounded-full flex items-center justify-center bg-white border border-neutral-200 hover:bg-neutral-50 active:scale-95 transition"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-              >
-                <path
-                  d="M15 18l-6-6 6-6"
-                  stroke="#111"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-
-            {/* CENTER: Title */}
             <h1
-              className="flex-1 text-center text-[clamp(22px,6.2vw,34px)] leading-tight"
+              className="text-[clamp(26px,7vw,36px)] leading-tight"
               style={{
                 fontFamily: '"Times New Roman", Times, serif',
                 fontWeight: 400,
@@ -514,8 +504,6 @@ export default function ListenerTakesPage() {
             >
               Musical opinions
             </h1>
-
-            {/* RIGHT: + */}
             <button
               type="button"
               onClick={() => setShowForm((s) => !s)}
@@ -764,7 +752,6 @@ export default function ListenerTakesPage() {
               No records logged yet.
             </div>
           ) : viewMode === 'shelves' ? (
-            // GRID – Shelves: cover limpia, info editorial debajo
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
               {sorted.map((it) => (
                 <Link
@@ -810,7 +797,6 @@ export default function ListenerTakesPage() {
               ))}
             </div>
           ) : (
-            // TIMELINE – agrupado por mes + año
             <div className="space-y-4">
               {groupedByPeriod.orderedKeys.map((key) => {
                 const bucket = groupedByPeriod.map[key];
@@ -844,7 +830,6 @@ export default function ListenerTakesPage() {
                           key={it.id}
                           className="relative rounded-[28px] border border-neutral-200 bg-white shadow-[0_14px_38px_rgba(0,0,0,0.06)]"
                         >
-                          {/* rating flotante (solo UNA vez) */}
                           {typeof it.rate === 'number' && (
                             <div className="absolute top-4 right-4">
                               <RatingBadge rate={it.rate} />
@@ -852,9 +837,7 @@ export default function ListenerTakesPage() {
                           )}
 
                           <div className="px-3 sm:px-5 py-4">
-                            {/* CABECERA */}
                             <div className="flex items-start gap-3">
-                              {/* COVER */}
                               <Link
                                 href={`/record/${it.target_id}`}
                                 className="shrink-0"
@@ -909,7 +892,6 @@ export default function ListenerTakesPage() {
                                   </p>
                                 </div>
 
-                                {/* acciones (mismas funciones) */}
                                 {it.user_id === userId && (
                                   <div className="mt-2 flex gap-2">
                                     {editingId === it.id ? (
@@ -952,7 +934,6 @@ export default function ListenerTakesPage() {
                               </div>
                             </div>
 
-                            {/* BODY */}
                             <div className="mt-4">
                               {editingId === it.id ? (
                                 <textarea
@@ -1001,7 +982,6 @@ export default function ListenerTakesPage() {
                               ) : null}
                             </div>
 
-                            {/* SEE MORE -> /review/[id].tsx (sin línea y sin Walcord) */}
                             <div className="mt-4">
                               <Link
                                 href={`/review/${it.id}`}
