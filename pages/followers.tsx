@@ -143,13 +143,13 @@ export default function FollowersPage() {
 
       setFollowing(
         followingProfiles.sort((a, b) =>
-          (a.username || "").localeCompare(b.username || ""),
-        ),
+          (a.username || "").localeCompare(b.username || "")
+        )
       );
       setFollowers(
         followerProfiles.sort((a, b) =>
-          (a.username || "").localeCompare(b.username || ""),
-        ),
+          (a.username || "").localeCompare(b.username || "")
+        )
       );
 
       if (me?.id) {
@@ -170,7 +170,7 @@ export default function FollowersPage() {
   /** actions */
   const isMeFollowing = useCallback(
     (userId: string) => myFollowingIds.has(userId),
-    [myFollowingIds],
+    [myFollowingIds]
   );
 
   const follow = async (userId: string) => {
@@ -217,8 +217,6 @@ export default function FollowersPage() {
   }, [list, search]);
 
   // ✅ CONECTADO con pages/u/[username].tsx
-  // -> Navega a /u/<username>
-  // -> Si no viene username en la lista, lo resuelve por id en Supabase.
   const openProfile = useCallback(
     async (p: Profile) => {
       const directUsername = (p.username || "").trim();
@@ -239,35 +237,35 @@ export default function FollowersPage() {
         return;
       }
 
-      // fallback (si por lo que sea no hay username)
       router.push(`/u/${encodeURIComponent(p.id)}`);
     },
-    [router],
+    [router]
   );
 
-  /** ========= UI (nuevo diseño, sin banner azul, estilo app Walcord) ========= */
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-16">
-        {/* Header compacto */}
-        <div className="flex flex-col items-center gap-2 mb-6">
-          <h1
-            className="text-[clamp(22px,4vw,30px)] tracking-tight"
-            style={{
-              fontFamily: "Times New Roman, serif",
-              fontWeight: 400,
-              letterSpacing: "-0.03em",
-            }}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-[calc(env(safe-area-inset-bottom)+8rem)] relative overflow-visible">
+        {/* TOP — back button (same as other pages) */}
+        <div className="w-full px-1 sm:px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between relative z-[1000]">
+          <button
+            onClick={() => router.back()}
+            aria-label="Go back"
+            title="Back"
+            className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
           >
-            {tab === "following" ? "Following" : "Followers"}
-          </h1>
+            <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+            <span>Back</span>
+          </button>
+          <div className="w-[60px]" />
+        </div>
 
+        {/* ✅ Only the alt tabs (no headline above) */}
+        <div className="flex flex-col items-center gap-3 mb-6 relative z-[1000]">
           {readonly && targetUsername && (
             <p className="text-xs text-neutral-600">@{targetUsername}</p>
           )}
 
-          {/* Tabs minimalistas tipo app */}
-          <div className="mt-1 flex items-center gap-8 text-sm">
+          <div className="flex items-center gap-10 text-sm">
             <button
               onClick={() => setTab("following")}
               className={`pb-1 transition ${
@@ -291,7 +289,7 @@ export default function FollowersPage() {
           </div>
         </div>
 
-        {/* Buscador fino, centrado */}
+        {/* Search */}
         <div className="flex justify-center mb-5">
           <input
             type="text"
@@ -302,7 +300,7 @@ export default function FollowersPage() {
           />
         </div>
 
-        {/* Contenido */}
+        {/* Content */}
         {loading ? (
           <ul className="divide-y divide-neutral-100">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -360,7 +358,7 @@ export default function FollowersPage() {
                     </p>
                   </button>
 
-                  {/* Follow / Following CTA */}
+                  {/* CTA */}
                   {!isMeCard && me?.id && (
                     amIFollowing ? (
                       <button
