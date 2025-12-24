@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/router';
 
 /** ====== Tipos (mismo shape visual que el original) ====== */
 type RecordRow = {
@@ -24,6 +25,7 @@ type Props = { viewerId?: string };
 
 export default function FavouriteRecordsViewer({ viewerId }: Props) {
   const qs = useSearchParams();
+  const router = useRouter();
 
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(viewerId ?? null);
   const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
@@ -106,8 +108,25 @@ export default function FavouriteRecordsViewer({ viewerId }: Props) {
   if (loading) {
     return (
       <main className="min-h-screen bg-white text-black font-[Roboto]">
+        {/* TOP — back button (app safe-area friendly) */}
+        <div
+          className="w-full px-5 sm:px-12 pb-4 flex items-center justify-between"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.75rem)' }}
+        >
+          <button
+            onClick={() => router.back()}
+            aria-label="Go back"
+            title="Back"
+            className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem] py-1"
+          >
+            <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+            <span>Back</span>
+          </button>
+          <div className="w-[60px]" />
+        </div>
+
         {/* Header (IGUAL al original, sin acciones) */}
-        <div className="w-full px-5 sm:px-6 pt-9">
+        <div className="w-full px-5 sm:px-6 pt-2">
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-col">
               <div
@@ -142,8 +161,25 @@ export default function FavouriteRecordsViewer({ viewerId }: Props) {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
+      {/* TOP — back button (app safe-area friendly) */}
+      <div
+        className="w-full px-5 sm:px-12 pb-4 flex items-center justify-between"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.75rem)' }}
+      >
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem] py-1"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
+
       {/* Header (IGUAL al original, sin acciones) */}
-      <div className="w-full px-5 sm:px-6 pt-9">
+      <div className="w-full px-5 sm:px-6 pt-2">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col">
             <div
