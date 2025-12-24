@@ -132,17 +132,23 @@ export default function FavouriteArtists() {
      =============================== */
   const handleAddFavourite = async (artistId: string) => {
     if (readonly || !me?.id) return;
-    await supabase.from("favourite_artists").insert([{ user_id: me.id, artist_id: artistId }]);
+    await supabase
+      .from("favourite_artists")
+      .insert([{ user_id: me.id, artist_id: artistId }]);
     setFavourites((prev) => [...prev, { artist_id: artistId }]);
   };
 
   const handleRemoveFavourite = async (artistId: string) => {
     if (readonly || !me?.id) return;
-    await supabase.from("favourite_artists").delete().match({ user_id: me.id, artist_id: artistId });
+    await supabase
+      .from("favourite_artists")
+      .delete()
+      .match({ user_id: me.id, artist_id: artistId });
     setFavourites((prev) => prev.filter((fav) => fav.artist_id !== artistId));
   };
 
-  const isFavourite = (artistId: string) => favourites.some((fav) => fav.artist_id === artistId);
+  const isFavourite = (artistId: string) =>
+    favourites.some((fav) => fav.artist_id === artistId);
 
   /* ===============================
      Búsqueda robusta (sin acentos / case-insensitive)
@@ -150,7 +156,9 @@ export default function FavouriteArtists() {
   const matchedArtists = useMemo(() => {
     const q = norm(search);
     if (!q) return artists;
-    return artists.filter((a) => norm(a.name).includes(q) || norm(a.place).includes(q));
+    return artists.filter(
+      (a) => norm(a.name).includes(q) || norm(a.place).includes(q)
+    );
   }, [artists, search]);
 
   const goToArtist = (id: string) => router.push(`/artist/${id}`);
@@ -160,7 +168,9 @@ export default function FavouriteArtists() {
     setSearchOpen(true);
     setEditMode(false);
     setTimeout(() => {
-      const el = document.getElementById("artistSearchInput") as HTMLInputElement | null;
+      const el = document.getElementById(
+        "artistSearchInput"
+      ) as HTMLInputElement | null;
       el?.focus();
     }, 0);
   };
@@ -185,8 +195,22 @@ export default function FavouriteArtists() {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
+      {/* TOP — back button */}
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
+
       {/* Header */}
-      <div className="w-full px-5 sm:px-6 pt-9">
+      <div className="w-full px-5 sm:px-6 pt-2 pb-[calc(env(safe-area-inset-bottom)+7.5rem)]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col">
             <div
@@ -211,7 +235,9 @@ export default function FavouriteArtists() {
             <div className="mt-4 h-[1px] w-24 bg-black/55" />
 
             {readonly && targetUsername && (
-              <p className="text-sm text-neutral-600 mt-4">Viewing @{targetUsername}</p>
+              <p className="text-sm text-neutral-600 mt-4">
+                Viewing @{targetUsername}
+              </p>
             )}
           </div>
 
@@ -255,7 +281,9 @@ export default function FavouriteArtists() {
 
             {/* Results label + small close aligned right (not huge, not centered) */}
             <div className="mt-4 flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">Results</div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
+                Results
+              </div>
 
               <button
                 onClick={closeSearch}
@@ -293,14 +321,21 @@ export default function FavouriteArtists() {
                       >
                         {hasImg ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={artist.image_url as string} alt={artist.name} className="w-full h-full object-cover" />
+                          <img
+                            src={artist.image_url as string}
+                            alt={artist.name}
+                            className="w-full h-full object-cover"
+                          />
                         ) : null}
                       </div>
 
                       <div className="min-w-0">
                         <div
                           className="text-[15px] leading-tight truncate"
-                          style={{ fontFamily: "Times New Roman, serif", opacity: 0.92 }}
+                          style={{
+                            fontFamily: "Times New Roman, serif",
+                            opacity: 0.92,
+                          }}
                         >
                           {artist.name}
                         </div>
@@ -328,76 +363,88 @@ export default function FavouriteArtists() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Content */}
-      {loading ? (
-        <p className="text-center text-gray-500 text-sm mt-14 mb-32">Loading artists...</p>
-      ) : favouriteArtists.length > 0 ? (
-        <div className="w-full px-5 sm:px-6 mt-10 pb-36">
-          <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
-            Your favourites · {favouriteArtists.length}
-          </div>
+        {/* Content */}
+        {loading ? (
+          <p className="text-center text-gray-500 text-sm mt-14 mb-24">
+            Loading artists...
+          </p>
+        ) : favouriteArtists.length > 0 ? (
+          <div className="w-full mt-10">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
+              Your favourites · {favouriteArtists.length}
+            </div>
 
-          {/* Grid: tighter vertical rhythm, no weird gaps */}
-          <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-7 gap-y-10">
-            {favouriteArtists.map((artist) => {
-              const hasImg = !!artist.image_url;
-              const color = colorFor(artist.name || "");
+            {/* Grid: tighter vertical rhythm, no weird gaps */}
+            <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-7 gap-y-10 pb-[calc(env(safe-area-inset-bottom)+8.5rem)]">
+              {favouriteArtists.map((artist) => {
+                const hasImg = !!artist.image_url;
+                const color = colorFor(artist.name || "");
 
-              return (
-                <div key={artist.id} className="flex flex-col items-center text-center">
-                  {/* Avatar + delete X pinned (close to artist, correct scale) */}
-                  <div className="relative">
-                    <div
-                      onClick={() => goToArtist(artist.id)}
-                      className="w-[118px] h-[118px] sm:w-[132px] sm:h-[132px] rounded-full cursor-pointer transition-transform duration-200 hover:scale-[1.02] shadow-[0_12px_26px_rgba(0,0,0,0.10)]"
-                      style={{
-                        backgroundColor: hasImg ? "#F4F5F7" : color,
-                        overflow: "hidden",
-                        border: hasImg ? "2px solid" : "none",
-                        borderColor: hasImg ? color : undefined,
-                      }}
-                      aria-label={`Open ${artist.name}`}
-                      title={artist.name}
-                    >
-                      {hasImg ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={artist.image_url as string}
-                          alt={artist.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : null}
+                return (
+                  <div
+                    key={artist.id}
+                    className="flex flex-col items-center text-center"
+                  >
+                    {/* Avatar + delete X pinned (close to artist, correct scale) */}
+                    <div className="relative">
+                      <div
+                        onClick={() => goToArtist(artist.id)}
+                        className="w-[118px] h-[118px] sm:w-[132px] sm:h-[132px] rounded-full cursor-pointer transition-transform duration-200 hover:scale-[1.02] shadow-[0_12px_26px_rgba(0,0,0,0.10)]"
+                        style={{
+                          backgroundColor: hasImg ? "#F4F5F7" : color,
+                          overflow: "hidden",
+                          border: hasImg ? "2px solid" : "none",
+                          borderColor: hasImg ? color : undefined,
+                        }}
+                        aria-label={`Open ${artist.name}`}
+                        title={artist.name}
+                      >
+                        {hasImg ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={artist.image_url as string}
+                            alt={artist.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : null}
+                      </div>
+
+                      {/* X like your reference: small, on the corner, not floating far away */}
+                      {!readonly && editMode && (
+                        <button
+                          onClick={() => handleRemoveFavourite(artist.id)}
+                          className="absolute -top-2 -right-2 w-9 h-9 rounded-full bg-white border border-black/20 shadow-sm flex items-center justify-center hover:border-black/35 transition"
+                          aria-label="Remove from favourites"
+                          title="Remove"
+                        >
+                          <span className="text-[22px] leading-none font-light text-black/70">
+                            ×
+                          </span>
+                        </button>
+                      )}
                     </div>
 
-                    {/* X like your reference: small, on the corner, not floating far away */}
-                    {!readonly && editMode && (
-                      <button
-                        onClick={() => handleRemoveFavourite(artist.id)}
-                        className="absolute -top-2 -right-2 w-9 h-9 rounded-full bg-white border border-black/20 shadow-sm flex items-center justify-center hover:border-black/35 transition"
-                        aria-label="Remove from favourites"
-                        title="Remove"
-                      >
-                        <span className="text-[22px] leading-none font-light text-black/70">×</span>
-                      </button>
-                    )}
+                    <p
+                      className="mt-4 text-[16px] leading-tight line-clamp-2"
+                      style={{
+                        fontFamily: "Times New Roman, serif",
+                        opacity: 0.92,
+                      }}
+                    >
+                      {artist.name}
+                    </p>
                   </div>
-
-                  <p
-                    className="mt-4 text-[16px] leading-tight line-clamp-2"
-                    style={{ fontFamily: "Times New Roman, serif", opacity: 0.92 }}
-                  >
-                    {artist.name}
-                  </p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ) : (
-        <p className="text-center text-neutral-500 mt-16">No artists yet.</p>
-      )}
+        ) : (
+          <p className="text-center text-neutral-500 mt-16 mb-24">
+            No artists yet.
+          </p>
+        )}
+      </div>
     </main>
   );
 }

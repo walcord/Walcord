@@ -254,9 +254,23 @@ export default function FavouriteRecords() {
   const showing: RecordRow[] = search ? matchedRecords : favouriteRecords;
 
   return (
-    <main className="min-h-screen bg-white text-black font-[Roboto] pb-[calc(env(safe-area-inset-bottom)+6.5rem)]">
+    <main className="min-h-screen bg-white text-black font-[Roboto] pb-[calc(env(safe-area-inset-bottom)+8.25rem)]">
+      {/* TOP — back button */}
+      <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          aria-label="Go back"
+          title="Back"
+          className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+        >
+          <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+          <span>Back</span>
+        </button>
+        <div className="w-[60px]" />
+      </div>
+
       {/* Header (replica Favourite Artists) */}
-      <div className="w-full px-5 sm:px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
+      <div className="w-full px-5 sm:px-6 pt-2">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col">
             <div
@@ -412,7 +426,7 @@ export default function FavouriteRecords() {
           Loading records...
         </p>
       ) : showing.length > 0 ? (
-        <div className="w-full px-5 sm:px-6 mt-10 pb-24">
+        <div className="w-full px-5 sm:px-6 mt-10 pb-[calc(env(safe-area-inset-bottom)+10rem)]">
           <div className="text-[11px] uppercase tracking-[0.22em] text-black/45">
             Your favourites · {favouriteRecords.length}
           </div>
@@ -482,7 +496,9 @@ export default function FavouriteRecords() {
           </div>
         </div>
       ) : (
-        <p className="text-center text-neutral-500 mt-16">No records yet.</p>
+        <p className="text-center text-neutral-500 mt-16 mb-28">
+          No records yet.
+        </p>
       )}
     </main>
   );
