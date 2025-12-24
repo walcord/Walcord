@@ -236,7 +236,10 @@ export default function FutureConcertsPage() {
   async function removeItem(id: string) {
     const backup = items;
     setItems((prev) => prev.filter((i) => i.id !== id));
-    const { error } = await supabase.from("future_concerts").delete().eq("id", id);
+    const { error } = await supabase
+      .from("future_concerts")
+      .delete()
+      .eq("id", id);
     if (error) setItems(backup);
   }
 
@@ -272,9 +275,10 @@ export default function FutureConcertsPage() {
 
   return (
     <div className="bg-white min-h-screen text-black font-[Roboto]">
-      <main className="mx-auto w-full max-w-[520px] px-4 pb-[calc(env(safe-area-inset-bottom)+8rem)]">
+      {/* ✅ overflow-visible + relative para stacking correcto en iOS */}
+      <main className="mx-auto w-full max-w-[520px] px-4 pb-[calc(env(safe-area-inset-bottom)+8rem)] relative overflow-visible">
         {/* TOP — back button */}
-        <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between">
+        <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between relative z-[1000]">
           <button
             onClick={() => router.back()}
             aria-label="Go back"
@@ -288,7 +292,8 @@ export default function FutureConcertsPage() {
         </div>
 
         {/* HEADER EDITORIAL */}
-        <header className="mb-4">
+        {/* ✅ z alto para que el + no quede “debajo” en WKWebView */}
+        <header className="mb-4 relative z-[1000]">
           <div className="flex items-center justify-between">
             <div className="w-8" />
             <h1
@@ -305,7 +310,7 @@ export default function FutureConcertsPage() {
               type="button"
               onClick={() => setShowForm((s) => !s)}
               aria-label="Add future concert"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-[0_10px_24px_rgba(0,0,0,0.25)] hover:scale-105 active:scale-95 transition-transform"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-[0_10px_24px_rgba(0,0,0,0.25)] hover:scale-105 active:scale-95 transition-transform relative z-[1001]"
               style={{ backgroundColor: "#1F48AF" }}
             >
               <span className="text-lg leading-none">+</span>
@@ -314,8 +319,9 @@ export default function FutureConcertsPage() {
         </header>
 
         {/* FORM INLINE */}
+        {/* ✅ z alto para que NO quede tapado por overlays */}
         {showForm && (
-          <section className="mb-6 rounded-3xl border border-neutral-200 bg-white px-4 py-4 shadow-[0_16px_40px_rgba(0,0,0,0.08)]">
+          <section className="mb-6 rounded-3xl border border-neutral-200 bg-white px-4 py-4 shadow-[0_16px_40px_rgba(0,0,0,0.08)] relative z-[999]">
             <div className="grid grid-cols-2 gap-2 text-sm">
               {/* ARTIST (buscable) */}
               <div className="col-span-2 relative">
@@ -349,7 +355,7 @@ export default function FutureConcertsPage() {
                       className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
                     />
                     {(artistSearching || artistResults.length > 0) && (
-                      <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-30">
+                      <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-[9999]">
                         {artistSearching && (
                           <div className="px-3 py-2 text-sm text-neutral-500">
                             Searching…
@@ -460,7 +466,7 @@ export default function FutureConcertsPage() {
                 </div>
 
                 {(companySearching || companySuggestions.length > 0) && (
-                  <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-30">
+                  <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-[9999]">
                     {companySearching && (
                       <div className="px-3 py-2 text-sm text-neutral-500">
                         Searching…
@@ -548,7 +554,7 @@ export default function FutureConcertsPage() {
         )}
 
         {/* LISTA DE CONCIERTOS */}
-        <section>
+        <section className="relative z-0">
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
