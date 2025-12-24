@@ -1,5 +1,6 @@
 'use client';
 
+import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
@@ -118,8 +119,8 @@ export default function SettingsPage() {
             new Set(
               favRows
                 .map((row: any) => row.genre_id as string | null)
-                .filter(Boolean)
-            )
+                .filter(Boolean),
+            ),
           ).slice(0, 2);
 
           setSelectedGenreIds(ids);
@@ -148,10 +149,7 @@ export default function SettingsPage() {
         full_name: displayName.trim() || null,
       };
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId);
+      const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
 
       if (error) throw error;
 
@@ -162,7 +160,7 @@ export default function SettingsPage() {
               username: updates.username ?? null,
               full_name: updates.full_name ?? null,
               avatar_url: null,
-            }
+            },
       );
 
       setProfileMessage('Profile updated');
@@ -187,12 +185,10 @@ export default function SettingsPage() {
       const fileName = `${userId}-${Date.now()}.${ext}`;
       const filePath = `${userId}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true,
-        });
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
 
       if (uploadError) throw uploadError;
 
@@ -293,9 +289,7 @@ export default function SettingsPage() {
           genre_id: genreId,
         }));
 
-        const { error: insertError } = await supabase
-          .from('favourite_genres')
-          .insert(rows);
+        const { error: insertError } = await supabase.from('favourite_genres').insert(rows);
 
         if (insertError) throw insertError;
       }
@@ -329,13 +323,10 @@ export default function SettingsPage() {
       if (!res.ok) {
         try {
           // @ts-ignore
-          const { error: rpcErr } =
-            await supabase.rpc('delete_user_and_data');
+          const { error: rpcErr } = await supabase.rpc('delete_user_and_data');
           if (rpcErr) throw rpcErr;
         } catch (e: any) {
-          throw new Error(
-            'No ha sido posible eliminar la cuenta.'
-          );
+          throw new Error('No ha sido posible eliminar la cuenta.');
         }
       }
 
@@ -363,17 +354,38 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-white text-black font-[Roboto]">
-      {/* Header ajustes */}
-      <div className="w-full px-6 sm:px-12 pt-8 pb-4 border-b border-neutral-200">
-        <h1
-          className="text-[clamp(1.6rem,4vw,2.2rem)] font-normal"
-          style={{ fontFamily: 'Times New Roman, serif' }}
-        >
-          Settings
-        </h1>
+      {/* TOP — back button (sticky + safe-area) */}
+      <div className="sticky top-0 z-50 bg-white">
+        <div className="w-full px-6 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 border-b border-neutral-200">
+          <div className="flex items-end justify-between gap-4">
+            <button
+              onClick={() => router.back()}
+              aria-label="Go back"
+              title="Back"
+              className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+            >
+              <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+              <span>Back</span>
+            </button>
+
+            <h1
+              className="text-[clamp(1.6rem,4vw,2.2rem)] font-normal"
+              style={{ fontFamily: 'Times New Roman, serif' }}
+            >
+              Settings
+            </h1>
+
+            <div className="w-[60px]" />
+          </div>
+        </div>
       </div>
 
-      <div className="px-6 sm:px-12 pb-24 max-w-3xl mx-auto space-y-10">
+      <div
+        className="px-6 sm:px-12 max-w-3xl mx-auto space-y-10"
+        style={{
+          paddingBottom: 'calc(140px + env(safe-area-inset-bottom))',
+        }}
+      >
         {/* Bloque superior: avatar + nombre + username */}
         <section className="pt-6 border-b border-neutral-200 pb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:gap-8 gap-4">
@@ -407,15 +419,11 @@ export default function SettingsPage() {
                 </p>
 
                 {avatarBusy && (
-                  <p className="text-[0.75rem] text-neutral-600">
-                    Updating photo…
-                  </p>
+                  <p className="text-[0.75rem] text-neutral-600">Updating photo…</p>
                 )}
 
                 {avatarError && (
-                  <p className="text-[0.75rem] text-red-600">
-                    {avatarError}
-                  </p>
+                  <p className="text-[0.75rem] text-red-600">{avatarError}</p>
                 )}
               </div>
             </div>
@@ -442,17 +450,13 @@ export default function SettingsPage() {
                   <span className="text-neutral-400">@</span>
                   <input
                     value={username}
-                    onChange={(e) =>
-                      setUsername(e.target.value.replace(/\s/g, ''))
-                    }
+                    onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))}
                     className="ml-1 flex-1 outline-none bg-transparent"
                     placeholder="walcorduser"
                   />
                 </div>
 
-                <p className="text-[0.7rem] text-neutral-400">
-                  No spaces allowed.
-                </p>
+                <p className="text-[0.7rem] text-neutral-400">No spaces allowed.</p>
               </div>
             </div>
           </div>
@@ -502,9 +506,7 @@ export default function SettingsPage() {
                     );
                   })
                 ) : (
-                  <span className="text-xs text-neutral-400">
-                    No genres selected yet
-                  </span>
+                  <span className="text-xs text-neutral-400">No genres selected yet</span>
                 )}
               </div>
 
@@ -537,9 +539,7 @@ export default function SettingsPage() {
               </div>
 
               {genresMessage && (
-                <span className="text-[0.7rem] text-neutral-500">
-                  {genresMessage}
-                </span>
+                <span className="text-[0.7rem] text-neutral-500">{genresMessage}</span>
               )}
             </div>
           </div>
@@ -578,9 +578,7 @@ export default function SettingsPage() {
 
             {/* Password */}
             <div className="mt-2">
-              <p className="text-[0.9rem] text-neutral-800 mb-2">
-                Change password
-              </p>
+              <p className="text-[0.9rem] text-neutral-800 mb-2">Change password</p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input
@@ -602,14 +600,9 @@ export default function SettingsPage() {
 
               <div className="mt-3 flex items-center justify-between gap-4">
                 <div className="text-xs">
-                  {passwordError && (
-                    <span className="text-red-600">{passwordError}</span>
-                  )}
-
+                  {passwordError && <span className="text-red-600">{passwordError}</span>}
                   {passwordSuccess && (
-                    <span className="text-neutral-700">
-                      {passwordSuccess}
-                    </span>
+                    <span className="text-neutral-700">{passwordSuccess}</span>
                   )}
                 </div>
 
@@ -662,11 +655,7 @@ export default function SettingsPage() {
               Delete account
             </button>
 
-            {deleteErr && (
-              <span className="text-sm text-red-700 align-middle">
-                {deleteErr}
-              </span>
-            )}
+            {deleteErr && <span className="text-sm text-red-700 align-middle">{deleteErr}</span>}
           </div>
         </section>
       </div>
@@ -695,11 +684,7 @@ export default function SettingsPage() {
                 placeholder="Type DELETE"
               />
 
-              {deleteErr && (
-                <div className="mt-3 text-sm text-red-700">
-                  {deleteErr}
-                </div>
-              )}
+              {deleteErr && <div className="mt-3 text-sm text-red-700">{deleteErr}</div>}
 
               <div className="mt-6 flex items-center justify-end gap-3">
                 <button

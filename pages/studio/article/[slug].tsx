@@ -68,9 +68,45 @@ const StudioArticlePage = () => {
     fetchArticle();
   }, [slug, supabase]);
 
+  const hasAudio = !!article?.audio_url;
+
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[720px] px-5 md:px-6 pt-6 pb-16">
+      {/* TOP — back button (sticky + safe-area + EXTRA SPACE) */}
+      <div className="sticky top-0 z-50 bg-white">
+        <div
+          className="w-full border-b border-neutral-200"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top) + 2.25rem)", // EXTRA arriba (más que suficiente)
+            paddingBottom: "1.25rem",
+          }}
+        >
+          <div className="mx-auto max-w-[720px] px-5 md:px-6 flex items-center justify-between">
+            <button
+              onClick={() => router.back()}
+              aria-label="Go back"
+              title="Back"
+              className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+            >
+              <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+              <span>Back</span>
+            </button>
+
+            <div className="w-[60px]" />
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="mx-auto max-w-[720px] px-5 md:px-6"
+        style={{
+          paddingTop: "1.25rem",
+          // EXTRA abajo: bottom bar + safe-area + margen adicional para el player/podcast
+          paddingBottom: hasAudio
+            ? "calc(260px + env(safe-area-inset-bottom))"
+            : "calc(170px + env(safe-area-inset-bottom))",
+        }}
+      >
         {loading && (
           <div className="mt-10 space-y-4">
             <div className="h-4 w-24 bg-neutral-100 rounded-full" />
@@ -86,7 +122,7 @@ const StudioArticlePage = () => {
         )}
 
         {!loading && article && (
-          <article className="mt-8">
+          <article className="mt-6">
             <h1
               className="mt-3 text-[2rem] leading-tight text-neutral-900 sm:text-[2.4rem]"
               style={{ fontFamily: "Times New Roman, serif", fontWeight: 400 }}

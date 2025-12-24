@@ -68,8 +68,39 @@ const StudioArticlesPage = () => {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6 pt-6 sm:pt-8 pb-16">
-        
+      {/* TOP — back button (sticky + safe-area + EXTRA SPACE) */}
+      <div className="sticky top-0 z-50 bg-white">
+        <div
+          className="w-full px-5 md:px-6 border-b border-neutral-200"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top) + 2.25rem)", // MÁS espacio arriba (extra)
+            paddingBottom: "1.25rem",
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => router.back()}
+              aria-label="Go back"
+              title="Back"
+              className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+            >
+              <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+              <span>Back</span>
+            </button>
+
+            {/* spacer para centrar visualmente y mantener look limpio */}
+            <div className="w-[60px]" />
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="mx-auto max-w-[500px] sm:max-w-[620px] md:max-w-[760px] lg:max-w-[820px] px-5 md:px-6"
+        style={{
+          paddingTop: "1.6rem",
+          paddingBottom: "calc(160px + env(safe-area-inset-bottom))", // MÁS espacio abajo por la bottom bar
+        }}
+      >
         {/* HEADER */}
         <header>
           <h1
