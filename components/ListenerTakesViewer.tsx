@@ -268,7 +268,21 @@ export default function ListenerTakesViewer({ profileId: propProfileId }: { prof
 
   return (
     <div className="bg-white min-h-screen text-black font-[Roboto]">
-      <main className="mx-auto w-full max-w-[780px] px-4 pt-7 pb-16">
+      <main className="mx-auto w-full max-w-[780px] px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-[calc(env(safe-area-inset-bottom)+8rem)]">
+        {/* TOP — back button */}
+        <div className="w-full px-5 sm:px-12 pb-4 flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            aria-label="Go back"
+            title="Back"
+            className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+          >
+            <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+            <span>Back</span>
+          </button>
+          <div className="w-[60px]" />
+        </div>
+
         {/* HEADER EDITORIAL (calcado, sin botón +) */}
         <header className="mb-5">
           <div className="flex items-center justify-between gap-3">
