@@ -567,7 +567,7 @@ function ArtistSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (a: 
                 className="p-3 hover:bg-neutral-50 flex items-center gap-3 cursor-pointer"
                 onClick={() => onPick(a)}
               >
-                {a.image_url ? <img src={a.image_url} alt={a.name} className="w-8 h-8 rounded object-cover object-center shrink-0" /> : null}
+                {a.image_url ? <img src={a.image_url} alt={a.name} className="w-8 h-8 rounded object-cover object-center shrink-0 block" /> : null}
                 <div className="text-sm">{a.name}</div>
               </li>
             ))}
@@ -669,12 +669,8 @@ function ConcertTile({ row }: { row: RowConcert }) {
             alt=""
             loading="eager"
             decoding="async"
-            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
+            className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
             style={{
-              transform: "translateZ(0)",
-              WebkitTransform: "translateZ(0)",
-              backfaceVisibility: "hidden",
-              WebkitBackfaceVisibility: "hidden",
               imageOrientation: "from-image" as any,
             }}
           />
@@ -704,11 +700,12 @@ function ConcertTile({ row }: { row: RowConcert }) {
           <div
             className="truncate text-white"
             style={{
-              fontFamily: "Times New Roman, serif",
-              fontWeight: 400,
+              fontFamily: "Roboto, Arial, sans-serif",
+              fontWeight: 500,
               textShadow: "0 2px 16px rgba(0,0,0,0.70)",
               fontSize: "clamp(14px, 3.5vw, 18px)",
               lineHeight: 1.05,
+              letterSpacing: "0.01em",
             }}
             title={artistLine}
           >
@@ -737,12 +734,8 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
             alt=""
             loading="eager"
             decoding="async"
-            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
+            className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
             style={{
-              transform: "translateZ(0)",
-              WebkitTransform: "translateZ(0)",
-              backfaceVisibility: "hidden",
-              WebkitBackfaceVisibility: "hidden",
               imageOrientation: "from-image" as any,
             }}
           />
@@ -1100,7 +1093,8 @@ export default function FeedPage() {
         }`}
         aria-hidden={!searchOpen}
       >
-        <div className="absolute inset-0 bg-black/25" onClick={closeSearch} />
+        {/* ✅ NO dark/blur overlay (keeps iOS app borders clean) */}
+        <div className="absolute inset-0 bg-transparent" onClick={closeSearch} />
 
         <div
           className={`absolute left-0 right-0 top-0 bg-white border-b border-neutral-200 shadow-[0_20px_60px_rgba(0,0,0,0.18)] transition-transform duration-300 ease-out ${
