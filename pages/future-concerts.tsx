@@ -56,9 +56,7 @@ export default function FutureConcertsPage() {
   // People I am going with
   const [peopleInput, setPeopleInput] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<MentionProfile[]>([]);
-  const [companySuggestions, setCompanySuggestions] = useState<
-    MentionProfile[]
-  >([]);
+  const [companySuggestions, setCompanySuggestions] = useState<MentionProfile[]>([]);
   const [companySearching, setCompanySearching] = useState(false);
   const companyDebouncer = useRef<TimeoutId | null>(null);
 
@@ -275,393 +273,403 @@ export default function FutureConcertsPage() {
 
   return (
     <div className="bg-white min-h-screen text-black font-[Roboto]">
-      {/* ✅ overflow-visible + relative para stacking correcto en iOS */}
-      <main className="mx-auto w-full max-w-[520px] px-4 pb-[calc(env(safe-area-inset-bottom)+8rem)] relative overflow-visible">
-        {/* TOP — back button */}
-        <div className="w-full px-5 sm:px-12 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center justify-between relative z-[1000]">
-          <button
-            onClick={() => router.back()}
-            aria-label="Go back"
-            title="Back"
-            className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
-          >
-            <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
-            <span>Back</span>
-          </button>
-          <div className="w-[60px]" />
+      {/* IMPORTANT: isolation + overflow-visible para WKWebView */}
+      <main className="mx-auto w-full max-w-[520px] px-4 relative overflow-visible [isolation:isolate] pb-[calc(env(safe-area-inset-bottom)+8rem)]">
+        {/* HEADER STICKY (iOS-proof) */}
+        <div className="sticky top-0 z-[9999] bg-white/95 backdrop-blur-sm">
+          {/* safe-area real */}
+          <div className="pt-[calc(env(safe-area-inset-top)+0.75rem)]" />
+
+          {/* TOP — back button */}
+          <div className="w-full px-5 sm:px-12 pb-3 flex items-center justify-between">
+            <button
+              onClick={() => router.back()}
+              aria-label="Go back"
+              title="Back"
+              className="flex items-center gap-2 text-[#264AAE] font-light text-[0.95rem]"
+            >
+              <span className="text-[1.35rem] leading-none -mt-[1px]">‹</span>
+              <span>Back</span>
+            </button>
+            <div className="w-[60px]" />
+          </div>
+
+          {/* HEADER EDITORIAL + PLUS */}
+          <div className="px-5 sm:px-12 pb-3">
+            <div className="flex items-center justify-between">
+              <div className="w-8" />
+              <h1
+                className="text-[clamp(22px,4vw,30px)] tracking-tight text-center"
+                style={{
+                  fontFamily: '"Times New Roman", Times, serif',
+                  fontWeight: 400,
+                  letterSpacing: "-0.03em",
+                }}
+              >
+                Future concerts
+              </h1>
+
+              {/* ✅ ALWAYS VISIBLE: high z + pointer-events ok */}
+              <button
+                type="button"
+                onClick={() => setShowForm((s) => !s)}
+                aria-label="Add future concert"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-[0_10px_24px_rgba(0,0,0,0.25)] active:scale-95 transition-transform"
+                style={{ backgroundColor: "#1F48AF" }}
+              >
+                <span className="text-lg leading-none">+</span>
+              </button>
+            </div>
+          </div>
+
+          {/* little separator like your editorial screens */}
+          <div className="h-px bg-neutral-200/70" />
         </div>
 
-        {/* HEADER EDITORIAL */}
-        {/* ✅ z alto para que el + no quede “debajo” en WKWebView */}
-        <header className="mb-4 relative z-[1000]">
-          <div className="flex items-center justify-between">
-            <div className="w-8" />
-            <h1
-              className="text-[clamp(22px,4vw,30px)] tracking-tight text-center"
-              style={{
-                fontFamily: '"Times New Roman", Times, serif',
-                fontWeight: 400,
-                letterSpacing: "-0.03em",
-              }}
-            >
-              Future concerts
-            </h1>
-            <button
-              type="button"
-              onClick={() => setShowForm((s) => !s)}
-              aria-label="Add future concert"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-[0_10px_24px_rgba(0,0,0,0.25)] hover:scale-105 active:scale-95 transition-transform relative z-[1001]"
-              style={{ backgroundColor: "#1F48AF" }}
-            >
-              <span className="text-lg leading-none">+</span>
-            </button>
-          </div>
-        </header>
-
-        {/* FORM INLINE */}
-        {/* ✅ z alto para que NO quede tapado por overlays */}
-        {showForm && (
-          <section className="mb-6 rounded-3xl border border-neutral-200 bg-white px-4 py-4 shadow-[0_16px_40px_rgba(0,0,0,0.08)] relative z-[999]">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              {/* ARTIST (buscable) */}
-              <div className="col-span-2 relative">
-                {artistName ? (
-                  <div className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 bg-neutral-50/70">
-                    <span
-                      className="truncate"
-                      style={{
-                        fontFamily: '"Times New Roman", Times, serif',
-                      }}
-                    >
-                      {artistName}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-[11px] text-[#1F48AF]"
-                      onClick={() => {
-                        setArtistName("");
-                        setArtistQ("");
-                      }}
-                    >
-                      Change
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <input
-                      value={artistQ}
-                      onChange={(e) => setArtistQ(e.target.value)}
-                      placeholder="Artist"
-                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
-                    />
-                    {(artistSearching || artistResults.length > 0) && (
-                      <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-[9999]">
-                        {artistSearching && (
-                          <div className="px-3 py-2 text-sm text-neutral-500">
-                            Searching…
-                          </div>
-                        )}
-                        {!artistSearching &&
-                          artistResults.map((r) => (
-                            <button
-                              key={r.id}
-                              type="button"
-                              onClick={() => {
-                                setArtistName(r.name);
-                                setArtistQ("");
-                                setArtistResults([]);
-                              }}
-                              className="block w-full text-left px-3 py-2 hover:bg-neutral-50"
-                              style={{
-                                fontFamily: '"Times New Roman", Times, serif',
-                              }}
-                            >
-                              {r.name}
-                            </button>
-                          ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* CITY */}
-              <input
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="City"
-                className="col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
-              />
-
-              {/* COUNTRY */}
-              <select
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                className="col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] appearance-none bg-white"
-              >
-                <option value="">Country</option>
-                {countries.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* VENUE */}
-              <input
-                value={venue}
-                onChange={(e) => setVenue(e.target.value)}
-                placeholder="Venue"
-                className="col-span-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
-              />
-
-              {/* SEATS */}
-              <input
-                value={seatLabel}
-                onChange={(e) => setSeatLabel(e.target.value)}
-                placeholder="Seats"
-                className="col-span-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
-              />
-
-              {/* PEOPLE I AM GOING WITH */}
-              <div className="col-span-2 relative">
-                <div className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm flex flex-wrap items-center gap-2 focus-within:ring-1 focus-within:ring-[#1F48AF]">
-                  {selectedPeople.map((p) => (
-                    <div
-                      key={p.id}
-                      className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-2 py-1 text-[11px]"
-                    >
-                      <div className="w-5 h-5 rounded-full overflow-hidden bg-neutral-300 flex items-center justify-center text-[10px]">
-                        {p.avatar_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={p.avatar_url}
-                            alt={p.username || ""}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span>
-                            {(p.username || "U").charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <span>{p.username}</span>
+        {/* CONTENT OFFSET so it doesn't go under sticky header */}
+        <div className="pt-4">
+          {/* FORM INLINE */}
+          {showForm && (
+            <section className="mb-6 rounded-3xl border border-neutral-200 bg-white px-4 py-4 shadow-[0_16px_40px_rgba(0,0,0,0.08)] relative z-[9998]">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {/* ARTIST (buscable) */}
+                <div className="col-span-2 relative">
+                  {artistName ? (
+                    <div className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 bg-neutral-50/70">
+                      <span
+                        className="truncate"
+                        style={{
+                          fontFamily: '"Times New Roman", Times, serif',
+                        }}
+                      >
+                        {artistName}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => handleRemovePerson(p.id)}
-                        className="text-[11px] text-neutral-500 hover:text-black"
+                        className="text-[11px] text-[#1F48AF]"
+                        onClick={() => {
+                          setArtistName("");
+                          setArtistQ("");
+                        }}
                       >
-                        ×
+                        Change
                       </button>
                     </div>
+                  ) : (
+                    <>
+                      <input
+                        value={artistQ}
+                        onChange={(e) => setArtistQ(e.target.value)}
+                        placeholder="Artist"
+                        className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
+                      />
+                      {(artistSearching || artistResults.length > 0) && (
+                        <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-[9999]">
+                          {artistSearching && (
+                            <div className="px-3 py-2 text-sm text-neutral-500">
+                              Searching…
+                            </div>
+                          )}
+                          {!artistSearching &&
+                            artistResults.map((r) => (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => {
+                                  setArtistName(r.name);
+                                  setArtistQ("");
+                                  setArtistResults([]);
+                                }}
+                                className="block w-full text-left px-3 py-2 hover:bg-neutral-50"
+                                style={{
+                                  fontFamily: '"Times New Roman", Times, serif',
+                                }}
+                              >
+                                {r.name}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* CITY */}
+                <input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City"
+                  className="col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
+                />
+
+                {/* COUNTRY */}
+                <select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="col-span-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] appearance-none bg-white"
+                >
+                  <option value="">Country</option>
+                  {countries.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
                   ))}
+                </select>
+
+                {/* VENUE */}
+                <input
+                  value={venue}
+                  onChange={(e) => setVenue(e.target.value)}
+                  placeholder="Venue"
+                  className="col-span-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
+                />
+
+                {/* SEATS */}
+                <input
+                  value={seatLabel}
+                  onChange={(e) => setSeatLabel(e.target.value)}
+                  placeholder="Seats"
+                  className="col-span-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF]"
+                />
+
+                {/* PEOPLE I AM GOING WITH */}
+                <div className="col-span-2 relative">
+                  <div className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm flex flex-wrap items-center gap-2 focus-within:ring-1 focus-within:ring-[#1F48AF]">
+                    {selectedPeople.map((p) => (
+                      <div
+                        key={p.id}
+                        className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-2 py-1 text-[11px]"
+                      >
+                        <div className="w-5 h-5 rounded-full overflow-hidden bg-neutral-300 flex items-center justify-center text-[10px]">
+                          {p.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.avatar_url}
+                              alt={p.username || ""}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>
+                              {(p.username || "U").charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <span>{p.username}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePerson(p.id)}
+                          className="text-[11px] text-neutral-500 hover:text-black"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <input
+                      value={peopleInput}
+                      onChange={(e) => setPeopleInput(e.target.value)}
+                      placeholder={
+                        selectedPeople.length === 0
+                          ? "People I am going with"
+                          : ""
+                      }
+                      className="flex-1 min-w-[80px] border-none outline-none bg-transparent text-sm"
+                    />
+                  </div>
+
+                  {(companySearching || companySuggestions.length > 0) && (
+                    <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-[9999]">
+                      {companySearching && (
+                        <div className="px-3 py-2 text-sm text-neutral-500">
+                          Searching…
+                        </div>
+                      )}
+                      {!companySearching &&
+                        companySuggestions.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handlePickCompanyUser(p)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-neutral-50"
+                          >
+                            <div className="w-6 h-6 rounded-full overflow-hidden bg-neutral-200 flex items-center justify-center text-[10px]">
+                              {p.avatar_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={p.avatar_url}
+                                  alt={p.username || ""}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span>
+                                  {(p.username || "U").charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[12px] truncate">
+                                {p.username || "user"}
+                              </p>
+                              {p.full_name && (
+                                <p className="text-[11px] text-neutral-500 truncate">
+                                  {p.full_name}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* DATE */}
+                <div className="col-span-2">
+                  <p className="mb-1 text-[11px] uppercase tracking-[0.16em] text-neutral-500">
+                    Date
+                  </p>
                   <input
-                    value={peopleInput}
-                    onChange={(e) => setPeopleInput(e.target.value)}
-                    placeholder={
-                      selectedPeople.length === 0 ? "People I am going with" : ""
-                    }
-                    className="flex-1 min-w-[80px] border-none outline-none bg-transparent text-sm"
+                    type="date"
+                    value={dateStr}
+                    onChange={(e) => setDateStr(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] bg-white"
                   />
                 </div>
 
-                {(companySearching || companySuggestions.length > 0) && (
-                  <div className="absolute mt-1 w-full rounded-lg border border-neutral-200 bg-white shadow-lg max-h-60 overflow-auto z-[9999]">
-                    {companySearching && (
-                      <div className="px-3 py-2 text-sm text-neutral-500">
-                        Searching…
-                      </div>
-                    )}
-                    {!companySearching &&
-                      companySuggestions.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => handlePickCompanyUser(p)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-neutral-50"
-                        >
-                          <div className="w-6 h-6 rounded-full overflow-hidden bg-neutral-200 flex items-center justify-center text-[10px]">
-                            {p.avatar_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={p.avatar_url}
-                                alt={p.username || ""}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span>
-                                {(p.username || "U").charAt(0).toUpperCase()}
-                              </span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[12px] truncate">
-                              {p.username || "user"}
-                            </p>
-                            {p.full_name && (
-                              <p className="text-[11px] text-neutral-500 truncate">
-                                {p.full_name}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
+                {/* NOTES */}
+                <textarea
+                  value={eveningNote}
+                  onChange={(e) => setEveningNote(e.target.value)}
+                  placeholder="Notes"
+                  className="col-span-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] resize-none min-h-[70px]"
+                />
+              </div>
+
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="text-[11px] text-neutral-500 hover:text-black"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={addItem}
+                  disabled={!canAdd}
+                  className="rounded-full px-5 h-9 text-xs text-white enabled:hover:opacity-90 disabled:opacity-40 transition"
+                  style={{ backgroundColor: "#1F48AF" }}
+                >
+                  Add concert
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* LISTA DE CONCIERTOS */}
+          <section>
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-20 rounded-3xl border border-neutral-200 bg-neutral-50 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="mt-16 text-center text-xs text-neutral-500">
+                No future concerts yet.
+              </div>
+            ) : (
+              orderedYears.map((year) => (
+                <div key={year} className="mb-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-px flex-1 bg-neutral-200" />
+                    <span
+                      className="text-[11px] uppercase tracking-[0.18em] text-neutral-600"
+                      style={{ fontFamily: '"Times New Roman", Times, serif' }}
+                    >
+                      {year}
+                    </span>
+                    <div className="h-px flex-1 bg-neutral-200" />
                   </div>
-                )}
-              </div>
 
-              {/* DATE */}
-              <div className="col-span-2">
-                <p className="mb-1 text-[11px] uppercase tracking-[0.16em] text-neutral-500">
-                  Date
-                </p>
-                <input
-                  type="date"
-                  value={dateStr}
-                  onChange={(e) => setDateStr(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] bg-white"
-                />
-              </div>
+                  <div className="space-y-3">
+                    {groupedByYear[year].map((it) => {
+                      const { day, month, year: yFull } = formatDate(it.event_date);
 
-              {/* NOTES */}
-              <textarea
-                value={eveningNote}
-                onChange={(e) => setEveningNote(e.target.value)}
-                placeholder="Notes"
-                className="col-span-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#1F48AF] resize-none min-h-[70px]"
-              />
-            </div>
+                      return (
+                        <article
+                          key={it.id}
+                          className="rounded-3xl border border-neutral-200 px-4 py-3 flex items-center gap-3 hover:shadow-[0_16px_40px_rgba(0,0,0,0.06)] transition-shadow bg-white"
+                        >
+                          <div className="flex flex-col items-center justify-center w-16 h-20 rounded-2xl border border-neutral-200 text-[10px] uppercase tracking-[0.18em] text-neutral-700 shrink-0">
+                            <span>{day}</span>
+                            <span>{month}</span>
+                            <span className="mt-1 text-[9px] tracking-[0.16em]">
+                              {yFull}
+                            </span>
+                          </div>
 
-            <div className="mt-3 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="text-[11px] text-neutral-500 hover:text-black"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={addItem}
-                disabled={!canAdd}
-                className="rounded-full px-5 h-9 text-xs text-white enabled:hover:opacity-90 disabled:opacity-40 transition"
-                style={{ backgroundColor: "#1F48AF" }}
-              >
-                Add concert
-              </button>
-            </div>
-          </section>
-        )}
+                          <div className="flex-1 min-w-0 flex flex-col gap-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p
+                                  className="text-[15px] leading-5 truncate"
+                                  style={{
+                                    fontFamily: '"Times New Roman", Times, serif',
+                                    fontWeight: 400,
+                                  }}
+                                >
+                                  {it.artist}
+                                </p>
+                                <p className="text-[11px] text-neutral-600 truncate">
+                                  {it.venue}
+                                  {it.venue && it.city ? " · " : ""}
+                                  {it.city}
+                                  {it.city && it.country_code ? " · " : ""}
+                                  {it.country_code}
+                                </p>
+                              </div>
 
-        {/* LISTA DE CONCIERTOS */}
-        <section className="relative z-0">
-          {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-20 rounded-3xl border border-neutral-200 bg-neutral-50 animate-pulse"
-                />
-              ))}
-            </div>
-          ) : items.length === 0 ? (
-            <div className="mt-16 text-center text-xs text-neutral-500">
-              No future concerts yet.
-            </div>
-          ) : (
-            orderedYears.map((year) => (
-              <div key={year} className="mb-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-px flex-1 bg-neutral-200" />
-                  <span
-                    className="text-[11px] uppercase tracking-[0.18em] text-neutral-600"
-                    style={{
-                      fontFamily: '"Times New Roman", Times, serif',
-                    }}
-                  >
-                    {year}
-                  </span>
-                  <div className="h-px flex-1 bg-neutral-200" />
-                </div>
-
-                <div className="space-y-3">
-                  {groupedByYear[year].map((it) => {
-                    const { day, month, year: yFull } = formatDate(it.event_date);
-
-                    return (
-                      <article
-                        key={it.id}
-                        className="rounded-3xl border border-neutral-200 px-4 py-3 flex items-center gap-3 hover:shadow-[0_16px_40px_rgba(0,0,0,0.06)] transition-shadow bg-white"
-                      >
-                        {/* BLOQUE FECHA — tamaño fijo */}
-                        <div className="flex flex-col items-center justify-center w-16 h-20 rounded-2xl border border-neutral-200 text-[10px] uppercase tracking-[0.18em] text-neutral-700 shrink-0">
-                          <span>{day}</span>
-                          <span>{month}</span>
-                          <span className="mt-1 text-[9px] tracking-[0.16em]">
-                            {yFull}
-                          </span>
-                        </div>
-
-                        {/* CONTENIDO PRINCIPAL */}
-                        <div className="flex-1 min-w-0 flex flex-col gap-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p
-                                className="text-[15px] leading-5 truncate"
-                                style={{
-                                  fontFamily: '"Times New Roman", Times, serif',
-                                  fontWeight: 400,
-                                }}
+                              <button
+                                type="button"
+                                onClick={() => removeItem(it.id)}
+                                className="px-3 h-7 rounded-full text-[10px] border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition shrink-0"
                               >
-                                {it.artist}
-                              </p>
-                              <p className="text-[11px] text-neutral-600 truncate">
-                                {it.venue}
-                                {it.venue && it.city ? " · " : ""}
-                                {it.city}
-                                {it.city && it.country_code ? " · " : ""}
-                                {it.country_code}
-                              </p>
+                                Remove
+                              </button>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => removeItem(it.id)}
-                              className="px-3 h-7 rounded-full text-[10px] border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition shrink-0"
-                            >
-                              Remove
-                            </button>
+                            {it.seat_label && (
+                              <p className="text-[10px] text-neutral-600">
+                                Seats · {it.seat_label}
+                              </p>
+                            )}
+
+                            {it.companions && (
+                              <p className="text-[10px] text-neutral-600 truncate">
+                                <span className="uppercase tracking-[0.18em] text-[9px] text-neutral-500 mr-1">
+                                  With
+                                </span>
+                                <span className="font-light">{it.companions}</span>
+                              </p>
+                            )}
+
+                            {it.notes && (
+                              <p className="text-[10px] text-neutral-500 italic line-clamp-2">
+                                {it.notes}
+                              </p>
+                            )}
                           </div>
-
-                          {it.seat_label && (
-                            <p className="text-[10px] text-neutral-600">
-                              Seats · {it.seat_label}
-                            </p>
-                          )}
-
-                          {it.companions && (
-                            <p className="text-[10px] text-neutral-600 truncate">
-                              <span className="uppercase tracking-[0.18em] text-[9px] text-neutral-500 mr-1">
-                                With
-                              </span>
-                              <span className="font-light">{it.companions}</span>
-                            </p>
-                          )}
-
-                          {it.notes && (
-                            <p className="text-[10px] text-neutral-500 italic line-clamp-2">
-                              {it.notes}
-                            </p>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })}
+                        </article>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
-        </section>
+              ))
+            )}
+          </section>
+        </div>
       </main>
     </div>
   );

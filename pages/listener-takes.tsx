@@ -468,12 +468,44 @@ export default function ListenerTakesPage() {
 
   return (
     <div className="bg-white min-h-screen text-black font-[Roboto]">
-      <main className="mx-auto w-full max-w-[780px] px-4 pt-7 pb-16">
+      <main
+        className="mx-auto w-full max-w-[780px] px-4"
+        style={{
+          paddingTop: 'calc(18px + env(safe-area-inset-top))',
+          paddingBottom: 'calc(120px + env(safe-area-inset-bottom))',
+        }}
+      >
         {/* HEADER EDITORIAL */}
         <header className="mb-5">
           <div className="flex items-center justify-between gap-3">
+            {/* LEFT: Back button */}
+            <button
+              type="button"
+              onClick={() => router.back()}
+              aria-label="Back"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-white border border-neutral-200 hover:bg-neutral-50 active:scale-95 transition"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 18l-6-6 6-6"
+                  stroke="#111"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
+            {/* CENTER: Title */}
             <h1
-              className="text-[clamp(26px,7vw,36px)] leading-tight"
+              className="flex-1 text-center text-[clamp(22px,6.2vw,34px)] leading-tight"
               style={{
                 fontFamily: '"Times New Roman", Times, serif',
                 fontWeight: 400,
@@ -482,6 +514,8 @@ export default function ListenerTakesPage() {
             >
               Musical opinions
             </h1>
+
+            {/* RIGHT: + */}
             <button
               type="button"
               onClick={() => setShowForm((s) => !s)}
