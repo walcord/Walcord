@@ -3,52 +3,79 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
-import { supabase } from '../lib/supabaseClient';
+
+const WALCORD_BLUE = '#1F48AF';
 
 export default function Home() {
   const router = useRouter();
 
-  // Si ya hay sesión → ir directo al feed
   useEffect(() => {
-    let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      if (data?.session) router.replace('/feed');
-    });
-    return () => { mounted = false; };
+    const t = setTimeout(() => {
+      router.replace('/login');
+    }, 1200);
+
+    return () => clearTimeout(t);
   }, [router]);
 
   return (
-    <div
-      className="relative flex flex-col items-center justify-center min-h-screen text-white text-center px-4"
-      style={{ backgroundColor: '#1F48AF' }}
-    >
-      <Image
-        src="/logotipo.png"
-        alt="Walcord Logo"
-        width={80}
-        height={80}
-        className="absolute"
-        style={{ top: 49, left: '50%', transform: 'translateX(-50%)' }}
-        priority
-      />
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="flex flex-col items-center">
+        {/* Logo */}
+        <div className="logoCoin">
+          <div className="logoInner">
+            <Image
+              src="/logotipo-dark.png"
+              alt="Walcord"
+              width={88}
+              height={88}
+              priority
+            />
+          </div>
+        </div>
 
-      <h1
-        className="text-4xl md:text-6xl mb-8 font-normal"
-        style={{ fontFamily: 'Times New Roman, serif' }}
-      >
-        Welcome to <span className="font-normal">Walcord</span>
-      </h1>
-
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          onClick={() => router.push('/login')}
-          className="px-5 py-2.5 rounded-full text-sm font-light bg-white text-[#1F48AF] hover:bg-white/90 active:scale-95 transition"
-          style={{ fontFamily: 'Roboto, sans-serif' }}
-        >
-          Enter
-        </button>
+        {/* Loader — single thin blue line */}
+        <div className="loaderRing mt-10" />
       </div>
+
+      <style jsx>{`
+        .logoCoin {
+          width: 96px;
+          height: 96px;
+          border-radius: 9999px;
+          background: #ffffff;
+          display: grid;
+          place-items: center;
+          position: relative;
+        }
+
+        .logoInner {
+          width: 88px;
+          height: 88px;
+          border-radius: 9999px;
+          overflow: hidden; /* elimina borde cuadrado del PNG */
+          display: grid;
+          place-items: center;
+        }
+
+        /* 🔵 Editorial ultra-minimal loader */
+        .loaderRing {
+          width: 28px;
+          height: 28px;
+          border-radius: 9999px;
+
+          /* SOLO una línea */
+          border: 1px solid transparent;
+          border-top-color: ${WALCORD_BLUE};
+
+          animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   );
 }

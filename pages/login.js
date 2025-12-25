@@ -2,18 +2,39 @@
 
 import { useRouter } from 'next/router';
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
+
+const WALCORD_BLUE = '#1F48AF';
+
+/* ===============================
+   Brand (silent, editorial)
+   =============================== */
+function BrandMark() {
+  return (
+    <div className="flex flex-col items-center">
+      <div className="logoWrap">
+        <div className="logoInner">
+          <Image
+            src="/logotipo-dark.png"
+            alt="Walcord"
+            width={76}
+            height={76}
+            priority
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Login() {
   const router = useRouter();
 
-  const [form, setForm] = useState({
-    email: '',
-    password: '',
-  });
-
+  const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -21,29 +42,20 @@ export default function Login() {
     setError('');
   };
 
-  const isValidEmail = (email) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isValidPassword = (password) => password.length >= 6;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     const { email, password } = form;
 
-    if (!email || !password) {
-      setError('Please complete all fields.');
-      return;
-    }
+    if (!email || !password) return setError('Please complete all fields.');
+    if (!isValidEmail(email)) return setError('Please enter a valid email address.');
+    if (!isValidPassword(password)) return setError('Password must be at least 6 characters long.');
 
-    if (!isValidEmail(email)) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    if (!isValidPassword(password)) {
-      setError('Password must be at least 6 characters long.');
-      return;
-    }
+    setLoading(true);
 
     const { data, error: loginError } = await supabase.auth.signInWithPassword({
       email,
@@ -51,101 +63,143 @@ export default function Login() {
     });
 
     if (loginError) {
-      if (loginError.message.toLowerCase().includes('email not confirmed')) {
+      if (String(loginError.message).toLowerCase().includes('email not confirmed')) {
         setError('Please confirm your email before logging in.');
       } else {
         setError(loginError.message);
       }
+      setLoading(false);
       return;
     }
 
-    // Verificar sesión y redirigir
-    if (data && data.session) {
-      router.push('/feed');
-    } else {
-      const { data: sData, error: sErr } = await supabase.auth.getSession();
-      if (sErr || !sData || !sData.session) {
-        setError('Login succeeded but session is missing. Please try again.');
-        return;
+    if (data?.session) {
+      const userId = data.session.user.id;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_completed')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profile && profile.onboarding_completed === false) {
+        router.replace('/onboarding');
+      } else {
+        router.replace('/feed');
       }
-      router.push('/feed');
+    } else {
+      router.replace('/feed');
     }
+
+    setLoading(false);
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 sm:px-6 bg-[#1F48AF]"
-      style={{ fontFamily: 'Times New Roman' }}
-    >
-      <div
-        className="w-full max-w-sm bg-white px-6 py-10 sm:px-10 rounded-md flex flex-col items-center shadow-[0_8px_30px_rgba(0,0,0,0.1)] transition-all duration-500 ease-in-out"
-      >
-        <h1 className="text-center mb-8 text-[clamp(2rem,2vw,2.8rem)] font-light tracking-[0.3px] text-black">
-          Welcome Back
-        </h1>
+    <div className="min-h-screen bg-white px-6 flex items-center justify-center">
+      <div className="w-full max-w-[420px]">
+        {/* Brand */}
+        <BrandMark />
 
-        <form onSubmit={handleSubmit} className="w-full flex flex-col gap-5 text-black">
-          <div className="border border-gray-300 rounded-sm px-3 py-2 bg-white">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="mt-16 flex flex-col gap-4">
+          <div className="rounded-2xl border border-black/10 px-4 py-3 focus-within:border-black/20 transition">
             <input
               name="email"
               type="email"
               placeholder="Email"
               value={form.email}
               onChange={handleChange}
-              className="w-full outline-none bg-transparent text-sm font-light placeholder-gray-400"
-              style={{ fontFamily: 'Roboto, sans-serif' }}
+              className="w-full outline-none bg-transparent text-[14px] text-black placeholder-black/30"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
             />
           </div>
 
-          <div className="border border-gray-300 rounded-sm px-3 py-2 bg-white">
+          <div className="rounded-2xl border border-black/10 px-4 py-3 focus-within:border-black/20 transition">
             <input
               name="password"
               type="password"
               placeholder="Password"
               value={form.password}
               onChange={handleChange}
-              className="w-full outline-none bg-transparent text-sm font-light placeholder-gray-400"
-              style={{ fontFamily: 'Roboto, sans-serif' }}
+              className="w-full outline-none bg-transparent text-[14px] text-black placeholder-black/30"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
             />
           </div>
 
-          {error && (
+          {error ? (
             <p
-              className="text-sm mt-2 text-center text-red-600"
-              style={{
-                fontFamily: 'Roboto, sans-serif',
-                fontWeight: 300,
-              }}
+              className="text-sm text-center text-red-600"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
             >
               {error}
             </p>
-          )}
+          ) : null}
 
           <button
             type="submit"
-            className="mt-6 w-full py-2 text-white text-sm tracking-wide rounded-md transition-all duration-300 hover:opacity-90 active:scale-95"
+            disabled={loading}
+            className="mt-4 w-full rounded-full py-3 text-[14px] text-white active:scale-[0.99] transition disabled:opacity-60 disabled:cursor-not-allowed"
             style={{
-              backgroundColor: '#1F48AF',
+              backgroundColor: WALCORD_BLUE,
               fontFamily: 'Roboto, sans-serif',
               fontWeight: 300,
-              fontSize: '0.9rem',
             }}
           >
-            Hello, it’s me
+            {loading ? 'Loading…' : 'Continue'}
           </button>
-        </form>
 
-        {/* Rótulo para crear cuenta */}
-        <p
-          className="mt-6 text-sm text-center text-gray-600"
-          style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
-        >
-          Don’t have an account?{' '}
-          <Link href="/signup" className="text-[#1F48AF] hover:underline">
-            Create it
-          </Link>
-        </p>
+          <div className="mt-8 text-center">
+            <Link
+              href="/signup"
+              className="text-[13px] text-black/55 hover:text-black/80 transition"
+              style={{ fontFamily: 'Roboto, sans-serif', fontWeight: 300 }}
+            >
+              Create account
+            </Link>
+          </div>
+        </form>
       </div>
+
+      {/* Scoped styles */}
+      <style jsx>{`
+        .logoWrap {
+          width: 88px;
+          height: 88px;
+          border-radius: 9999px;
+          background: #ffffff;
+          display: grid;
+          place-items: center;
+          position: relative;
+          margin: 0 auto;
+        }
+
+        /* Halo editorial sutil → hace que el logo “respire” */
+        .logoWrap::before {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          border-radius: 9999px;
+          background: linear-gradient(
+            180deg,
+            rgba(31, 72, 175, 0.16),
+            rgba(0, 0, 0, 0.05)
+          );
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          padding: 1px;
+          pointer-events: none;
+        }
+
+        .logoInner {
+          width: 76px;
+          height: 76px;
+          border-radius: 9999px;
+          overflow: hidden; /* elimina cualquier borde cuadrado del PNG */
+          display: grid;
+          place-items: center;
+          background: #ffffff;
+        }
+      `}</style>
     </div>
   );
 }
