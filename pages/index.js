@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
+import { supabase } from '../lib/supabaseClient';
 
 const WALCORD_BLUE = '#1F48AF';
 
@@ -10,11 +11,49 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      router.replace('/login');
-    }, 1200);
+    let cancelled = false;
 
-    return () => clearTimeout(t);
+    const run = async () => {
+      try {
+        // 1) Comprobar si hay sesión persistida
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+
+        // Mantener la animación premium
+        await new Promise((r) => setTimeout(r, 1200));
+        if (cancelled) return;
+
+        if (!session) {
+          router.replace('/login');
+          return;
+        }
+
+        // 2) Decidir onboarding vs feed
+        const userId = session.user.id;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('onboarding_completed')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (profile && profile.onboarding_completed === false) {
+          router.replace('/onboarding');
+        } else {
+          router.replace('/feed');
+        }
+      } catch (e) {
+        router.replace('/login');
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return (
@@ -52,7 +91,7 @@ export default function Home() {
           width: 88px;
           height: 88px;
           border-radius: 9999px;
-          overflow: hidden; /* elimina borde cuadrado del PNG */
+          overflow: hidden;
           display: grid;
           place-items: center;
         }
@@ -62,11 +101,8 @@ export default function Home() {
           width: 28px;
           height: 28px;
           border-radius: 9999px;
-
-          /* SOLO una línea */
           border: 1px solid transparent;
           border-top-color: ${WALCORD_BLUE};
-
           animation: spin 0.9s linear infinite;
         }
 
