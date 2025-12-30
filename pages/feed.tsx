@@ -83,34 +83,23 @@ function isVideoUrl(url?: string | null): boolean {
   return /\.(mp4|mov|webm|m4v|avi|mkv|ogg)$/i.test(clean);
 }
 
-/** iOS WebView render fix (overflow+radius+img transform bugs) */
-const IOS_IMG_FIX: React.CSSProperties = {
-  WebkitTransform: "translateZ(0)",
-  transform: "translateZ(0)",
+/** iOS WebView render fix (overflow+radius+img bugs) */
+const IOS_GPU_FIX: React.CSSProperties = {
+  WebkitTransform: "translate3d(0,0,0)",
+  transform: "translate3d(0,0,0)",
   WebkitBackfaceVisibility: "hidden",
   backfaceVisibility: "hidden",
-};
-
-const IOS_CLIP_FIX: React.CSSProperties = {
-  WebkitTransform: "translateZ(0)",
-  transform: "translateZ(0)",
-  WebkitBackfaceVisibility: "hidden",
-  backfaceVisibility: "hidden",
-  // Helps iOS correctly clip rounded corners with overflow-hidden
-  WebkitMaskImage: "-webkit-radial-gradient(white, black)",
+  willChange: "transform",
 };
 
 const Avatar = ({ src, alt, size = 24 }: { src?: string | null; alt?: string; size?: number }) => (
-  <div
-    className="rounded-full overflow-hidden bg-neutral-100 shrink-0"
-    style={{ width: size, height: size, ...IOS_CLIP_FIX }}
-  >
+  <div className="rounded-full overflow-hidden bg-neutral-100 shrink-0" style={{ width: size, height: size, ...IOS_GPU_FIX }}>
     {src ? (
       <img
         src={src}
         alt={alt || "user"}
-        className="w-full h-full object-cover object-center"
-        style={IOS_IMG_FIX}
+        className="w-full h-full object-cover object-center block"
+        style={{ ...IOS_GPU_FIX }}
         loading="eager"
         decoding="async"
       />
@@ -196,8 +185,7 @@ function cmpByRecent(a: PostBase, b: PostBase) {
    - Evita paginación: carga todo al inicio (NO loadMore)
    - Followers_count real desde profile_follow_counts
    ✅ FIX:
-   - FRIENDS ahora = solo "follows" + tú (NO friendships)
-   - Re-fetch correcto cuando me.id aparece (iOS/app suele tardar)
+   - FRIENDS = solo "follows" + tú (NO friendships)
 ============================ */
 function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
   const supabase = useSupabaseClient();
@@ -206,7 +194,6 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  // anti-race (si cambias de tab rápido)
   const runIdRef = useRef(0);
 
   useEffect(() => {
@@ -224,9 +211,7 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
     setLoading(true);
     try {
       let allowedUserIds: string[] | null = null;
-
       if (opts.scope === "friends") {
-        // ✅ Friends = gente que sigues + tú (NO friendships)
         const ids = new Set<string>([me!.id!]);
         const fo = await supabase.from("follows").select("following_id").eq("follower_id", me!.id!);
         (fo.data || []).forEach((r: any) => ids.add(r.following_id));
@@ -329,7 +314,6 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
           const effectiveCover = coverUrl && !isVideoUrl(coverUrl) ? coverUrl : null;
 
           const colors = c.record_id ? (colByRecordId[c.record_id] || {}) : {};
-
           const totalConcertLikes = (likeCount[c.id] ?? 0) + (photoLikeCountByConcertId[c.id] ?? 0);
 
           concerts.push({
@@ -485,10 +469,8 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
       }
 
       const merged = [...concerts, ...collections, ...recos];
-
       merged.sort(opts.scope === "for-you" ? (cmpByLikes as any) : (cmpByRecent as any));
 
-      // si hubo un cambio de tab / user durante la carga, ignoramos este resultado
       if (runIdRef.current !== myRun) return;
 
       setRows(merged as any);
@@ -499,7 +481,6 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
   };
 
   useEffect(() => {
-    // Re-fetch cuando cambia scope o cuando aparece me.id (muy común en iOS app)
     Promise.resolve().then(loadAll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opts.scope, me?.id]);
@@ -541,7 +522,7 @@ function UserSearch({ autoFocus, onNavigate }: { autoFocus?: boolean; onNavigate
         className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] text-sm"
       />
       {q && res.length > 0 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden" style={IOS_CLIP_FIX}>
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
           <ul className="max-h-[60vh] overflow-auto divide-y divide-neutral-100">
             {res.map((u) => (
               <li key={u.id} className="p-3 hover:bg-neutral-50">
@@ -586,7 +567,7 @@ function ArtistSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (a: 
         className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] text-sm"
       />
       {q && res.length > 0 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden" style={IOS_CLIP_FIX}>
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
           <ul className="max-h-[60vh] overflow-auto divide-y divide-neutral-100">
             {res.map((a) => (
               <li
@@ -594,16 +575,7 @@ function ArtistSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (a: 
                 className="p-3 hover:bg-neutral-50 flex items-center gap-3 cursor-pointer"
                 onClick={() => onPick(a)}
               >
-                {a.image_url ? (
-                  <img
-                    src={a.image_url}
-                    alt={a.name}
-                    className="w-8 h-8 rounded object-cover object-center shrink-0 block"
-                    style={IOS_IMG_FIX}
-                    loading="eager"
-                    decoding="async"
-                  />
-                ) : null}
+                {a.image_url ? <img src={a.image_url} alt={a.name} className="w-8 h-8 rounded object-cover object-center shrink-0 block" style={{ ...IOS_GPU_FIX }} /> : null}
                 <div className="text-sm">{a.name}</div>
               </li>
             ))}
@@ -644,7 +616,7 @@ function RecordSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (r: 
         className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] text-sm"
       />
       {q && res.length > 0 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden" style={IOS_CLIP_FIX}>
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
           <ul className="max-h-[60vh] overflow-auto divide-y divide-neutral-100">
             {res.map((r) => (
               <li
@@ -698,27 +670,28 @@ function ConcertTile({ row }: { row: RowConcert }) {
 
   return (
     <TileShell href={`/post/${row.id}`}>
-      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100" style={IOS_CLIP_FIX}>
+      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100" style={{ ...IOS_GPU_FIX }}>
         {cover ? (
           <img
             src={cover}
             alt=""
             loading="eager"
             decoding="async"
-            className="w-full h-full object-cover object-center block"
+            className="absolute inset-0 w-full h-full object-cover object-center block"
             style={{
               imageOrientation: "from-image" as any,
-              ...IOS_IMG_FIX,
+              zIndex: 0,
+              ...IOS_GPU_FIX,
             }}
           />
         ) : null}
 
-        {/* ✅ lighter overlays (no ugly black haze) */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/28 via-black/8 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/85 via-black/18 to-transparent" />
+        {/* overlays */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/28 via-black/8 to-transparent" style={{ zIndex: 10 }} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/85 via-black/18 to-transparent" style={{ zIndex: 10 }} />
 
-        {/* ✅ smaller username, readable; avatar visible but not huge */}
-        <div className="absolute left-2.5 top-2.5 flex items-center gap-2 max-w-[calc(100%-20px)]">
+        {/* username */}
+        <div className="absolute left-2.5 top-2.5 flex items-center gap-2 max-w-[calc(100%-20px)]" style={{ zIndex: 20 }}>
           <Avatar size={24} src={row.author.avatar_url} alt={row.author.username || "user"} />
           <div
             className="min-w-0 truncate text-[11px] text-white/95"
@@ -733,7 +706,8 @@ function ConcertTile({ row }: { row: RowConcert }) {
           </div>
         </div>
 
-        <div className="absolute left-2 right-2 bottom-2">
+        {/* artist */}
+        <div className="absolute left-2 right-2 bottom-2" style={{ zIndex: 20 }}>
           <div
             className="truncate text-white"
             style={{
@@ -750,14 +724,12 @@ function ConcertTile({ row }: { row: RowConcert }) {
           </div>
         </div>
 
-        {/* ring */}
-        <div className="pointer-events-none absolute inset-0 rounded-[14px] ring-1 ring-black/10 group-hover:ring-black/20 transition" />
+        <div className="pointer-events-none absolute inset-0 rounded-[14px] ring-1 ring-black/10 group-hover:ring-black/20 transition" style={{ zIndex: 30 }} />
 
-        {/* ✅ Hover scale ONLY on devices that actually hover (prevents iOS WebView weirdness) */}
         <style jsx>{`
           @media (hover: hover) and (pointer: fine) {
             .group:hover img {
-              transform: translateZ(0) scale(1.02);
+              transform: translate3d(0, 0, 0) scale(1.02);
             }
           }
         `}</style>
@@ -774,27 +746,26 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
 
   return (
     <TileShell href={href}>
-      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100" style={IOS_CLIP_FIX}>
+      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100" style={{ ...IOS_GPU_FIX }}>
         {cover ? (
           <img
             src={cover}
             alt=""
             loading="eager"
             decoding="async"
-            className="w-full h-full object-cover object-center block"
+            className="absolute inset-0 w-full h-full object-cover object-center block"
             style={{
               imageOrientation: "from-image" as any,
-              ...IOS_IMG_FIX,
+              zIndex: 0,
+              ...IOS_GPU_FIX,
             }}
           />
         ) : null}
 
-        {/* ✅ same overlay style as concert */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/28 via-black/8 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/85 via-black/18 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/28 via-black/8 to-transparent" style={{ zIndex: 10 }} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/85 via-black/18 to-transparent" style={{ zIndex: 10 }} />
 
-        {/* ✅ EXACT same username/avatar sizing as concert */}
-        <div className="absolute left-2.5 top-2.5 flex items-center gap-2 max-w-[calc(100%-20px)]">
+        <div className="absolute left-2.5 top-2.5 flex items-center gap-2 max-w-[calc(100%-20px)]" style={{ zIndex: 20 }}>
           <Avatar size={24} src={row.author.avatar_url} alt={row.author.username || "user"} />
           <div
             className="min-w-0 truncate text-[11px] text-white/95"
@@ -809,8 +780,7 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
           </div>
         </div>
 
-        {/* ✅ record title in Roboto (as requested) */}
-        <div className="absolute left-2 right-2 bottom-2">
+        <div className="absolute left-2 right-2 bottom-2" style={{ zIndex: 20 }}>
           <div
             className="truncate text-white"
             style={{
@@ -827,12 +797,12 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-0 rounded-[14px] ring-1 ring-black/10 group-hover:ring-black/20 transition" />
+        <div className="pointer-events-none absolute inset-0 rounded-[14px] ring-1 ring-black/10 group-hover:ring-black/20 transition" style={{ zIndex: 30 }} />
 
         <style jsx>{`
           @media (hover: hover) and (pointer: fine) {
             .group:hover img {
-              transform: translateZ(0) scale(1.02);
+              transform: translate3d(0, 0, 0) scale(1.02);
             }
           }
         `}</style>
@@ -848,7 +818,7 @@ function RecommendationTile({ row }: { row: RowReco }) {
 
   return (
     <TileShell href={`/review/${row.id}`} className="col-span-2 sm:col-span-2">
-      <div className="rounded-[16px] bg-white ring-1 ring-black/10 hover:ring-black/20 transition" style={IOS_CLIP_FIX}>
+      <div className="rounded-[16px] bg-white ring-1 ring-black/10 hover:ring-black/20 transition">
         <div className="p-3.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
