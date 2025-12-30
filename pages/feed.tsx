@@ -83,13 +83,36 @@ function isVideoUrl(url?: string | null): boolean {
   return /\.(mp4|mov|webm|m4v|avi|mkv|ogg)$/i.test(clean);
 }
 
+/** iOS WebView render fix (overflow+radius+img transform bugs) */
+const IOS_IMG_FIX: React.CSSProperties = {
+  WebkitTransform: "translateZ(0)",
+  transform: "translateZ(0)",
+  WebkitBackfaceVisibility: "hidden",
+  backfaceVisibility: "hidden",
+};
+
+const IOS_CLIP_FIX: React.CSSProperties = {
+  WebkitTransform: "translateZ(0)",
+  transform: "translateZ(0)",
+  WebkitBackfaceVisibility: "hidden",
+  backfaceVisibility: "hidden",
+  // Helps iOS correctly clip rounded corners with overflow-hidden
+  WebkitMaskImage: "-webkit-radial-gradient(white, black)",
+};
+
 const Avatar = ({ src, alt, size = 24 }: { src?: string | null; alt?: string; size?: number }) => (
-  <div className="rounded-full overflow-hidden bg-neutral-100 shrink-0" style={{ width: size, height: size }}>
+  <div
+    className="rounded-full overflow-hidden bg-neutral-100 shrink-0"
+    style={{ width: size, height: size, ...IOS_CLIP_FIX }}
+  >
     {src ? (
       <img
         src={src}
         alt={alt || "user"}
         className="w-full h-full object-cover object-center"
+        style={IOS_IMG_FIX}
+        loading="eager"
+        decoding="async"
       />
     ) : null}
   </div>
@@ -172,6 +195,9 @@ function cmpByRecent(a: PostBase, b: PostBase) {
    - FRIENDS: most recent
    - Evita paginación: carga todo al inicio (NO loadMore)
    - Followers_count real desde profile_follow_counts
+   ✅ FIX:
+   - FRIENDS ahora = solo "follows" + tú (NO friendships)
+   - Re-fetch correcto cuando me.id aparece (iOS/app suele tardar)
 ============================ */
 function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
   const supabase = useSupabaseClient();
@@ -180,30 +206,30 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  const mounted = useRef(false);
+  // anti-race (si cambias de tab rápido)
+  const runIdRef = useRef(0);
 
   useEffect(() => {
     setRows([]);
     setDone(false);
     setLoading(false);
-    mounted.current = false;
   }, [opts.scope, me?.id]);
 
   const loadAll = async () => {
     if (loading || done) return;
     if (opts.scope === "friends" && !me?.id) return;
 
+    const myRun = ++runIdRef.current;
+
     setLoading(true);
     try {
       let allowedUserIds: string[] | null = null;
+
       if (opts.scope === "friends") {
+        // ✅ Friends = gente que sigues + tú (NO friendships)
         const ids = new Set<string>([me!.id!]);
         const fo = await supabase.from("follows").select("following_id").eq("follower_id", me!.id!);
         (fo.data || []).forEach((r: any) => ids.add(r.following_id));
-        const frA = await supabase.from("friendships").select("receiver_id").eq("requester_id", me!.id!).eq("status", "accepted");
-        (frA.data || []).forEach((r: any) => ids.add(r.receiver_id));
-        const frB = await supabase.from("friendships").select("requester_id").eq("receiver_id", me!.id!).eq("status", "accepted");
-        (frB.data || []).forEach((r: any) => ids.add(r.requester_id));
         allowedUserIds = Array.from(ids);
       }
 
@@ -462,6 +488,9 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
 
       merged.sort(opts.scope === "for-you" ? (cmpByLikes as any) : (cmpByRecent as any));
 
+      // si hubo un cambio de tab / user durante la carga, ignoramos este resultado
+      if (runIdRef.current !== myRun) return;
+
       setRows(merged as any);
       setDone(true);
     } finally {
@@ -470,12 +499,10 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
   };
 
   useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      Promise.resolve().then(loadAll);
-    }
+    // Re-fetch cuando cambia scope o cuando aparece me.id (muy común en iOS app)
+    Promise.resolve().then(loadAll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [opts.scope, me?.id]);
 
   const loadMore = () => {};
 
@@ -514,7 +541,7 @@ function UserSearch({ autoFocus, onNavigate }: { autoFocus?: boolean; onNavigate
         className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] text-sm"
       />
       {q && res.length > 0 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden" style={IOS_CLIP_FIX}>
           <ul className="max-h-[60vh] overflow-auto divide-y divide-neutral-100">
             {res.map((u) => (
               <li key={u.id} className="p-3 hover:bg-neutral-50">
@@ -559,7 +586,7 @@ function ArtistSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (a: 
         className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] text-sm"
       />
       {q && res.length > 0 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden" style={IOS_CLIP_FIX}>
           <ul className="max-h-[60vh] overflow-auto divide-y divide-neutral-100">
             {res.map((a) => (
               <li
@@ -567,7 +594,16 @@ function ArtistSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (a: 
                 className="p-3 hover:bg-neutral-50 flex items-center gap-3 cursor-pointer"
                 onClick={() => onPick(a)}
               >
-                {a.image_url ? <img src={a.image_url} alt={a.name} className="w-8 h-8 rounded object-cover object-center shrink-0 block" /> : null}
+                {a.image_url ? (
+                  <img
+                    src={a.image_url}
+                    alt={a.name}
+                    className="w-8 h-8 rounded object-cover object-center shrink-0 block"
+                    style={IOS_IMG_FIX}
+                    loading="eager"
+                    decoding="async"
+                  />
+                ) : null}
                 <div className="text-sm">{a.name}</div>
               </li>
             ))}
@@ -608,7 +644,7 @@ function RecordSearch({ autoFocus, onPick }: { autoFocus?: boolean; onPick: (r: 
         className="w-full rounded-full border border-neutral-200 px-4 py-2 outline-none focus:border-[#1F48AF] text-sm"
       />
       {q && res.length > 0 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden" style={IOS_CLIP_FIX}>
           <ul className="max-h-[60vh] overflow-auto divide-y divide-neutral-100">
             {res.map((r) => (
               <li
@@ -662,16 +698,17 @@ function ConcertTile({ row }: { row: RowConcert }) {
 
   return (
     <TileShell href={`/post/${row.id}`}>
-      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100">
+      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100" style={IOS_CLIP_FIX}>
         {cover ? (
           <img
             src={cover}
             alt=""
             loading="eager"
             decoding="async"
-            className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
+            className="w-full h-full object-cover object-center block"
             style={{
               imageOrientation: "from-image" as any,
+              ...IOS_IMG_FIX,
             }}
           />
         ) : null}
@@ -713,7 +750,17 @@ function ConcertTile({ row }: { row: RowConcert }) {
           </div>
         </div>
 
+        {/* ring */}
         <div className="pointer-events-none absolute inset-0 rounded-[14px] ring-1 ring-black/10 group-hover:ring-black/20 transition" />
+
+        {/* ✅ Hover scale ONLY on devices that actually hover (prevents iOS WebView weirdness) */}
+        <style jsx>{`
+          @media (hover: hover) and (pointer: fine) {
+            .group:hover img {
+              transform: translateZ(0) scale(1.02);
+            }
+          }
+        `}</style>
       </div>
     </TileShell>
   );
@@ -727,16 +774,17 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
 
   return (
     <TileShell href={href}>
-      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100">
+      <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100" style={IOS_CLIP_FIX}>
         {cover ? (
           <img
             src={cover}
             alt=""
             loading="eager"
             decoding="async"
-            className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
+            className="w-full h-full object-cover object-center block"
             style={{
               imageOrientation: "from-image" as any,
+              ...IOS_IMG_FIX,
             }}
           />
         ) : null}
@@ -780,6 +828,14 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
         </div>
 
         <div className="pointer-events-none absolute inset-0 rounded-[14px] ring-1 ring-black/10 group-hover:ring-black/20 transition" />
+
+        <style jsx>{`
+          @media (hover: hover) and (pointer: fine) {
+            .group:hover img {
+              transform: translateZ(0) scale(1.02);
+            }
+          }
+        `}</style>
       </div>
     </TileShell>
   );
@@ -792,7 +848,7 @@ function RecommendationTile({ row }: { row: RowReco }) {
 
   return (
     <TileShell href={`/review/${row.id}`} className="col-span-2 sm:col-span-2">
-      <div className="rounded-[16px] bg-white ring-1 ring-black/10 hover:ring-black/20 transition">
+      <div className="rounded-[16px] bg-white ring-1 ring-black/10 hover:ring-black/20 transition" style={IOS_CLIP_FIX}>
         <div className="p-3.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
