@@ -136,6 +136,15 @@ export default function RecordProfile() {
     return true;
   };
 
+  /** ✅ redirect to Opinion tab on new.tsx */
+  const goToOpinion = () => {
+    if (!recordId) return;
+    router.push({
+      pathname: "/post/new",
+      query: { tab: "opinion", recordId },
+    });
+  };
+
   // ✅ FAVOURITE RECORD (Add button)
   const [isFavourite, setIsFavourite] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
@@ -184,7 +193,6 @@ export default function RecordProfile() {
 
     syncUser();
 
-    // Mantener sincronizado si cambia sesión
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       syncUser();
     });
@@ -309,34 +317,10 @@ export default function RecordProfile() {
     }
   };
 
-  const handleRate = async (rate: number) => {
+  /** ✅ Instead of rating here, send to new.tsx Opinion */
+  const handleRate = async (_rate: number) => {
     if (!requireAuth("Sign in to rate this record")) return;
-    if (!userId || !recordId) return;
-
-    if (userRating === rate && hasMyTake) {
-      alert("You already shared a take for this record. Delete your take before removing the rating.");
-      return;
-    }
-
-    if (userRating === rate) {
-      await supabase.from("ratings").delete().eq("user_id", userId).eq("record_id", recordId);
-      setUserRating(null);
-      setTakeRate(null);
-    } else {
-      await supabase
-        .from("ratings")
-        .upsert({ user_id: userId, record_id: recordId, rate }, { onConflict: "user_id,record_id" });
-      setUserRating(rate);
-      setTakeRate(rate);
-    }
-
-    const { data: ratingsData } = await supabase.from("ratings").select("rate").eq("record_id", recordId);
-    const avg =
-      ratingsData && ratingsData.length > 0
-        ? ratingsData.reduce((sum: number, r: any) => sum + r.rate, 0) / ratingsData.length
-        : null;
-
-    setAverageRate(avg);
+    goToOpinion();
   };
 
   const loadTakes = async (recId: string, myId: string | null) => {
@@ -429,51 +413,11 @@ export default function RecordProfile() {
     setTakesLoading(false);
   };
 
+  /** ✅ Instead of posting take here, send to new.tsx Opinion */
   const postTake = async () => {
     if (!recordId) return;
     if (!requireAuth("Sign in to share your take")) return;
-    const bodyClean = takeBody.trim();
-    if (bodyClean.length === 0) return;
-    if (!userId) return;
-
-    if (takeRate == null) {
-      alert("Please select a rating (1–10) to publish your take.");
-      return;
-    }
-
-    setTakePosting(true);
-
-    const { data: ratingRow, error: ratingErr } = await supabase
-      .from("ratings")
-      .upsert({ user_id: userId, record_id: recordId, rate: takeRate }, { onConflict: "user_id,record_id" })
-      .select("id")
-      .single();
-
-    if (ratingErr || !ratingRow) {
-      setTakePosting(false);
-      alert("Error saving the rating for this take.");
-      return;
-    }
-
-    const { error } = await supabase.from("recommendations").insert({
-      user_id: userId,
-      target_type: "record",
-      target_id: recordId,
-      body: bodyClean,
-      rating_id: ratingRow.id,
-    });
-
-    if (error) {
-      alert(`Error posting: ${error.message}`);
-    } else {
-      await loadTakes(recordId, userId);
-      setHasMyTake(true);
-    }
-
-    setTakePosting(false);
-    setTakeBody("");
-    setRatePickerOpen(false);
-    setComposerOpen(false);
+    goToOpinion();
   };
 
   const toggleLike = async (rec: Thought) => {
@@ -819,10 +763,8 @@ export default function RecordProfile() {
                   setLoginOpen(true);
                   return;
                 }
-                setComposerOpen((s) => !s);
-                if (!composerOpen) {
-                  setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
-                }
+                // ✅ Instead of opening composer here, go to Opinion
+                goToOpinion();
               }}
               className="w-full flex items-center justify-between rounded-2xl border border-neutral-200 px-4 py-3 hover:border-neutral-900 transition"
             >
@@ -840,11 +782,12 @@ export default function RecordProfile() {
                   <p className="text-[11px] font-light text-neutral-500">For the fans — not critics.</p>
                 </div>
               </div>
-              <span className="text-[12px] text-neutral-600">{composerOpen ? "Close" : "Open"}</span>
+              <span className="text-[12px] text-neutral-600">Open</span>
             </button>
 
             {composerOpen && (
               <div ref={composerRef} className="mt-4">
+                {/* kept (unused now) to preserve layout if you re-enable later */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-[11px] font-light text-neutral-500">Your rating for this take (required)</p>
