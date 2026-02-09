@@ -286,20 +286,24 @@ export default function PostCard({ post }: Props) {
       const endpoint = isConcert ? '/api/delete-concert' : '/api/delete-post';
       const payload = isConcert ? { concertId: post.id } : { postId: post.id };
 
-      const base =
-        typeof window !== 'undefined'
-          ? window.location.origin
-          : process.env.NEXT_PUBLIC_SITE_URL || '';
-      const fullUrl = `${base}${endpoint}`;
+      // ✅ iOS/WKWebView: NO construyas fullUrl con window.location.origin (puede ser capacitor://localhost, file://, etc.)
+      // ✅ Usa siempre endpoint relativo.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
 
-      const resp = await fetch(fullUrl, {
+      const resp = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify(payload),
+        credentials: 'same-origin',
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
+
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         // eslint-disable-next-line no-console

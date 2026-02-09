@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { useRouter } from "next/router";
 
 /* =========================================================
    Walcord — New
@@ -87,6 +88,8 @@ type RecordSearchRow = RecordRow;
 type TopTab = "memories" | "collection" | "opinion";
 
 export default function NewPage() {
+  const router = useRouter();
+
   /* ==========================================
      Top tabs
      ========================================== */
@@ -297,6 +300,8 @@ export default function NewPage() {
     if (!countryCode) return alert("Please select country");
     if (!city.trim()) return alert("Please type city");
     if (!dateStr) return alert("Please select date");
+
+    // ✅ HARD BLOCK: no media, no publish (avoid empty concert posts)
     if (imageFiles.length < 1 && videoFiles.length < 1) return alert("Please add photos and/or videos");
 
     setSubmitting(true);
@@ -425,7 +430,9 @@ export default function NewPage() {
       setArtistError("");
       setSelectedCoverIdx(0);
       setShowCoverPicker(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      alert("Published. Taking you to your profile.");
+      router.push("/profile");
     } catch (e: any) {
       alert(e?.message ?? "Error");
     } finally {
@@ -501,12 +508,14 @@ export default function NewPage() {
 
       if (error) throw error;
 
-      alert("Saved to your collection.");
       setSelectedCollectionRecord(null);
       setCollectionRecordQ("");
       setCollectionResults([]);
       setCollectionPhoto(null);
       if (collectionPhotoInputRef.current) collectionPhotoInputRef.current.value = "";
+
+      alert("Published. Taking you to your profile.");
+      router.push("/profile");
     } catch (e: any) {
       alert(e?.message ?? "Error");
     } finally {
@@ -594,7 +603,9 @@ export default function NewPage() {
       setRecordQ("");
       setRecordResults([]);
       setTakeRate(null);
-      alert("Published.");
+
+      alert("Published. Taking you to your profile.");
+      router.push("/profile");
     } catch (e: any) {
       alert(e?.message ?? "Error");
     } finally {

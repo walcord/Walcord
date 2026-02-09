@@ -30,19 +30,6 @@ type RecordReview = {
   createdAt: string;
 };
 
-type FeedPost = {
-  id: string;
-  userName: string;
-  userHandle: string;
-  avatarUrl?: string;
-  body: string;
-  likes: number;
-  comments: number;
-  createdAt: string;
-  relatedRecordTitle?: string;
-  coverUrl?: string;
-};
-
 type ConcertMemory = {
   id: string;
   title: string;
@@ -84,23 +71,6 @@ type ActiveVideo = {
   url: string;
 };
 
-type Hashtag = {
-  tag: string;
-  count: number;
-};
-
-const extractHashtags = (text: string): string[] => {
-  const regex = /#([A-Za-z0-9_]+)/g;
-  const tags: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text))) {
-    tags.push(match[1]);
-  }
-  return tags;
-};
-
-const normalizeTag = (raw: string) => raw.replace(/^#/, "").trim().toLowerCase();
-
 const getYouTubeEmbedUrl = (url: string) => {
   if (!url) return "";
   try {
@@ -137,7 +107,6 @@ const TheIdolPage: React.FC = () => {
 
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [reviews, setReviews] = useState<RecordReview[]>([]);
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [concerts, setConcerts] = useState<ConcertMemory[]>([]);
   const [eras, setEras] = useState<Era[]>([]);
   const [eraContents, setEraContents] = useState<ContentItem[]>([]);
@@ -240,14 +209,18 @@ const TheIdolPage: React.FC = () => {
       if (recordIds.length > 0) {
         const { data: recData, error: recError } = await supabase
           .from("recommendations")
-          .select("id, user_id, target_type, target_id, body, created_at, rating_id")
+          .select(
+            "id, user_id, target_type, target_id, body, created_at, rating_id"
+          )
           .eq("target_type", "record")
           .in("target_id", recordIds)
           .order("created_at", { ascending: false })
           .limit(24);
 
         if (!recError && recData) {
-          const ratingIds = recData.map((r: any) => r.rating_id).filter(Boolean);
+          const ratingIds = recData
+            .map((r: any) => r.rating_id)
+            .filter(Boolean);
           const userIds = recData.map((r: any) => r.user_id).filter(Boolean);
 
           let ratingsMap = new Map<string, { record_id: string; rate: number }>();
@@ -262,7 +235,10 @@ const TheIdolPage: React.FC = () => {
               ratingsMap = new Map(
                 ratingsData.map((r: any) => [
                   r.id as string,
-                  { record_id: r.record_id as string, rate: (r.rate as number) ?? 0 },
+                  {
+                    record_id: r.record_id as string,
+                    rate: (r.rate as number) ?? 0,
+                  },
                 ])
               );
             }
@@ -275,17 +251,24 @@ const TheIdolPage: React.FC = () => {
               .in("id", userIds);
             if (profilesData) {
               usersMap = new Map(
-                profilesData.map((p: any) => [p.id as string, (p.username as string) ?? ""])
+                profilesData.map((p: any) => [
+                  p.id as string,
+                  (p.username as string) ?? "",
+                ])
               );
             }
           }
 
           const mappedReviews: RecordReview[] = recData.map((r: any) => {
-            const ratingInfo = r.rating_id ? ratingsMap.get(r.rating_id as string) : undefined;
-            const recordId = ratingInfo?.record_id ?? (r.target_id as string) ?? "";
+            const ratingInfo = r.rating_id
+              ? ratingsMap.get(r.rating_id as string)
+              : undefined;
+            const recordId =
+              ratingInfo?.record_id ?? (r.target_id as string) ?? "";
             const rate = ratingInfo?.rate ?? 0;
             const userName =
-              usersMap.get(r.user_id as string) ?? (r.user_id ? "walcord user" : "walcord");
+              usersMap.get(r.user_id as string) ??
+              (r.user_id ? "walcord user" : "walcord");
 
             return {
               id: r.id as string,
@@ -312,62 +295,12 @@ const TheIdolPage: React.FC = () => {
         setReviews([]);
       }
 
-      /* ----- POSTS TIPO TWEET (Moments) ----- */
-      const { data: postsData, error: postsError } = await supabase
-        .from("idol_posts")
-        .select("id, user_name, user_handle, body, likes_count, comments_count, created_at")
-        .eq("artist_id", selectedArtistId)
-        .order("created_at", { ascending: false })
-        .limit(6);
-
-      if (!postsError && postsData) {
-        let mediaMap = new Map<string, string>();
-
-        const postIds = postsData.map((p: any) => p.id as string);
-
-        if (postIds.length > 0) {
-          const { data: mediaData } = await supabase
-            .from("idol_post_media")
-            .select("post_id, url, position, created_at")
-            .in("post_id", postIds)
-            .order("position", { ascending: true });
-
-          if (mediaData) {
-            mediaData.forEach((m: any) => {
-              const key = m.post_id as string;
-              if (!mediaMap.has(key) && m.url) {
-                mediaMap.set(key, m.url as string);
-              }
-            });
-          }
-        }
-
-        setFeedPosts(
-          postsData.map((p: any) => ({
-            id: p.id as string,
-            userName: (p.user_name as string) ?? "",
-            userHandle: (p.user_handle as string) ?? "",
-            body: (p.body as string) ?? "",
-            likes: (p.likes_count as number) ?? 0,
-            comments: (p.comments_count as number) ?? 0,
-            createdAt: p.created_at
-              ? new Date(p.created_at).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })
-              : "",
-            coverUrl: mediaMap.get(p.id as string),
-          }))
-        );
-      } else {
-        setFeedPosts([]);
-      }
-
       /* ----- CONCIERTOS + MEDIA (Tour) ----- */
       const { data: concertsData, error: concertsError } = await supabase
         .from("concerts")
-        .select("id, city, country_code, event_date, tour_name, artist_id, created_at")
+        .select(
+          "id, city, country_code, event_date, tour_name, artist_id, created_at"
+        )
         .eq("artist_id", selectedArtistId)
         .order("event_date", { ascending: false })
         .limit(20);
@@ -406,7 +339,9 @@ const TheIdolPage: React.FC = () => {
             title: (c.tour_name as string) ?? "",
             city: (c.city as string) ?? "",
             countryCode: (c.country_code as string) ?? "",
-            year: c.event_date ? new Date(c.event_date).getFullYear() : new Date().getFullYear(),
+            year: c.event_date
+              ? new Date(c.event_date).getFullYear()
+              : new Date().getFullYear(),
             userName: "",
             createdAt: c.created_at ? new Date(c.created_at).toISOString() : "",
             imageUrls: imgs,
@@ -417,7 +352,8 @@ const TheIdolPage: React.FC = () => {
             event_date: (c.event_date as string) ?? null,
             cover_url: mainImg,
             artist_name: null,
-            country_name: c.city && c.country_code ? `${c.city}, ${c.country_code}` : null,
+            country_name:
+              c.city && c.country_code ? `${c.city}, ${c.country_code}` : null,
           } as ConcertMemory;
         });
       }
@@ -484,61 +420,6 @@ const TheIdolPage: React.FC = () => {
     loadArtistData();
   }, [selectedArtistId, supabase, selectedArtistName]);
 
-  const handleCreateMoment = async (body: string) => {
-    if (!user || !selectedArtistId || !body.trim()) return;
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("username, full_name")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    const displayName = profile?.full_name || profile?.username || "walcord user";
-    const handle = profile?.username ? `@${profile.username}` : "@walcord user";
-
-    const payload = {
-      user_id: user.id,
-      artist_id: selectedArtistId,
-      user_name: displayName,
-      user_handle: handle,
-      body: body.trim(),
-      likes_count: 0,
-      comments_count: 0,
-    };
-
-    const { data, error } = await supabase
-      .from("idol_posts")
-      .insert([payload])
-      .select("id, user_name, user_handle, body, likes_count, comments_count, created_at")
-      .single();
-
-    if (error || !data) {
-      console.error("Error creating idol post", error);
-      return;
-    }
-
-    const createdAt = data.created_at
-      ? new Date(data.created_at).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-      : "";
-
-    const newPost: FeedPost = {
-      id: data.id as string,
-      userName: (data.user_name as string) ?? displayName,
-      userHandle: (data.user_handle as string) ?? handle,
-      body: (data.body as string) ?? body.trim(),
-      likes: (data.likes_count as number) ?? 0,
-      comments: (data.comments_count as number) ?? 0,
-      createdAt,
-      coverUrl: undefined,
-    };
-
-    setFeedPosts((prev) => [newPost, ...prev]);
-  };
-
   const handleOpenVideo = (item: ContentItem) => {
     setActiveVideo({
       title: item.title,
@@ -548,7 +429,9 @@ const TheIdolPage: React.FC = () => {
 
   const handleCloseVideo = () => setActiveVideo(null);
 
-  const selectedArtistChip = artistChips.find((a) => a.id === selectedArtistId);
+  const selectedArtistChip = artistChips.find(
+    (a) => a.id === selectedArtistId
+  );
 
   return (
     <main className="min-h-[100svh] bg-white">
@@ -614,12 +497,10 @@ const TheIdolPage: React.FC = () => {
               bio={artistBio}
               records={records}
               reviews={reviews}
-              feedPosts={feedPosts}
               concerts={concerts}
               eras={eras}
               eraContents={eraContents}
               onOpenVideo={handleOpenVideo}
-              onCreateMoment={handleCreateMoment}
             />
           </section>
         )}
@@ -674,12 +555,10 @@ type ArtistProfileProps = {
   bio?: string;
   records: RecordItem[];
   reviews: RecordReview[];
-  feedPosts: FeedPost[];
   concerts: ConcertMemory[];
   eras: Era[];
   eraContents: ContentItem[];
   onOpenVideo: (item: ContentItem) => void;
-  onCreateMoment?: (body: string) => Promise<void> | void;
 };
 
 const ArtistProfile: React.FC<ArtistProfileProps> = ({
@@ -688,108 +567,27 @@ const ArtistProfile: React.FC<ArtistProfileProps> = ({
   bio,
   records,
   reviews,
-  feedPosts,
   concerts,
   eras,
   eraContents,
   onOpenVideo,
-  onCreateMoment,
 }) => {
   const router = useRouter();
-  const supabase = useSupabaseClient();
-  const user = useUser();
 
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(
     records[0]?.id ?? null
   );
-  const [activeSection, setActiveSection] = useState<"eras" | "moments" | "tour">(
-    "eras"
-  );
-
-  const [showPostForm, setShowPostForm] = useState(false);
-  const [newPostBody, setNewPostBody] = useState("");
-  const [isSubmittingPost, setIsSubmittingPost] = useState(false);
-
-  const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string | null>(null);
-
-  const [activeTag, setActiveTag] = useState<string | null>(null);
-  const [hashtagTopic, setHashtagTopic] = useState("");
+  const [activeSection, setActiveSection] = useState<"eras" | "tour">("eras");
 
   useEffect(() => {
     if (!records.length) return;
     setSelectedRecordId(records[0].id);
   }, [records, artistId]);
 
-  useEffect(() => {
-    if (!user) {
-      setCurrentAvatarUrl(null);
-      return;
-    }
-    (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
-      setCurrentAvatarUrl((data?.avatar_url as string) ?? null);
-    })();
-  }, [user, supabase]);
-
   const selectedRecord = records.find((record) => record.id === selectedRecordId);
-  const selectedReviews = reviews.filter((review) => review.recordId === selectedRecordId);
-
-  const trendingTags: Hashtag[] = useMemo(() => {
-    const counts: Record<string, number> = {};
-    feedPosts.forEach((m) => {
-      const tags = extractHashtags(m.body);
-      tags.forEach((t) => {
-        const key = t.toLowerCase();
-        counts[key] = (counts[key] ?? 0) + 1;
-      });
-    });
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([tag, count]) => ({ tag, count }));
-  }, [feedPosts]);
-
-  const filteredFeedPosts = useMemo(() => {
-    if (!activeTag) return feedPosts;
-    return feedPosts.filter((m) =>
-      extractHashtags(m.body).some((t) => t.toLowerCase() === activeTag.toLowerCase())
-    );
-  }, [feedPosts, activeTag]);
-
-  const hashtagSuggestions = useMemo(() => {
-    if (!hashtagTopic) return [];
-    const draft = normalizeTag(hashtagTopic);
-    if (!draft) return [];
-    return trendingTags.filter((t) => t.tag.toLowerCase().startsWith(draft));
-  }, [trendingTags, hashtagTopic]);
-
-  const handleSubmitPost = async () => {
-    if (!newPostBody.trim() || !onCreateMoment || isSubmittingPost) return;
-
-    const cleanedTopic = normalizeTag(hashtagTopic);
-    let finalBody = newPostBody.trim();
-
-    if (cleanedTopic) {
-      const hash = `#${cleanedTopic}`;
-      if (!finalBody.toLowerCase().includes(hash.toLowerCase())) {
-        finalBody = `${finalBody} ${hash}`.trim();
-      }
-    }
-
-    setIsSubmittingPost(true);
-    try {
-      await onCreateMoment(finalBody);
-      setNewPostBody("");
-      setHashtagTopic("");
-      setShowPostForm(false);
-    } finally {
-      setIsSubmittingPost(false);
-    }
-  };
+  const selectedReviews = reviews.filter(
+    (review) => review.recordId === selectedRecordId
+  );
 
   const handleSeeMoreReviews = () => {
     if (!selectedRecordId) return;
@@ -828,7 +626,10 @@ const ArtistProfile: React.FC<ArtistProfileProps> = ({
                   <div className="relative w-[94px] sm:w-[110px]">
                     <div className="pt-[100%]" />
                     <div className="absolute inset-0">
-                      <div className="absolute inset-0" style={{ backgroundColor: record.vibeColor }} />
+                      <div
+                        className="absolute inset-0"
+                        style={{ backgroundColor: record.vibeColor }}
+                      />
                       <div
                         className="absolute inset-[35%] shadow-md"
                         style={{ backgroundColor: record.coverColor }}
@@ -894,12 +695,11 @@ const ArtistProfile: React.FC<ArtistProfileProps> = ({
         </div>
       </section>
 
-      {/* NAV ERAS / MOMENTS / TOUR */}
+      {/* NAV ERAS / TOUR */}
       <section className="space-y-7">
         <div className="flex gap-6 text-sm">
-          {(["eras", "moments", "tour"] as const).map((section) => {
-            const label =
-              section === "eras" ? "Eras" : section === "moments" ? "Moments" : "Tour";
+          {(["eras", "tour"] as const).map((section) => {
+            const label = section === "eras" ? "Eras" : "Tour";
             const isActive = activeSection === section;
             return (
               <button
@@ -909,12 +709,16 @@ const ArtistProfile: React.FC<ArtistProfileProps> = ({
                 className="relative pb-1 text-left"
               >
                 <span
-                  className={`text-[1.15rem] ${isActive ? "text-neutral-900" : "text-neutral-400"}`}
+                  className={`text-[1.15rem] ${
+                    isActive ? "text-neutral-900" : "text-neutral-400"
+                  }`}
                   style={{ fontFamily: "Times New Roman, serif" }}
                 >
                   {label}
                 </span>
-                {isActive && <span className="absolute inset-x-0 -bottom-0.5 h-[1px] bg-neutral-900" />}
+                {isActive && (
+                  <span className="absolute inset-x-0 -bottom-0.5 h-[1px] bg-neutral-900" />
+                )}
               </button>
             );
           })}
@@ -933,133 +737,14 @@ const ArtistProfile: React.FC<ArtistProfileProps> = ({
               <section>
                 <div className="mt-4 space-y-10">
                   {eras.map((era) => (
-                    <EraBlock key={era.id} era={era} contentItems={eraContents} onOpenVideo={onOpenVideo} />
+                    <EraBlock
+                      key={era.id}
+                      era={era}
+                      contentItems={eraContents}
+                      onOpenVideo={onOpenVideo}
+                    />
                   ))}
                 </div>
-              </section>
-            )}
-
-            {activeSection === "moments" && (
-              <section className="mt-2 space-y-4 relative">
-                {/* Trending tags (calcado) */}
-                {trendingTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {trendingTags.map((t) => {
-                      const isTagActive =
-                        activeTag && activeTag.toLowerCase() === t.tag.toLowerCase();
-                      return (
-                        <button
-                          key={t.tag}
-                          type="button"
-                          onClick={() =>
-                            setActiveTag((prev) =>
-                              prev && prev.toLowerCase() === t.tag.toLowerCase() ? null : t.tag
-                            )
-                          }
-                          className={`rounded-full px-3 py-1 text-[11px] font-light transition border ${
-                            isTagActive
-                              ? "border-[#1F48AF] bg-[#1F48AF] text-white"
-                              : "border-neutral-200 text-neutral-700 hover:border-neutral-400"
-                          }`}
-                        >
-                          #{t.tag}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {feedPosts.length > 0 && (
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-neutral-500">
-                      Latest moments
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/artist/${artistId}`)}
-                      className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900"
-                    >
-                      See all
-                    </button>
-                  </div>
-                )}
-
-                {/* Composer (calcado con topic hashtag + suggestions) */}
-                {showPostForm && (
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 h-9 w-9 rounded-full overflow-hidden bg-neutral-200">
-                      {currentAvatarUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={currentAvatarUrl}
-                          alt="Avatar"
-                          className="h-full w-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1 rounded-3xl border border-neutral-200 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)] px-4 py-3">
-                      <textarea
-                        value={newPostBody}
-                        onChange={(e) => setNewPostBody(e.target.value)}
-                        placeholder="Share a thought about this artist..."
-                        className="w-full min-h-[70px] resize-none border-none bg-transparent text-sm outline-none"
-                      />
-
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <input
-                            value={hashtagTopic}
-                            onChange={(e) => setHashtagTopic(e.target.value)}
-                            placeholder="Hashtag topic (metgala, grammys, ag8)..."
-                            className="flex-1 rounded-full border border-neutral-200 px-3 py-1.5 text-[11px] outline-none focus:border-neutral-500"
-                          />
-
-                          <button
-                            type="button"
-                            disabled={!newPostBody.trim() || isSubmittingPost}
-                            onClick={handleSubmitPost}
-                            className="rounded-full px-5 h-8 text-xs text-white enabled:hover:opacity-90 disabled:opacity-40 transition"
-                            style={{ backgroundColor: "#1F48AF" }}
-                          >
-                            Post
-                          </button>
-                        </div>
-
-                        {hashtagTopic && hashtagSuggestions.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {hashtagSuggestions.map((t) => (
-                              <button
-                                key={t.tag}
-                                type="button"
-                                onClick={() => setHashtagTopic(t.tag)}
-                                className="rounded-full border border-neutral-200 px-2.5 py-1 text-[11px] text-neutral-700 hover:border-neutral-400"
-                              >
-                                #{t.tag}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  {filteredFeedPosts.map((post) => (
-                    <MomentStripItem key={post.id} post={post} />
-                  ))}
-                </div>
-
-                {/* Botón flotante + */}
-                <button
-                  type="button"
-                  onClick={() => setShowPostForm((prev) => !prev)}
-                  className="absolute -top-10 right-0 h-9 w-9 rounded-full shadow-[0_8px_20px_rgba(0,0,0,0.18)] flex items-center justify-center text-white text-lg"
-                  style={{ backgroundColor: "#1F48AF" }}
-                  aria-label={showPostForm ? "Close composer" : "Create moment"}
-                >
-                  {showPostForm ? "×" : "+"}
-                </button>
               </section>
             )}
 
@@ -1078,7 +763,9 @@ const ArtistProfile: React.FC<ArtistProfileProps> = ({
         {/* BIO SIEMPRE VISIBLE EN CUALQUIER TAB */}
         {bio && (
           <section className="mt-8 border-t border-neutral-200 pt-6">
-            <p className="text-sm font-light leading-relaxed text-neutral-700">{bio}</p>
+            <p className="text-sm font-light leading-relaxed text-neutral-700">
+              {bio}
+            </p>
           </section>
         )}
       </section>
@@ -1109,8 +796,12 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ review }) => {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[13px] font-medium text-neutral-900">{review.userName}</p>
-          <p className="text-[11px] font-light text-neutral-500">{review.createdAt}</p>
+          <p className="text-[13px] font-medium text-neutral-900">
+            {review.userName}
+          </p>
+          <p className="text-[11px] font-light text-neutral-500">
+            {review.createdAt}
+          </p>
         </div>
         <div className="flex h-8 w-8 items-center justify-center rounded-full border border-neutral-900 text-[12px] font-medium text-neutral-900">
           {review.rating}
@@ -1123,43 +814,6 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ review }) => {
         {review.likes} likes · 0 comments
       </p>
     </button>
-  );
-};
-
-type MomentStripItemProps = {
-  post: FeedPost;
-};
-
-const MomentStripItem: React.FC<MomentStripItemProps> = ({ post }) => {
-  return (
-    <article className="relative rounded-3xl border border-neutral-200 bg-white p-4 shadow-[0_14px_32px_rgba(0,0,0,0.05)] transition-transform duration-300 hover:-translate-y-1">
-      {post.coverUrl && (
-        <div className="mb-3 overflow-hidden rounded-2xl bg-neutral-900">
-          <div className="relative aspect-[4/3] w-full">
-            <img
-              src={post.coverUrl}
-              alt={post.userName}
-              className="absolute inset-0 h-full w-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
-          </div>
-        </div>
-      )}
-      <div className="flex items-start gap-2">
-        <div className="mt-1 h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-neutral-200" />
-        <div className="flex-1">
-          <p className="text-[13px] font-medium text-neutral-900">{post.userName}</p>
-          <p className="text-[11px] font-light text-neutral-500">{post.userHandle}</p>
-        </div>
-      </div>
-      <p className="mt-3 text-[13px] font-light leading-relaxed text-neutral-800">{post.body}</p>
-      <p className="mt-3 text-[11px] font-light text-neutral-500">
-        {post.likes} likes · {post.comments} comments
-      </p>
-    </article>
   );
 };
 
@@ -1251,7 +905,9 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onOpenVideo }) => {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
         <div className="absolute inset-x-4 bottom-3 flex items-center justify-between text-[11px] text-neutral-100">
-          <span className="font-light uppercase tracking-[0.14em]">{item.source}</span>
+          <span className="font-light uppercase tracking-[0.14em]">
+            {item.source}
+          </span>
           <span className="rounded-full bg-[#1F48AF] px-3 py-1 text-[10px] font-medium text-white shadow-sm transition-all duration-150 group-hover:-translate-y-0.5 group-hover:shadow-md">
             Watch
           </span>
