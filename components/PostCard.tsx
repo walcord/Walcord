@@ -66,6 +66,7 @@ export default function PostCard({ post }: Props) {
   const [reporting, setReporting] = useState(false);
   const [reported, setReported] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
   // ✅ retry para imágenes (iOS/WebView a veces no carga el último tile)
@@ -105,6 +106,7 @@ export default function PostCard({ post }: Props) {
 
   function closeMenu() {
     setMenuOpen(false);
+    setConfirmDelete(false);
   }
 
   // Cerrar menú: click fuera / resize / scroll
@@ -275,10 +277,18 @@ export default function PostCard({ post }: Props) {
     e.preventDefault();
     e.stopPropagation();
     if (!isOwner || deleting) return;
-    const ok = safeConfirm('Delete this post? This cannot be undone.');
-    if (!ok) return;
+
+    // ✅ En iOS/WebView evitamos window.confirm (puede no mostrarse / no disparar)
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      // auto-reset por si el usuario no confirma
+      setTimeout(() => setConfirmDelete(false), 4000);
+      return;
+    }
+
     try {
       setDeleting(true);
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -286,19 +296,35 @@ export default function PostCard({ post }: Props) {
       const endpoint = isConcert ? '/api/delete-concert' : '/api/delete-post';
       const payload = isConcert ? { concertId: post.id } : { postId: post.id };
 
-      // ✅ iOS/WKWebView: NO construyas fullUrl con window.location.origin (puede ser capacitor://localhost, file://, etc.)
-      // ✅ Usa siempre endpoint relativo.
+      // ✅ Base URL robusta para app (Capacitor/WKWebView puede tener origin raro)
+      const origin =
+        typeof window !== 'undefined' ? window.location.origin : '';
+
+      const looksLikeHttp =
+        origin.startsWith('http://') || origin.startsWith('https://');
+
+      const envBase = process.env.NEXT_PUBLIC_SITE_URL || '';
+
+      // Si NO es http(s) (capacitor://, file://, etc) => usamos NEXT_PUBLIC_SITE_URL
+      const base = looksLikeHttp ? origin : envBase;
+
+      if (!base) {
+        safeAlert('Delete failed: missing NEXT_PUBLIC_SITE_URL in app build.');
+        return;
+      }
+
+      const url = `${base}${endpoint}`;
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
 
-      const resp = await fetch(endpoint, {
+      const resp = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify(payload),
-        credentials: 'same-origin',
         signal: controller.signal,
       });
 
@@ -311,6 +337,7 @@ export default function PostCard({ post }: Props) {
         safeAlert((json as any)?.error || 'Could not delete this post.');
         return;
       }
+
       closeMenu();
       if (typeof window !== 'undefined') window.location.reload();
     } catch (err) {
@@ -319,6 +346,7 @@ export default function PostCard({ post }: Props) {
       safeAlert('Could not delete this post.');
     } finally {
       setDeleting(false);
+      setConfirmDelete(false);
     }
   }
 
@@ -377,7 +405,7 @@ export default function PostCard({ post }: Props) {
                     onClick={handleDelete}
                     className="block w-full px-3 py-2.5 text-left hover:bg-white/10"
                   >
-                    {deleting ? 'Deleting…' : 'Delete'}
+                    {deleting ? 'Deleting…' : confirmDelete ? 'Tap Again To Delete' : 'Delete'}
                   </button>
                 )}
               </div>,
