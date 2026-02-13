@@ -48,16 +48,6 @@ const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
   { value: "Karaoke", label: "Karaoke" },
 ];
 
-/** ✅ Opinion limits (avoid invisible failures) */
-const MAX_TAKE_WORDS = 60;
-const MAX_TAKE_CHARS = 600;
-
-function countWords(s: string) {
-  const trimmed = (s || "").trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
-}
-
 /** Helpers de Storage (subida directa + URL pública) */
 async function uploadDirect(bucket: string, path: string, file: File) {
   const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
@@ -442,7 +432,7 @@ export default function NewPage() {
       setShowCoverPicker(false);
 
       alert("Published. Taking you to your profile.");
-      router.push("/profile");
+      router.replace("/profile");
     } catch (e: any) {
       alert(e?.message ?? "Error");
     } finally {
@@ -525,7 +515,7 @@ export default function NewPage() {
       if (collectionPhotoInputRef.current) collectionPhotoInputRef.current.value = "";
 
       alert("Published. Taking you to your profile.");
-      router.push("/profile");
+      router.replace("/profile");
     } catch (e: any) {
       alert(e?.message ?? "Error");
     } finally {
@@ -547,12 +537,6 @@ export default function NewPage() {
   const [takeBody, setTakeBody] = useState("");
   const [postingTake, setPostingTake] = useState(false);
   const [takeRate, setTakeRate] = useState<number | null>(null);
-
-  const takeWords = useMemo(() => countWords(takeBody), [takeBody]);
-  const takeChars = useMemo(() => (takeBody || "").length, [takeBody]);
-  const takeOverWords = takeWords > MAX_TAKE_WORDS;
-  const takeOverChars = takeChars > MAX_TAKE_CHARS;
-  const takeOverLimit = takeOverWords || takeOverChars;
 
   useEffect(() => {
     const term = recordQ.trim();
@@ -580,20 +564,13 @@ export default function NewPage() {
     }, 220);
   }, [recordQ, topTab]);
 
-  const canPublishTake =
-    !!meId && !!selectedRecord && takeBody.trim().length > 0 && takeRate != null && !postingTake && !takeOverLimit;
+  const canPublishTake = !!meId && !!selectedRecord && takeBody.trim().length > 0 && takeRate != null && !postingTake;
 
   const submitTake = async () => {
     if (!meId) return alert("Sign in to continue.");
     if (!selectedRecord) return alert("Please choose a record.");
     const clean = takeBody.trim();
     if (!clean) return;
-
-    // ✅ Hard block if over the limit (prevents silent failure)
-    if (takeOverLimit) {
-      if (takeOverWords) return alert(`Your opinion is too long. Max ${MAX_TAKE_WORDS} words.`);
-      return alert(`Your opinion is too long. Max ${MAX_TAKE_CHARS} characters.`);
-    }
 
     if (takeRate == null) {
       alert("Please select a rating (1–10).");
@@ -616,6 +593,8 @@ export default function NewPage() {
         target_id: selectedRecord.id,
         body: clean,
         rating_id: ratingRow.id,
+        category: "listener_take",
+        listened_on: new Date().toISOString().slice(0, 10),
       });
 
       if (error) throw error;
@@ -627,7 +606,7 @@ export default function NewPage() {
       setTakeRate(null);
 
       alert("Published. Taking you to your profile.");
-      router.push("/profile");
+      router.replace("/profile");
     } catch (e: any) {
       alert(e?.message ?? "Error");
     } finally {
@@ -1471,46 +1450,12 @@ export default function NewPage() {
 
                   <textarea
                     value={takeBody}
-                    onChange={(e) => {
-                      const next = e.target.value || "";
-
-                      // ✅ Hard cap chars
-                      const cappedChars = next.slice(0, MAX_TAKE_CHARS);
-
-                      // ✅ Hard cap words (keeps UX clean + prevents silent insert failures)
-                      const words = cappedChars.trim().split(/\s+/).filter(Boolean);
-                      if (words.length <= MAX_TAKE_WORDS) {
-                        setTakeBody(cappedChars);
-                        return;
-                      }
-                      const trimmedToWords = words.slice(0, MAX_TAKE_WORDS).join(" ");
-                      setTakeBody(trimmedToWords);
-                    }}
+                    onChange={(e) => setTakeBody(e.target.value || "")}
                     placeholder={selectedRecord ? "Share what stayed with you…" : "Select a record to start writing."}
                     disabled={!selectedRecord}
-                    maxLength={MAX_TAKE_CHARS}
                     className="mt-3 w-full min-h-[140px] border border-neutral-200 rounded-2xl px-3 py-3 text-[15px] leading-7 outline-none focus:ring-2 focus:ring-[#1F48AF]"
                     style={{ fontFamily: '"Times New Roman", Times, serif' }}
                   />
-
-                  {/* ✅ Counter + visible limit (prevents silent insert failure) */}
-                  <div className="mt-2 flex items-center justify-between">
-                    <div
-                      className={`text-[11px] ${takeOverLimit ? "text-red-600" : "text-neutral-500"}`}
-                      style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
-                    >
-                      {takeWords}/{MAX_TAKE_WORDS} words · {takeChars}/{MAX_TAKE_CHARS} chars
-                    </div>
-
-                    {takeOverLimit && (
-                      <div
-                        className="text-[11px] text-red-600"
-                        style={{ fontFamily: "Roboto, Arial, sans-serif", fontWeight: 300 }}
-                      >
-                        Too long — shorten to publish.
-                      </div>
-                    )}
-                  </div>
 
                   <div className="mt-3">
                     <div
