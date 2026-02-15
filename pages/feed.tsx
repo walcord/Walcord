@@ -85,19 +85,22 @@ function isVideoUrl(url?: string | null): boolean {
 
 /* =========================================================
    ✅ Avatar FIX iOS WebView:
-   - img absolute inset-0 + translateZ(0) para evitar render “a media altura”
+   - Usamos background-image (en vez de <img>) para evitar el bug de “media altura”
 ========================================================= */
 const Avatar = ({ src, alt, size = 24 }: { src?: string | null; alt?: string; size?: number }) => (
   <div
     className="relative rounded-full overflow-hidden bg-neutral-100 shrink-0"
     style={{ width: size, height: size }}
+    aria-label={alt || "user"}
+    title={alt || "user"}
   >
     {src ? (
-      <img
-        src={src}
-        alt={alt || "user"}
-        className="absolute inset-0 w-full h-full object-cover object-center block"
+      <div
+        className="absolute inset-0 block"
         style={{
+          backgroundImage: `url(${src})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
           WebkitTransform: "translateZ(0)",
           transform: "translateZ(0)",
           WebkitBackfaceVisibility: "hidden",
@@ -314,6 +317,10 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
           const coverUrl = (c as any)?.cover_url ?? null;
           const effectiveCover = coverUrl && !isVideoUrl(coverUrl) ? coverUrl : null;
 
+          // ✅ HIDE EMPTY CONCERT POSTS (no cover + no photos)
+          const imgs = urlsBy[c.id] || [];
+          if (!effectiveCover && imgs.length === 0) return;
+
           const colors = c.record_id ? (colByRecordId[c.record_id] || {}) : {};
 
           const totalConcertLikes = (likeCount[c.id] ?? 0) + (photoLikeCountByConcertId[c.id] ?? 0);
@@ -334,7 +341,7 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
             year: c.event_date ? new Date(c.event_date).getFullYear() : null,
             event_date: c.event_date ?? null,
             caption: c.caption ?? null,
-            image_urls: urlsBy[c.id] || [],
+            image_urls: imgs,
             cover_url: effectiveCover,
             record_id: (c as any)?.record_id ?? null,
             colors: { vibe: (colors as any).vibe ?? null, cover: (colors as any).cover ?? null },
@@ -681,18 +688,16 @@ function ConcertTile({ row }: { row: RowConcert }) {
     <TileShell href={`/post/${row.id}`}>
       <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100">
         {cover ? (
-          <img
-            src={cover}
-            alt=""
-            loading="eager"
-            decoding="async"
-            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
+          <div
+            className="absolute inset-0 block transition-transform duration-500 group-hover:scale-[1.02]"
             style={{
+              backgroundImage: `url(${cover})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
               WebkitTransform: "translateZ(0)",
               transform: "translateZ(0)",
               WebkitBackfaceVisibility: "hidden",
               backfaceVisibility: "hidden",
-              imageOrientation: "from-image" as any,
             }}
           />
         ) : null}
@@ -750,18 +755,16 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
     <TileShell href={href}>
       <div className="relative aspect-square rounded-[14px] overflow-hidden bg-neutral-100">
         {cover ? (
-          <img
-            src={cover}
-            alt=""
-            loading="eager"
-            decoding="async"
-            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
+          <div
+            className="absolute inset-0 block transition-transform duration-500 group-hover:scale-[1.02]"
             style={{
+              backgroundImage: `url(${cover})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
               WebkitTransform: "translateZ(0)",
               transform: "translateZ(0)",
               WebkitBackfaceVisibility: "hidden",
               backfaceVisibility: "hidden",
-              imageOrientation: "from-image" as any,
             }}
           />
         ) : null}
