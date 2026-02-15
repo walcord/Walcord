@@ -83,13 +83,26 @@ function isVideoUrl(url?: string | null): boolean {
   return /\.(mp4|mov|webm|m4v|avi|mkv|ogg)$/i.test(clean);
 }
 
+/* =========================================================
+   ✅ Avatar FIX iOS WebView:
+   - img absolute inset-0 + translateZ(0) para evitar render “a media altura”
+========================================================= */
 const Avatar = ({ src, alt, size = 24 }: { src?: string | null; alt?: string; size?: number }) => (
-  <div className="rounded-full overflow-hidden bg-neutral-100 shrink-0" style={{ width: size, height: size }}>
+  <div
+    className="relative rounded-full overflow-hidden bg-neutral-100 shrink-0"
+    style={{ width: size, height: size }}
+  >
     {src ? (
       <img
         src={src}
         alt={alt || "user"}
-        className="w-full h-full object-cover object-center"
+        className="absolute inset-0 w-full h-full object-cover object-center block"
+        style={{
+          WebkitTransform: "translateZ(0)",
+          transform: "translateZ(0)",
+          WebkitBackfaceVisibility: "hidden",
+          backfaceVisibility: "hidden",
+        }}
       />
     ) : null}
   </div>
@@ -146,7 +159,7 @@ function GradeBadge({ value }: { value: number | null }) {
 
 /* ============================
    Sorting
-   ✅ GENERAL: by likes desc (then created_at desc)
+   ✅ GENERAL: (antes likes) -> ahora MOST RECENT
    ✅ FRIENDS: most recent
 ============================ */
 function cmpByLikes(a: PostBase, b: PostBase) {
@@ -202,12 +215,6 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
         // ✅ ONLY follows (+ me)
         const fo = await supabase.from("follows").select("following_id").eq("follower_id", me!.id!);
         (fo.data || []).forEach((r: any) => ids.add(r.following_id));
-
-        // ❌ REMOVED friendships (was mixing concepts and leaking posts)
-        // const frA = await supabase.from("friendships").select("receiver_id").eq("requester_id", me!.id!).eq("status", "accepted");
-        // (frA.data || []).forEach((r: any) => ids.add(r.receiver_id));
-        // const frB = await supabase.from("friendships").select("requester_id").eq("receiver_id", me!.id!).eq("status", "accepted");
-        // (frB.data || []).forEach((r: any) => ids.add(r.requester_id));
 
         allowedUserIds = Array.from(ids);
       }
@@ -465,7 +472,12 @@ function useUnifiedFeed(opts: { scope: "for-you" | "friends" }) {
 
       const merged = [...concerts, ...collections, ...recos];
 
-      merged.sort(opts.scope === "for-you" ? (cmpByLikes as any) : (cmpByRecent as any));
+      /* =========================================================
+         ✅ FEED ORDER FIX:
+         - Antes: GENERAL por likes -> feed “siempre igual”
+         - Ahora: SIEMPRE más reciente -> más antiguo (para ambos scopes)
+      ========================================================= */
+      merged.sort(cmpByRecent as any);
 
       setRows(merged as any);
       setDone(true);
@@ -674,8 +686,12 @@ function ConcertTile({ row }: { row: RowConcert }) {
             alt=""
             loading="eager"
             decoding="async"
-            className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
+            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
             style={{
+              WebkitTransform: "translateZ(0)",
+              transform: "translateZ(0)",
+              WebkitBackfaceVisibility: "hidden",
+              backfaceVisibility: "hidden",
               imageOrientation: "from-image" as any,
             }}
           />
@@ -739,8 +755,12 @@ function CollectionTile({ row }: { row: RowMusicCollection }) {
             alt=""
             loading="eager"
             decoding="async"
-            className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
+            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02] block"
             style={{
+              WebkitTransform: "translateZ(0)",
+              transform: "translateZ(0)",
+              WebkitBackfaceVisibility: "hidden",
+              backfaceVisibility: "hidden",
               imageOrientation: "from-image" as any,
             }}
           />
