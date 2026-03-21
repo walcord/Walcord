@@ -92,3 +92,34 @@ html:not(.is-app) .wc-fabs{ display:none; }
 /* Modo compacto (más minimalista) */
 .wc-fabs--compact .wc-fab{ padding:6px 10px; border-radius:10px; }
 .wc-fabs--compact .wc-fab-icon{ width:30px; height:30px; box-shadow:0 1px 5px rgba(0,0,0,.18); }
+/* ===== ANDROID APP ONLY ===== */
+/* Muy importante:
+   esto SOLO afecta a Android dentro de la app Walcord.
+   No toca iPhone ni la web normal.
+*/
+
+html.is-android-app body{
+  padding-bottom: max(88px, env(safe-area-inset-bottom));
+}
+
+/* Texto general estable en Android app */
+html.is-android-app,
+html.is-android-app body,
+html.is-android-app button,
+html.is-android-app input,
+html.is-android-app textarea,
+html.is-android-app select{
+  font-family: 'Roboto', Arial, Helvetica, sans-serif;
+  font-weight: 300;
+}
+
+/* Cuando en la app uses serif/títulos elegantes, en Android
+   forzamos Times New Roman para que no coja una serif cutre del sistema */
+html.is-android-app .font-times,
+html.is-android-app .font-serif,
+html.is-android-app h1.font-serif,
+html.is-android-app h2.font-serif,
+html.is-android-app h3.font-serif{
+  font-family: 'Times New Roman', Times, serif !important;
+  font-weight: 400;
+}

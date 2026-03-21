@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
 
-const HEADER_H = 92; // banner alto y tocable
+const HEADER_H = 92;
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -10,7 +10,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const user = useUser();
   const [openSheet, setOpenSheet] = useState(false);
 
-  // Oculta menú en rutas de auth (nunca mostrar Log out aquí)
   const isAuth = useMemo(
     () => router.pathname.startsWith("/auth"),
     [router.pathname]
@@ -40,7 +39,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-white text-black">
-      {/* HEADER FIJO – SIN LOGO */}
       <header
         className="fixed top-0 left-0 right-0 z-50 bg-[#1F48AF] text-white shadow"
         style={{ height: HEADER_H, paddingTop: "env(safe-area-inset-top)" }}
@@ -62,10 +60,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* ESPACIADOR PARA QUE NADA QUEDE DETRÁS DEL HEADER */}
       <div style={{ height: HEADER_H }} aria-hidden />
 
-      {/* CONTENIDO – padding inferior generoso para gestos/CTA */}
       <main
         className="px-4 pb-[120px]"
         style={{ paddingBottom: "max(120px, env(safe-area-inset-bottom))" }}
@@ -73,7 +69,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* SHEET / ACCIONES DE CUENTA (incluye Log out) */}
       {openSheet && (
         <div
           role="dialog"
