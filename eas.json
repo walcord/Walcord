@@ -2,6 +2,7 @@
   "build": {
     "production": {
       "distribution": "store",
+      "node": "20",
       "ios": {
         "autoIncrement": true
       },
@@ -10,11 +11,13 @@
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "20"
     },
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "20"
     }
   },
   "submit": {
