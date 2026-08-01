@@ -2,10 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import Image from 'next/image';
 import { supabase } from '../lib/supabaseClient';
-
-const WALCORD_BLUE = '#1F48AF';
+import Head from 'next/head';
 
 export default function Home() {
   const router = useRouter();
@@ -15,34 +13,18 @@ export default function Home() {
 
     const run = async () => {
       try {
-        // 1) Comprobar si hay sesión persistida
         const { data } = await supabase.auth.getSession();
         const session = data?.session;
 
-        // Mantener la animación premium
+        // Mantenemos la animación premium 1.2 segundos
         await new Promise((r) => setTimeout(r, 1200));
         if (cancelled) return;
 
         if (!session) {
           router.replace('/login');
-          return;
-        }
-
-        // 2) Decidir onboarding vs feed
-        const userId = session.user.id;
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('onboarding_completed')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (cancelled) return;
-
-        if (profile && profile.onboarding_completed === false) {
-          router.replace('/onboarding');
         } else {
-          router.replace('/feed');
+          // 🚀 Como hemos eliminado el onboarding, vamos directos al portal
+          router.replace('/feed'); 
         }
       } catch (e) {
         router.replace('/login');
@@ -57,53 +39,31 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <div className="flex flex-col items-center">
-        {/* Logo */}
-        <div className="logoCoin">
-          <div className="logoInner">
-            <Image
-              src="/logotipo-dark.png"
-              alt="Walcord"
-              width={88}
-              height={88}
-              priority
-            />
-          </div>
-        </div>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center">
+      <Head>
+        <title>WALCORD</title>
+      </Head>
 
-        {/* Loader — single thin blue line */}
-        <div className="loaderRing mt-10" />
-      </div>
+      {/* LOGO NUEVO */}
+      <img 
+        src="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png" 
+        alt="Walcord" 
+        style={{ width: '160px', height: 'auto', objectFit: 'contain' }} 
+      />
+
+      {/* LOADER EDITORIAL (Círculo ultra fino) */}
+      <div className="editorial-ring mt-12"></div>
 
       <style jsx>{`
-        .logoCoin {
-          width: 96px;
-          height: 96px;
-          border-radius: 9999px;
-          background: #ffffff;
-          display: grid;
-          place-items: center;
-          position: relative;
-        }
-
-        .logoInner {
-          width: 88px;
-          height: 88px;
-          border-radius: 9999px;
-          overflow: hidden;
-          display: grid;
-          place-items: center;
-        }
-
-        /* 🔵 Editorial ultra-minimal loader */
-        .loaderRing {
-          width: 28px;
-          height: 28px;
-          border-radius: 9999px;
-          border: 1px solid transparent;
-          border-top-color: ${WALCORD_BLUE};
-          animation: spin 0.9s linear infinite;
+        .editorial-ring {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          /* Un borde gris casi invisible para marcar el recorrido */
+          border: 1px solid rgba(0, 0, 0, 0.05); 
+          /* La línea negra pura y fina que gira */
+          border-top-color: #000000; 
+          animation: spin 0.85s linear infinite;
         }
 
         @keyframes spin {

@@ -11,11 +11,22 @@ class MyDocument extends Document {
             content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
           />
 
-          {/* Favicons / PWA */}
-          <link rel="icon" href="/favicon.png" sizes="32x32" type="image/png" />
-          <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-          <link rel="manifest" href="/site.webmanifest" />
-          <meta name="theme-color" content="#1F4CED" />
+          {/* Favicons apuntando directamente a tu logo en Supabase con ?v=2 para matar la caché */}
+          <link 
+            rel="icon" 
+            href="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png?v=2" 
+            type="image/png" 
+          />
+          <link 
+            rel="apple-touch-icon" 
+            href="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png?v=2" 
+          />
+          
+          {/* Manifest comentado porque no existe el archivo local /site.webmanifest */}
+          {/* <link rel="manifest" href="/site.webmanifest" /> */}
+          
+          {/* Color del navegador: Blanco puro para estética minimalista */}
+          <meta name="theme-color" content="#ffffff" />
 
           {/* iOS web-app */}
           <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -28,17 +39,18 @@ class MyDocument extends Document {
             content="Walcord — The Wall: memories, concerts, content and more."
           />
 
-          {/* OG / Twitter */}
+          {/* OG / Twitter con tu nuevo logo editorial y ?v=2 */}
           <meta property="og:site_name" content="Walcord" />
           <meta property="og:title" content="Walcord" />
           <meta property="og:description" content="The Wall: memories, concerts, content and more." />
           <meta property="og:type" content="website" />
           <meta property="og:url" content="https://walcord.com/" />
-          <meta property="og:image" content="https://walcord.com/logotipo.png" />
+          <meta property="og:image" content="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png?v=2" />
+          
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content="Walcord" />
           <meta name="twitter:description" content="The Wall: memories, concerts, content and more." />
-          <meta name="twitter:image" content="https://walcord.com/logotipo.png" />
+          <meta name="twitter:image" content="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png?v=2" />
 
           {/* JSON-LD */}
           <script
@@ -53,10 +65,7 @@ class MyDocument extends Document {
             }}
           />
 
-          {/* ⚡️ ACTIVAR MODO APP ANTES DE QUE PINTE (sin FOUC):
-              - UA contiene WalcordApp
-              - O query ?app=1
-          */}
+          {/* ⚡️ ACTIVAR MODO APP ANTES DE QUE PINTE (sin FOUC) */}
           <script
             dangerouslySetInnerHTML={{
               __html: `

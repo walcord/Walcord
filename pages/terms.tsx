@@ -1,48 +1,67 @@
+import Head from 'next/head';
+import Link from 'next/link';
+
 export default function TermsPage() {
   return (
-    <main style={{maxWidth: 860, margin: "40px auto", padding: "0 16px", lineHeight: 1.6}}>
-      <h1 style={{fontFamily: "Times New Roman, serif"}}>Terms of Use</h1>
-      <p>Last updated: {new Date().toISOString().slice(0,10)}</p>
+    <div className="min-h-screen bg-white text-black font-['Helvetica_Neue',_Helvetica,_Arial,_sans-serif]">
+      <Head>
+        <title>Terms of Use - WALCORD</title>
+      </Head>
 
-      <h2>1. No Tolerance for Objectionable Content</h2>
-      <p>
-        Walcord does not tolerate any content that is illegal, hateful, violent, harassing,
-        pornographic, discriminatory, or otherwise objectionable. Users must not upload or share
-        such content. We may remove content and terminate accounts at our sole discretion.
-      </p>
+      <header className="sticky top-0 bg-white/90 backdrop-blur-sm border-b border-gray-100 px-6 py-6 z-10 flex justify-between items-center">
+        <Link href="/" className="text-xl font-light hover:opacity-50 transition-opacity">✕</Link>
+        <h2 className="text-[10px] tracking-[0.2em] uppercase font-medium">Legal</h2>
+        <div className="w-6" />
+      </header>
 
-      <h2>2. User-Generated Content</h2>
-      <p>
-        You are responsible for the content you post. By using Walcord, you agree not to violate
-        the rights of others and to comply with applicable laws.
-      </p>
+      <main className="max-w-2xl mx-auto px-6 py-16 text-sm leading-relaxed text-gray-800">
+        <h1 className="font-['Times_New_Roman',_serif] text-4xl mb-2 text-black">Terms of Use</h1>
+        <p className="text-[11px] text-gray-400 uppercase tracking-widest mb-12">Last updated: {new Date().toISOString().slice(0,10)}</p>
 
-      <h2>3. Reporting and Moderation</h2>
-      <p>
-        Users can report objectionable content using the “Report” button. We review reports and
-        take action (including removal and/or account ejection) within 24 hours.
-      </p>
+        <div className="space-y-10">
+          <section>
+            <h2 className="text-[12px] tracking-[0.15em] uppercase font-medium text-black mb-4">1. Acceptance of Terms</h2>
+            <p>
+              By accessing and using Walcord, you accept and agree to be bound by these Terms of Use. Walcord is a digital media platform providing editorial content, campaigns, and cultural curation.
+            </p>
+          </section>
 
-      <h2>4. Blocking Users</h2>
-      <p>
-        You can block other users to avoid abusive interactions. When blocked, their content will
-        no longer appear in your feed.
-      </p>
+          <section>
+            <h2 className="text-[12px] tracking-[0.15em] uppercase font-medium text-black mb-4">2. Intellectual Property</h2>
+            <p>
+              All content published on Walcord, including articles, photographs, videos, design elements, and branding, is the exclusive property of Walcord or its contributors. You may not reproduce, distribute, or create derivative works without explicit written permission from our editorial team.
+            </p>
+          </section>
 
-      <h2>5. Account Deletion</h2>
-      <p>
-        You may permanently delete your account at any time in Profile → Settings → Delete Account.
-      </p>
+          <section>
+            <h2 className="text-[12px] tracking-[0.15em] uppercase font-medium text-black mb-4">3. User Accounts</h2>
+            <p>
+              While our content is accessible publicly, certain features may require creating an account. You are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account.
+            </p>
+          </section>
 
-      <h2>6. Changes</h2>
-      <p>
-        We may update these Terms. Continued use of Walcord constitutes acceptance of the updated Terms.
-      </p>
+          <section>
+            <h2 className="text-[12px] tracking-[0.15em] uppercase font-medium text-black mb-4">4. Acceptable Use</h2>
+            <p>
+              You agree to use Walcord only for lawful purposes. You must not attempt to compromise the platform's security, scrape our editorial data, or use our services to distribute malicious software.
+            </p>
+          </section>
 
-      <h2>7. Contact</h2>
-      <p>
-        For concerns, please contact support@walcord.com. We aim to respond quickly to urgent reports.
-      </p>
-    </main>
+          <section>
+            <h2 className="text-[12px] tracking-[0.15em] uppercase font-medium text-black mb-4">5. Modifications</h2>
+            <p>
+              We reserve the right to modify these terms at any time to reflect changes in our editorial direction or legal requirements. Continued use of the platform following any changes constitutes your acceptance of the new terms.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-[12px] tracking-[0.15em] uppercase font-medium text-black mb-4">6. Contact</h2>
+            <p>
+              For legal inquiries, press, or permissions, please contact <a href="mailto:thewalcord@gmail.com" className="border-b border-black pb-0.5 hover:text-gray-500">thewalcord@gmail.com</a>.
+            </p>
+          </section>
+        </div>
+      </main>
+    </div>
   );
 }

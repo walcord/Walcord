@@ -1,6 +1,13 @@
 /* === Tipografías === */
+/* 1. Importamos la fuente editorial (Playfair Display) y tu Roboto base */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap');
 @import "tailwindcss";
+
+/* 2. Forzamos que Tailwind use Playfair Display cuando escribas 'font-serif' */
+.font-serif {
+  font-family: 'Playfair Display', 'Times New Roman', Times, serif !important;
+}
 
 /* Variables + Safe Area */
 :root{
@@ -92,6 +99,7 @@ html:not(.is-app) .wc-fabs{ display:none; }
 /* Modo compacto (más minimalista) */
 .wc-fabs--compact .wc-fab{ padding:6px 10px; border-radius:10px; }
 .wc-fabs--compact .wc-fab-icon{ width:30px; height:30px; box-shadow:0 1px 5px rgba(0,0,0,.18); }
+
 /* ===== ANDROID APP ONLY ===== */
 /* Muy importante:
    esto SOLO afecta a Android dentro de la app Walcord.
