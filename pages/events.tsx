@@ -44,8 +44,6 @@ export default function Events() {
             }
 
             grouped[monthYearKey].push(event);
-
-            // Avanzar al siguiente mes
             current.setMonth(current.getMonth() + 1);
           }
         });
@@ -62,6 +60,14 @@ export default function Events() {
 
   const monthKeys = Object.keys(groupedEvents);
 
+  // Función para hacer scroll suave a la sección del mes
+  const scrollToMonth = (monthId: string) => {
+    const element = document.getElementById(monthId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
@@ -71,10 +77,11 @@ export default function Events() {
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-      <main className="pt-28 md:pt-40 px-6 sm:px-10 md:px-12 max-w-[1600px] mx-auto pb-24">
-        {/* Cabecera */}
-        <div className="flex flex-col items-center mb-16 md:mb-24">
-          <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-4">
+      <main className="pt-28 md:pt-40 px-0 md:px-12 max-w-[1600px] mx-auto pb-24">
+        
+        {/* Cabecera Principal */}
+        <div className="flex flex-col items-center mb-10 px-6 sm:px-10">
+          <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-4 text-center">
             Events & Season
           </h1>
           <div className="w-[1px] h-12 bg-gray-300"></div>
@@ -93,25 +100,50 @@ export default function Events() {
             </p>
           </div>
         ) : (
-          <div className="space-y-20 max-w-7xl mx-auto">
-            {monthKeys.map((month) => (
-              <section key={month} className="space-y-8">
-                {/* Cabecera del mes */}
-                <div className="border-b border-black pb-3">
-                  <h2 className="text-xs md:text-sm tracking-[0.35em] uppercase text-gray-900 font-normal">
+          <>
+            {/* 
+              SUB-MENÚ DE NAVEGACIÓN ZARA STYLE 
+              Se queda pegado arriba (sticky) y permite scroll horizontal en móviles 
+            */}
+            <div className="sticky top-[70px] md:top-[90px] z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 mb-16 py-4 px-6 sm:px-10">
+              <div className="max-w-7xl mx-auto flex overflow-x-auto gap-8 items-center md:justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {monthKeys.map((month) => (
+                  <button
+                    key={`nav-${month}`}
+                    onClick={() => scrollToMonth(month)}
+                    className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 hover:text-black whitespace-nowrap transition-colors"
+                  >
                     {month}
-                  </h2>
-                </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                {/* Grid 2 Columnas de Tarjetas Tipográficas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                  {groupedEvents[month].map((event) => (
-                    <EventCard key={`${event.id}-${month}`} event={event} />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
+            {/* Listado de Eventos */}
+            <div className="space-y-20 max-w-7xl mx-auto px-6 sm:px-10">
+              {monthKeys.map((month) => (
+                <section 
+                  key={month} 
+                  id={month} 
+                  className="space-y-8 scroll-mt-40" /* scroll-mt-40 da margen para que el menú sticky no tape el título al hacer scroll */
+                >
+                  {/* Cabecera del mes */}
+                  <div className="border-b border-black pb-3">
+                    <h2 className="text-xs md:text-sm tracking-[0.35em] uppercase text-gray-900 font-normal">
+                      {month}
+                    </h2>
+                  </div>
+
+                  {/* Grid 2 Columnas de Tarjetas Tipográficas */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                    {groupedEvents[month].map((event) => (
+                      <EventCard key={`${event.id}-${month}`} event={event} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </>
         )}
       </main>
     </div>
