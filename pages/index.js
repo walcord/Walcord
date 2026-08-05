@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { supabase } from '../lib/supabaseClient';
 import Head from 'next/head';
 
 export default function Home() {
@@ -12,23 +11,12 @@ export default function Home() {
     let cancelled = false;
 
     const run = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const session = data?.session;
+      // Mantenemos la animación premium 1.2 segundos
+      await new Promise((r) => setTimeout(r, 1200));
+      if (cancelled) return;
 
-        // Mantenemos la animación premium 1.2 segundos
-        await new Promise((r) => setTimeout(r, 1200));
-        if (cancelled) return;
-
-        if (!session) {
-          router.replace('/login');
-        } else {
-          // 🚀 Como hemos eliminado el onboarding, vamos directos al portal
-          router.replace('/feed'); 
-        }
-      } catch (e) {
-        router.replace('/login');
-      }
+      // 🚀 Lanzamos a TODOS los usuarios al feed, sin pedir login
+      router.replace('/feed'); 
     };
 
     run();

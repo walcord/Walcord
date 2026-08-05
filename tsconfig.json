@@ -22,7 +22,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx"
-, "scripts/patch-scripts.js"  ],
+, "scripts/patch-scripts.js", "pages/campaigns/[id].js"  ],
   "exclude": [
     "node_modules"
   ]
