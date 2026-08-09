@@ -93,9 +93,7 @@ export default function MenuDrawer({ isOpen, onClose }: MenuDrawerProps) {
             <Link href="/feed" onClick={onClose} className="hover:opacity-50 transition-opacity">Latest</Link>
             <Link href="/campaigns" onClick={onClose} className="hover:opacity-50 transition-opacity">Campaigns</Link>
             <Link href="/lifestyle" onClick={onClose} className="hover:opacity-50 transition-opacity">Lifestyle</Link>
-            {/* CORREGIDO: de /agenda a /events */}
             <Link href="/events" onClick={onClose} className="hover:opacity-50 transition-opacity">Events</Link>
-            <Link href="/critics" onClick={onClose} className="hover:opacity-50 transition-opacity">Critics</Link>
           </nav>
 
           <div className="mt-auto pt-8 border-t border-gray-100 flex flex-col space-y-6 shrink-0">
