@@ -4,10 +4,12 @@ import { useRouter } from 'next/router';
 import Header from '../../components/editorial/Header';
 import MenuDrawer from '../../components/editorial/MenuDrawer';
 import { supabase } from '../../lib/supabaseClient';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function CampaignDetail() {
   const router = useRouter();
   const { id } = router.query;
+  const { language, t } = useLanguage();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [campaign, setCampaign] = useState(null);
@@ -18,14 +20,12 @@ export default function CampaignDetail() {
     if (!id) return;
 
     const fetchCampaignData = async () => {
-      // 1. Obtener datos de la campaña
       const { data: campaignData, error: campaignError } = await supabase
         .from('campaigns')
         .select('*')
         .eq('id', id)
         .single();
 
-      // 2. Obtener fotos adicionales
       const { data: photosData, error: photosError } = await supabase
         .from('campaign_photos')
         .select('*')
@@ -48,7 +48,7 @@ export default function CampaignDetail() {
   if (loading) {
     return (
       <div className="min-h-[100dvh] flex justify-center items-center bg-white">
-        <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">Loading...</span>
+        <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">{t('loading')}</span>
       </div>
     );
   }
@@ -56,65 +56,64 @@ export default function CampaignDetail() {
   if (!campaign) {
     return (
       <div className="min-h-[100dvh] flex justify-center items-center bg-white">
-        <p className="text-xs tracking-[0.2em] uppercase text-gray-900">Campaign not found.</p>
+        <p className="text-xs tracking-[0.2em] uppercase text-gray-900">{t('not_found')}</p>
       </div>
     );
   }
 
-  // Lógica de fecha: Usa la manual de Supabase, o genera una automática si está vacía
   const date = new Date(campaign.created_at);
   const fallbackDate = `${date.toLocaleString('en-US', { month: 'short' })}. ${date.getFullYear().toString().slice(2)}'`.toUpperCase();
   const finalDate = campaign.display_date || fallbackDate;
 
+  // Lógica de traducción dinámica
+  const langKey = language.toLowerCase();
+  
+  const localizedTitle = campaign[`title_${langKey}`] || campaign.title;
+  const localizedInterview = campaign[`interview_${langKey}`] || campaign.interview;
+  const localizedSubjects = campaign[`subjects_${langKey}`] || campaign.subjects;
+
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
-        <title>{campaign.title} - WALCORD</title>
+        <title>{localizedTitle} - WALCORD</title>
       </Head>
 
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-      {/* AÑADIDO pb-32 o pb-40 para asegurar que hay margen al final del scroll */}
       <main className="pt-24 md:pt-32 pb-32 md:pb-40">
-        {/* Portada Principal */}
         <section className="w-full px-4 md:px-12 max-w-screen-2xl mx-auto mb-16 md:mb-32">
-          
-          {/* CORREGIDO: aspect-video aplicado globalmente para que en el teléfono también se vea apaisada */}
           <div className="w-full aspect-video overflow-hidden">
             <img 
               src={campaign.cover_url} 
-              alt={campaign.title} 
+              alt={localizedTitle} 
               className="w-full h-full object-cover"
             />
           </div>
           
           <div className="mt-8 md:mt-16 flex flex-col items-center text-center px-4">
-            {/* CORREGIDO: Fecha manual de Supabase y eliminación del FEAT. */}
             <span className="text-[9px] md:text-[10px] tracking-[0.3em] uppercase text-gray-400 mb-6 font-light">
-              {finalDate} — {campaign.subjects}
+              {finalDate} — {localizedSubjects}
             </span>
             <h1 className="text-4xl md:text-7xl font-serif font-normal text-gray-900 tracking-tight max-w-4xl leading-[1.1]">
-              {campaign.title}
+              {localizedTitle}
             </h1>
           </div>
         </section>
 
-        {/* Entrevista / Contenido Editorial */}
-        {campaign.interview && (
+        {localizedInterview && (
           <section className="px-6 md:px-0 max-w-2xl mx-auto mb-16 md:mb-32 pb-12">
             <div className="prose prose-lg md:prose-xl prose-stone font-serif text-gray-800 leading-relaxed mx-auto text-justify whitespace-pre-wrap">
-              {campaign.interview}
+              {localizedInterview}
             </div>
           </section>
         )}
 
-        {/* Galería de la Campaña (Grid Lookbook) */}
         {photos.length > 0 && (
           <section className="px-4 md:px-12 max-w-[1600px] mx-auto">
             <div className="w-full flex justify-center mb-16">
               <span className="text-[10px] tracking-[0.3em] uppercase text-gray-400 font-light">
-                The Lookbook
+                {t('lookbook')}
               </span>
             </div>
             

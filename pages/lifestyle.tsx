@@ -4,11 +4,13 @@ import Header from '../components/editorial/Header';
 import MenuDrawer from '../components/editorial/MenuDrawer';
 import VideoCard from '../components/editorial/VideoCard';
 import { supabase } from '../lib/supabaseClient';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Lifestyle() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -44,14 +46,14 @@ export default function Lifestyle() {
         {/* Cabecera de sección */}
         <div className="flex flex-col items-center mb-16 md:mb-24">
           <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-4">
-            Lifestyle
+            {t('lifestyle')}
           </h1>
           <div className="w-[1px] h-12 bg-gray-300"></div>
         </div>
 
         {loading ? (
           <div className="flex justify-center items-center h-[50vh]">
-            <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">Loading...</span>
+            <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">{t('loading')}</span>
           </div>
         ) : (
           /* Grid de vídeos con separación amplia */

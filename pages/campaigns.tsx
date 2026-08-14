@@ -4,11 +4,13 @@ import Header from '../components/editorial/Header';
 import MenuDrawer from '../components/editorial/MenuDrawer';
 import CampaignCard from '../components/editorial/CampaignCard';
 import { supabase } from '../lib/supabaseClient';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Campaigns() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchCampaigns = async () => {
@@ -41,14 +43,14 @@ export default function Campaigns() {
         {/* Cabecera de sección */}
         <div className="flex flex-col items-center mb-16 md:mb-24">
           <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-4">
-            Campaigns
+            {t('campaigns')}
           </h1>
           <div className="w-[1px] h-12 bg-gray-300"></div>
         </div>
 
         {loading ? (
           <div className="flex justify-center items-center h-[50vh]">
-            <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">Loading...</span>
+            <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">{t('loading')}</span>
           </div>
         ) : (
           /* En el teléfono el gap-y-16 separa cada campaña lo suficiente para respirar */

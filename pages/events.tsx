@@ -4,11 +4,20 @@ import Header from '../components/editorial/Header';
 import MenuDrawer from '../components/editorial/MenuDrawer';
 import EventCard from '../components/editorial/EventCard';
 import { supabase } from '../lib/supabaseClient';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Events() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [groupedEvents, setGroupedEvents] = useState<{ [key: string]: any[] }>({});
   const [loading, setLoading] = useState(true);
+  const { language, t } = useLanguage();
+
+  const localeMap: Record<string, string> = {
+    EN: 'en-US',
+    ES: 'es-ES',
+    FR: 'fr-FR',
+    IT: 'it-IT',
+  };
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -34,7 +43,7 @@ export default function Events() {
           const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 
           while (current <= lastMonth) {
-            const monthYearKey = current.toLocaleDateString('en-US', {
+            const monthYearKey = current.toLocaleDateString(localeMap[language] || 'en-US', {
               month: 'long',
               year: 'numeric'
             }).toUpperCase();
@@ -56,7 +65,7 @@ export default function Events() {
     };
 
     fetchEvents();
-  }, []);
+  }, [language]);
 
   const monthKeys = Object.keys(groupedEvents);
 
@@ -71,7 +80,8 @@ export default function Events() {
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
-        <title>Events - WALCORD</title>
+        {/* CORRECCIÓN: Título actualizado */}
+        <title>Season - WALCORD</title>
       </Head>
 
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
@@ -82,7 +92,8 @@ export default function Events() {
         {/* Cabecera Principal */}
         <div className="flex flex-col items-center mb-10 px-6 sm:px-10">
           <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-4 text-center">
-            Events & Season
+            {/* CORRECCIÓN AQUÍ: de t('events_season') a t('season') */}
+            {t('season')}
           </h1>
           <div className="w-[1px] h-12 bg-gray-300"></div>
         </div>
@@ -90,22 +101,22 @@ export default function Events() {
         {loading ? (
           <div className="flex justify-center items-center h-[50vh]">
             <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">
-              Loading Season...
+              {t('loading_season')}
             </span>
           </div>
         ) : monthKeys.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-xs tracking-[0.25em] uppercase text-gray-400">
-              No upcoming events scheduled.
+              {t('no_events')}
             </p>
           </div>
         ) : (
           <>
             {/* 
               SUB-MENÚ DE NAVEGACIÓN ZARA STYLE 
-              Se queda pegado arriba (sticky) y permite scroll horizontal en móviles 
+              CORRECCIÓN AQUÍ: z-40 cambiado a z-20 para que se tape con el velo gris del menú
             */}
-            <div className="sticky top-[70px] md:top-[90px] z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 mb-16 py-4 px-6 sm:px-10">
+            <div className="sticky top-[70px] md:top-[90px] z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 mb-16 py-4 px-6 sm:px-10">
               <div className="max-w-7xl mx-auto flex overflow-x-auto gap-8 items-center md:justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 {monthKeys.map((month) => (
                   <button
@@ -125,7 +136,7 @@ export default function Events() {
                 <section 
                   key={month} 
                   id={month} 
-                  className="space-y-8 scroll-mt-40" /* scroll-mt-40 da margen para que el menú sticky no tape el título al hacer scroll */
+                  className="space-y-8 scroll-mt-40"
                 >
                   {/* Cabecera del mes */}
                   <div className="border-b border-black pb-3">
