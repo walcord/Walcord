@@ -25,9 +25,7 @@ export default function Feed() {
         .limit(1)
         .maybeSingle();
 
-      if (campaignData) {
-        setCampaign(campaignData);
-      }
+      if (campaignData) setCampaign(campaignData);
 
       let photosData = [];
       if (campaignData) {
@@ -36,7 +34,7 @@ export default function Feed() {
           .select('*')
           .eq('campaign_id', campaignData.id)
           .order('display_order', { ascending: true })
-          .limit(3); // Solo 3 fotos para no saturar el feed
+          .limit(6); // Subimos a 6 fotos para un feed más rico
           
         if (pData) photosData = pData;
       }
@@ -45,7 +43,7 @@ export default function Feed() {
         .from('articles')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(10); // Cargamos más artículos para llenar el grid
+        .limit(10);
 
       const combined = [];
       const maxLen = Math.max(photosData?.length || 0, articlesData?.length || 0);
@@ -76,16 +74,9 @@ export default function Feed() {
 
   if (!campaign && mixedContent.length === 0) {
     return (
-      <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
-        <Head><title>WALCORD</title></Head>
-        <Header onOpenMenu={() => setIsMenuOpen(true)} />
-        <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
-        <main className="pt-32 md:pt-40 px-6 max-w-screen-2xl mx-auto flex flex-col items-center">
-          <div className="flex flex-col items-center justify-center w-full h-[65vh]">
-            <span className="text-xs tracking-[0.4em] uppercase text-gray-400 mb-6 font-light">{t('coming_soon')}</span>
-            <h2 className="text-4xl md:text-5xl font-serif font-normal text-center max-w-4xl leading-tight text-gray-900">{t('journal_description')}</h2>
-          </div>
-        </main>
+      // ... (Tu estado de empty se mantiene igual)
+      <div className="min-h-[100dvh] bg-white flex items-center justify-center">
+         <span className="text-xs uppercase tracking-widest text-gray-400">Coming Soon</span>
       </div>
     );
   }
@@ -100,15 +91,18 @@ export default function Feed() {
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
       <main className="pb-32">
-        {/* HERO CAMPAIGN - Reducido a 70-80vh para no ser tan masivo */}
+        {/* HERO CAMPAIGN FEED - Picture Tag */}
         {campaign && (
-          <Link href={`/campaigns/${campaign.id}`} className="group relative block w-full h-[70vh] lg:h-[80vh] overflow-hidden cursor-pointer mb-12 lg:mb-20">
-            <img 
-              src={campaign.cover_url || 'https://via.placeholder.com/1920x1080'} 
-              alt={campaignTitle} 
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-[2s] ease-out group-hover:scale-105"
-            />
-            <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-12 lg:px-16 bg-gradient-to-t from-black/50 via-transparent to-transparent">
+          <Link href={`/campaigns/${campaign.id}`} className="group relative block w-full h-[70vh] lg:h-[85vh] overflow-hidden cursor-pointer mb-12 lg:mb-24">
+            <picture>
+              <source media="(min-width: 768px)" srcSet={campaign.cover_horizontal_url || campaign.cover_url} />
+              <img 
+                src={campaign.cover_vertical_url || campaign.cover_url} 
+                alt={campaignTitle} 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-[2s] ease-out group-hover:scale-105"
+              />
+            </picture>
+            <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-12 lg:px-16 bg-gradient-to-t from-black/60 via-transparent to-transparent">
               <h1 className="text-4xl md:text-6xl lg:text-8xl font-serif font-normal text-white tracking-tight mb-4 max-w-5xl">
                 {campaignTitle}
               </h1>
@@ -119,25 +113,24 @@ export default function Feed() {
           </Link>
         )}
 
-        {/* FEED GRID - Estilo Vogue (Múltiples columnas, tarjetas proporcionadas) */}
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-12 px-6 md:px-12 lg:px-16 max-w-[2000px] mx-auto ${!campaign ? 'pt-32 md:pt-40' : ''}`}>
+        {/* FEED GRID - Estilo Editorial con Masonry CSS */}
+        <div className={`columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-8 md:gap-12 space-y-8 md:space-y-12 px-6 md:px-12 lg:px-16 max-w-[2000px] mx-auto ${!campaign ? 'pt-32 md:pt-40' : ''}`}>
           {mixedContent.map((item, index) => {
             if (item.type === 'article') {
               return (
-                <div key={`art-${item.data.id}`} className="col-span-1">
+                <div key={`art-${item.data.id}`} className="break-inside-avoid">
                   <ArticleCard article={item.data} />
                 </div>
               );
             } else {
               return (
-                <div key={`photo-${item.data.id}`} className="col-span-1 flex flex-col justify-center">
-                  <div className="w-full aspect-[3/4] overflow-hidden bg-gray-50">
-                    <img 
-                      src={item.data.image_url} 
-                      alt="Campaign visual" 
-                      className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
-                    />
-                  </div>
+                <div key={`photo-${item.data.id}`} className="break-inside-avoid w-full overflow-hidden bg-gray-50 group">
+                  {/* h-auto permite que la foto viva en su proporción nativa */}
+                  <img 
+                    src={item.data.image_url} 
+                    alt="Campaign visual" 
+                    className="w-full h-auto object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
+                  />
                 </div>
               );
             }

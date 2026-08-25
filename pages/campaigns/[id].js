@@ -64,13 +64,106 @@ export default function CampaignDetail() {
   const date = new Date(campaign.created_at);
   const fallbackDate = `${date.toLocaleString('en-US', { month: 'short' })}. ${date.getFullYear().toString().slice(2)}'`.toUpperCase();
   const finalDate = campaign.display_date || fallbackDate;
-
-  // Lógica de traducción dinámica
   const langKey = language.toLowerCase();
   
   const localizedTitle = campaign[`title_${langKey}`] || campaign.title;
   const localizedInterview = campaign[`interview_${langKey}`] || campaign.interview;
   const localizedSubjects = campaign[`subjects_${langKey}`] || campaign.subjects;
+
+  // Separamos el texto de la entrevista en párrafos individuales
+  const paragraphs = localizedInterview 
+    ? localizedInterview.split(/\n\s*\n/).filter((p) => p.trim() !== '')
+    : [];
+
+  // Algoritmo de interleaving estilo Interview Magazine:
+  // Distribuye párrafos y fotos en bloques editoriales alternados
+  const renderEditorialStream = () => {
+    const stream = [];
+    let photoIdx = 0;
+    let paragraphIdx = 0;
+
+    while (paragraphIdx < paragraphs.length || photoIdx < photos.length) {
+      // 1. Bloque de Texto (2 párrafos de entrevista)
+      if (paragraphIdx < paragraphs.length) {
+        const textBlock = paragraphs.slice(paragraphIdx, paragraphIdx + 2);
+        paragraphIdx += 2;
+
+        stream.push(
+          <div 
+            key={`text-block-${paragraphIdx}`} 
+            className="max-w-2xl mx-auto px-6 md:px-0 my-16 md:my-24 font-serif text-gray-900 leading-relaxed text-base md:text-xl selection:bg-black selection:text-white"
+          >
+            {textBlock.map((p, pSubIdx) => (
+              <p key={pSubIdx} className="mb-6 whitespace-pre-line text-justify md:text-left">
+                {p}
+              </p>
+            ))}
+          </div>
+        );
+      }
+
+      // 2. Foto Individual (Pantalla completa / Centrada)
+      if (photoIdx < photos.length) {
+        const singlePhoto = photos[photoIdx];
+        photoIdx += 1;
+
+        stream.push(
+          <div key={`photo-single-${singlePhoto.id}`} className="w-full max-w-5xl mx-auto px-4 md:px-12 my-12 md:my-20">
+            <div className="w-full bg-gray-50 overflow-hidden">
+              <img 
+                src={singlePhoto.image_url} 
+                alt="Editorial shot" 
+                className="w-full h-auto object-cover"
+                loading="lazy"
+              />
+            </div>
+          </div>
+        );
+      }
+
+      // 3. Siguiente Bloque de Texto (1 párrafo)
+      if (paragraphIdx < paragraphs.length) {
+        const singleParagraph = paragraphs[paragraphIdx];
+        paragraphIdx += 1;
+
+        stream.push(
+          <div 
+            key={`text-single-${paragraphIdx}`} 
+            className="max-w-2xl mx-auto px-6 md:px-0 my-16 md:my-24 font-serif text-gray-900 leading-relaxed text-base md:text-xl"
+          >
+            <p className="whitespace-pre-line text-justify md:text-left">
+              {singleParagraph}
+            </p>
+          </div>
+        );
+      }
+
+      // 4. Par de Fotos Diptych (Dos fotos verticales lado a lado)
+      if (photoIdx < photos.length) {
+        const pairPhotos = photos.slice(photoIdx, photoIdx + 2);
+        photoIdx += pairPhotos.length;
+
+        stream.push(
+          <div key={`photo-pair-${photoIdx}`} className="max-w-6xl mx-auto px-4 md:px-12 my-16 md:my-24">
+            <div className={`grid grid-cols-1 ${pairPhotos.length > 1 ? 'md:grid-cols-2' : ''} gap-6 md:gap-10`}>
+              {pairPhotos.map((photo) => (
+                <div key={photo.id} className="w-full bg-gray-50 overflow-hidden">
+                  <img 
+                    src={photo.image_url} 
+                    alt="Editorial diptych shot" 
+                    className="w-full h-auto object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+    }
+
+    return stream;
+  };
 
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
@@ -82,13 +175,18 @@ export default function CampaignDetail() {
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
       <main className="pt-24 md:pt-32 pb-32 md:pb-40">
-        <section className="w-full px-4 md:px-12 max-w-screen-2xl mx-auto mb-16 md:mb-32">
-          <div className="w-full aspect-video overflow-hidden">
-            <img 
-              src={campaign.cover_url} 
-              alt={localizedTitle} 
-              className="w-full h-full object-cover"
-            />
+        
+        {/* HERO PORTADA - Responsive Picture Tag */}
+        <section className="w-full px-4 md:px-12 max-w-screen-2xl mx-auto mb-12 md:mb-20">
+          <div className="w-full relative">
+            <picture>
+              <source media="(min-width: 768px)" srcSet={campaign.cover_horizontal_url || campaign.cover_url} />
+              <img 
+                src={campaign.cover_vertical_url || campaign.cover_url} 
+                alt={localizedTitle} 
+                className="w-full h-auto max-h-[85vh] object-cover"
+              />
+            </picture>
           </div>
           
           <div className="mt-8 md:mt-16 flex flex-col items-center text-center px-4">
@@ -101,41 +199,11 @@ export default function CampaignDetail() {
           </div>
         </section>
 
-        {localizedInterview && (
-          <section className="px-6 md:px-0 max-w-2xl mx-auto mb-16 md:mb-32 pb-12">
-            <div className="prose prose-lg md:prose-xl prose-stone font-serif text-gray-800 leading-relaxed mx-auto text-justify whitespace-pre-wrap">
-              {localizedInterview}
-            </div>
-          </section>
-        )}
+        {/* INTERVIEW MAGAZINE STREAM (Flujo intercalado de Texto + Imagen) */}
+        <section className="w-full">
+          {renderEditorialStream()}
+        </section>
 
-        {photos.length > 0 && (
-          <section className="px-4 md:px-12 max-w-[1600px] mx-auto">
-            <div className="w-full flex justify-center mb-16">
-              <span className="text-[10px] tracking-[0.3em] uppercase text-gray-400 font-light">
-                {t('lookbook')}
-              </span>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-              {photos.map((photo, index) => (
-                <div 
-                  key={photo.id} 
-                  className={`w-full overflow-hidden bg-gray-50 ${
-                    index % 3 === 0 ? 'md:col-span-2 aspect-video' : 'aspect-[3/4]'
-                  }`}
-                >
-                  <img 
-                    src={photo.image_url} 
-                    alt={`Campaign shot ${index + 1}`} 
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
       </main>
     </div>
   );

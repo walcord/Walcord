@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 export default function Campaigns() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const { t } = useLanguage();
 
@@ -37,7 +37,6 @@ export default function Campaigns() {
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-      {/* AQUÍ ESTÁ EL AJUSTE: px-6 (teléfono) obliga a dejar márgenes blancos a los lados */}
       <main className="pt-28 md:pt-40 px-6 sm:px-10 md:px-12 max-w-[1600px] mx-auto pb-24">
         
         {/* Cabecera de sección */}
@@ -53,7 +52,6 @@ export default function Campaigns() {
             <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">{t('loading')}</span>
           </div>
         ) : (
-          /* En el teléfono el gap-y-16 separa cada campaña lo suficiente para respirar */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-8 md:gap-y-24 md:gap-x-12">
             {campaigns.map((campaign) => (
               <CampaignCard key={campaign.id} campaign={campaign} />
