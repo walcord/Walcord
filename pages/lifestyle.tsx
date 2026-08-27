@@ -34,7 +34,7 @@ export default function Lifestyle() {
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
-        <title>Lifestyle - WALCORD</title>
+        <title>Videos - WALCORD</title>
       </Head>
 
       <Header onOpenMenu={() => setIsMenuOpen(true)} />

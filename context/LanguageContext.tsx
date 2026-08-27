@@ -12,7 +12,7 @@ const translations: Record<Language, Record<string, string>> = {
   EN: {
     latest: 'Latest',
     campaigns: 'Campaigns',
-    lifestyle: 'Lifestyle',
+    lifestyle: 'Videos',
     season: 'Season',
     loading_season: 'Loading Season...',
     no_events: 'No upcoming events scheduled.',
@@ -41,7 +41,7 @@ const translations: Record<Language, Record<string, string>> = {
   ES: {
     latest: 'Principal', 
     campaigns: 'Campañas', 
-    lifestyle: 'Lifestyle', 
+    lifestyle: 'Vídeos', 
     season: 'Temporada', 
     loading_season: 'Cargando Temporada...',
     no_events: 'No hay eventos programados.',
@@ -70,7 +70,7 @@ const translations: Record<Language, Record<string, string>> = {
   FR: {
     latest: 'Principal',
     campaigns: 'Campagnes',
-    lifestyle: 'Lifestyle',
+    lifestyle: 'Vidéos',
     season: 'Saison',
     loading_season: 'Chargement Saison...',
     no_events: 'Aucun événement à venir.',
@@ -99,7 +99,7 @@ const translations: Record<Language, Record<string, string>> = {
   IT: {
     latest: 'Principale',
     campaigns: 'Campagne',
-    lifestyle: 'Lifestyle',
+    lifestyle: 'Video',
     season: 'Stagione',
     loading_season: 'Caricamento Stagione...',
     no_events: 'Nessun evento in programma.',
