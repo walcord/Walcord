@@ -1,4 +1,3 @@
-// components/editorial/Header.tsx
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useLanguage, Language } from '../../context/LanguageContext';
@@ -41,7 +40,7 @@ export default function Header({ onOpenMenu }: HeaderProps) {
 
         {isLangOpen && (
           <div className="absolute right-0 top-full mt-2 w-16 bg-white border border-gray-100 shadow-sm flex flex-col py-1 z-[50]">
-            {(['EN', 'ES', 'FR', 'IT'] as Language[]).map((lang) => (
+            {(['FR', 'EN', 'ES', 'IT'] as Language[]).map((lang) => (
               <button
                 key={lang}
                 onClick={() => handleLangChange(lang)}
