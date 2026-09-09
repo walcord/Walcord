@@ -61,104 +61,137 @@ export default function CampaignDetail() {
     );
   }
 
+  // Idioma principal: Francés por defecto
+  const langKey = language ? language.toLowerCase() : 'fr';
+  const localizedTitle = campaign[`title_${langKey}`] || campaign.title_fr || campaign.title;
+  const localizedSubtitle = campaign[`subtitle_${langKey}`] || campaign.subtitle_fr || campaign.subtitle;
+  const localizedInterview = campaign[`interview_${langKey}`] || campaign.interview_fr || campaign.interview;
+  const localizedSubjects = campaign[`subjects_${langKey}`] || campaign.subjects_fr || campaign.subjects;
+
   const date = new Date(campaign.created_at);
   const fallbackDate = `${date.toLocaleString('en-US', { month: 'short' })}. ${date.getFullYear().toString().slice(2)}'`.toUpperCase();
   const finalDate = campaign.display_date || fallbackDate;
-  const langKey = language.toLowerCase();
-  
-  const localizedTitle = campaign[`title_${langKey}`] || campaign.title;
-  const localizedInterview = campaign[`interview_${langKey}`] || campaign.interview;
-  const localizedSubjects = campaign[`subjects_${langKey}`] || campaign.subjects;
 
-  // Separamos el texto de la entrevista en párrafos individuales
+  // Extraer las preguntas/respuestas individuales
   const paragraphs = localizedInterview 
     ? localizedInterview.split(/\n\s*\n/).filter((p) => p.trim() !== '')
     : [];
 
-  // Algoritmo de interleaving estilo Interview Magazine:
-  // Distribuye párrafos y fotos en bloques editoriales alternados
+  // Función para renderizar preguntas con estilo Interview Magazine
+  const renderParagraph = (text, key) => {
+    const colonIndex = text.indexOf(' : ');
+    if (colonIndex !== -1) {
+      const question = text.substring(0, colonIndex).trim();
+      const answer = text.substring(colonIndex + 3).trim();
+
+      return (
+        <div key={key} className="mb-8 text-left">
+          <span className="block font-sans font-semibold text-xs md:text-sm tracking-wider uppercase text-black mb-1.5">
+            {question}
+          </span>
+          <p className="whitespace-pre-line text-gray-800 font-serif">
+            {answer}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <p key={key} className="mb-6 whitespace-pre-line text-justify md:text-left text-gray-800 font-serif">
+        {text}
+      </p>
+    );
+  };
+
+  // Algoritmo de distribución proporcional de texto e imágenes en el cuerpo
   const renderEditorialStream = () => {
+    if (!paragraphs.length && !photos.length) return null;
+
+    if (!photos.length) {
+      return (
+        <div className="max-w-2xl mx-auto px-6 md:px-0 my-10 md:my-16 font-serif text-gray-900 leading-relaxed text-base md:text-lg">
+          {paragraphs.map((p, idx) => renderParagraph(p, idx))}
+        </div>
+      );
+    }
+
+    // Agrupar fotos del cuerpo alternando individuales y parejas
+    const photoBlocks = [];
+    let i = 0;
+    while (i < photos.length) {
+      if (i + 1 < photos.length && i % 3 === 1) {
+        photoBlocks.push(photos.slice(i, i + 2));
+        i += 2;
+      } else {
+        photoBlocks.push([photos[i]]);
+        i += 1;
+      }
+    }
+
+    const totalBlocks = photoBlocks.length;
+    const totalParagraphs = paragraphs.length;
+    const numSegments = totalBlocks + 1;
+
+    // Reparto equitativo de párrafos
+    const baseItemsPerSegment = Math.floor(totalParagraphs / numSegments);
+    const remainder = totalParagraphs % numSegments;
+
     const stream = [];
-    let photoIdx = 0;
-    let paragraphIdx = 0;
+    let pIdx = 0;
 
-    while (paragraphIdx < paragraphs.length || photoIdx < photos.length) {
-      // 1. Bloque de Texto (2 párrafos de entrevista)
-      if (paragraphIdx < paragraphs.length) {
-        const textBlock = paragraphs.slice(paragraphIdx, paragraphIdx + 2);
-        paragraphIdx += 2;
+    for (let s = 0; s < numSegments; s++) {
+      const count = baseItemsPerSegment + (s < remainder ? 1 : 0);
 
-        stream.push(
-          <div 
-            key={`text-block-${paragraphIdx}`} 
-            className="max-w-2xl mx-auto px-6 md:px-0 my-16 md:my-24 font-serif text-gray-900 leading-relaxed text-base md:text-xl selection:bg-black selection:text-white"
-          >
-            {textBlock.map((p, pSubIdx) => (
-              <p key={pSubIdx} className="mb-6 whitespace-pre-line text-justify md:text-left">
-                {p}
-              </p>
-            ))}
-          </div>
-        );
-      }
-
-      // 2. Foto Individual (Pantalla completa / Centrada)
-      if (photoIdx < photos.length) {
-        const singlePhoto = photos[photoIdx];
-        photoIdx += 1;
-
-        stream.push(
-          <div key={`photo-single-${singlePhoto.id}`} className="w-full max-w-5xl mx-auto px-4 md:px-12 my-12 md:my-20">
-            <div className="w-full bg-gray-50 overflow-hidden">
-              <img 
-                src={singlePhoto.image_url} 
-                alt="Editorial shot" 
-                className="w-full h-auto object-cover"
-                loading="lazy"
-              />
-            </div>
-          </div>
-        );
-      }
-
-      // 3. Siguiente Bloque de Texto (1 párrafo)
-      if (paragraphIdx < paragraphs.length) {
-        const singleParagraph = paragraphs[paragraphIdx];
-        paragraphIdx += 1;
+      // Bloque de texto
+      if (count > 0 && pIdx < totalParagraphs) {
+        const textChunk = paragraphs.slice(pIdx, pIdx + count);
+        pIdx += count;
 
         stream.push(
           <div 
-            key={`text-single-${paragraphIdx}`} 
-            className="max-w-2xl mx-auto px-6 md:px-0 my-16 md:my-24 font-serif text-gray-900 leading-relaxed text-base md:text-xl"
+            key={`text-seg-${s}`} 
+            className="max-w-2xl mx-auto px-6 md:px-0 my-10 md:my-16 font-serif text-gray-900 leading-relaxed text-base md:text-lg selection:bg-black selection:text-white"
           >
-            <p className="whitespace-pre-line text-justify md:text-left">
-              {singleParagraph}
-            </p>
+            {textChunk.map((p, idx) => renderParagraph(p, `${s}-${idx}`))}
           </div>
         );
       }
 
-      // 4. Par de Fotos Diptych (Dos fotos verticales lado a lado)
-      if (photoIdx < photos.length) {
-        const pairPhotos = photos.slice(photoIdx, photoIdx + 2);
-        photoIdx += pairPhotos.length;
+      // Bloque de imagen en el cuerpo (mantiene proporción intacta)
+      if (s < totalBlocks) {
+        const block = photoBlocks[s];
 
-        stream.push(
-          <div key={`photo-pair-${photoIdx}`} className="max-w-6xl mx-auto px-4 md:px-12 my-16 md:my-24">
-            <div className={`grid grid-cols-1 ${pairPhotos.length > 1 ? 'md:grid-cols-2' : ''} gap-6 md:gap-10`}>
-              {pairPhotos.map((photo) => (
-                <div key={photo.id} className="w-full bg-gray-50 overflow-hidden">
-                  <img 
-                    src={photo.image_url} 
-                    alt="Editorial diptych shot" 
-                    className="w-full h-auto object-cover"
-                    loading="lazy"
-                  />
-                </div>
-              ))}
+        if (block.length === 2) {
+          stream.push(
+            <div key={`photo-pair-${s}`} className="max-w-6xl mx-auto px-4 md:px-12 my-12 md:my-20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
+                {block.map((photo) => (
+                  <div key={photo.id} className="w-full">
+                    <img 
+                      src={photo.image_url} 
+                      alt="Editorial shot" 
+                      className="w-full h-auto object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        );
+          );
+        } else {
+          stream.push(
+            <div key={`photo-single-${s}-${block[0].id}`} className="w-full max-w-5xl mx-auto px-4 md:px-12 my-12 md:my-20">
+              <div className="w-full">
+                <img 
+                  src={block[0].image_url} 
+                  alt="Editorial shot" 
+                  className="w-full h-auto object-cover"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+          );
+        }
       }
     }
 
@@ -176,7 +209,7 @@ export default function CampaignDetail() {
 
       <main className="pt-24 md:pt-32 pb-32 md:pb-40">
         
-        {/* HERO PORTADA - Responsive Picture Tag */}
+        {/* HERO PORTADA (Restaurado exacto a tu código original con max-h-[85vh]) */}
         <section className="w-full px-4 md:px-12 max-w-screen-2xl mx-auto mb-12 md:mb-20">
           <div className="w-full relative">
             <picture>
@@ -189,17 +222,24 @@ export default function CampaignDetail() {
             </picture>
           </div>
           
-          <div className="mt-8 md:mt-16 flex flex-col items-center text-center px-4">
+          <div className="mt-8 md:mt-16 flex flex-col items-center text-center px-4 max-w-4xl mx-auto">
             <span className="text-[9px] md:text-[10px] tracking-[0.3em] uppercase text-gray-400 mb-6 font-light">
-              {finalDate} — {localizedSubjects}
+              {finalDate} {localizedSubjects && `— ${localizedSubjects}`}
             </span>
-            <h1 className="text-4xl md:text-7xl font-serif font-normal text-gray-900 tracking-tight max-w-4xl leading-[1.1]">
+            
+            <h1 className="text-4xl md:text-7xl font-serif font-normal text-gray-900 tracking-tight leading-[1.1]">
               {localizedTitle}
             </h1>
+
+            {localizedSubtitle && (
+              <p className="mt-4 md:mt-6 text-sm md:text-lg font-serif italic text-gray-600 tracking-wide max-w-2xl leading-relaxed">
+                {localizedSubtitle}
+              </p>
+            )}
           </div>
         </section>
 
-        {/* INTERVIEW MAGAZINE STREAM (Flujo intercalado de Texto + Imagen) */}
+        {/* INTERVIEW STREAM */}
         <section className="w-full">
           {renderEditorialStream()}
         </section>
