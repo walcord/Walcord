@@ -61,12 +61,21 @@ export default function CampaignDetail() {
     );
   }
 
-  // Idioma principal: Francés por defecto
-  const langKey = language ? language.toLowerCase() : 'fr';
-  const localizedTitle = campaign[`title_${langKey}`] || campaign.title_fr || campaign.title;
-  const localizedSubtitle = campaign[`subtitle_${langKey}`] || campaign.subtitle_fr || campaign.subtitle;
-  const localizedInterview = campaign[`interview_${langKey}`] || campaign.interview_fr || campaign.interview;
-  const localizedSubjects = campaign[`subjects_${langKey}`] || campaign.subjects_fr || campaign.subjects;
+  // Lógica corregida para la selección de idioma
+  const getLocalizedField = (fieldName) => {
+    const langKey = language ? language.toLowerCase() : 'fr';
+    
+    if (langKey === 'en') {
+      return campaign[fieldName] || campaign[`${fieldName}_en`] || campaign[`${fieldName}_fr`] || '';
+    }
+    
+    return campaign[`${fieldName}_${langKey}`] || campaign[fieldName] || campaign[`${fieldName}_fr`] || '';
+  };
+
+  const localizedTitle = getLocalizedField('title');
+  const localizedSubtitle = getLocalizedField('subtitle');
+  const localizedInterview = getLocalizedField('interview');
+  const localizedSubjects = getLocalizedField('subjects');
 
   const date = new Date(campaign.created_at);
   const fallbackDate = `${date.toLocaleString('en-US', { month: 'short' })}. ${date.getFullYear().toString().slice(2)}'`.toUpperCase();
@@ -103,7 +112,7 @@ export default function CampaignDetail() {
     );
   };
 
-  // Algoritmo de distribución proporcional de texto e imágenes en el cuerpo
+  // Algoritmo de distribución proporcional de texto e imágenes
   const renderEditorialStream = () => {
     if (!paragraphs.length && !photos.length) return null;
 
@@ -115,7 +124,6 @@ export default function CampaignDetail() {
       );
     }
 
-    // Agrupar fotos del cuerpo alternando individuales y parejas
     const photoBlocks = [];
     let i = 0;
     while (i < photos.length) {
@@ -132,7 +140,6 @@ export default function CampaignDetail() {
     const totalParagraphs = paragraphs.length;
     const numSegments = totalBlocks + 1;
 
-    // Reparto equitativo de párrafos
     const baseItemsPerSegment = Math.floor(totalParagraphs / numSegments);
     const remainder = totalParagraphs % numSegments;
 
@@ -142,7 +149,6 @@ export default function CampaignDetail() {
     for (let s = 0; s < numSegments; s++) {
       const count = baseItemsPerSegment + (s < remainder ? 1 : 0);
 
-      // Bloque de texto
       if (count > 0 && pIdx < totalParagraphs) {
         const textChunk = paragraphs.slice(pIdx, pIdx + count);
         pIdx += count;
@@ -157,7 +163,6 @@ export default function CampaignDetail() {
         );
       }
 
-      // Bloque de imagen en el cuerpo (mantiene proporción intacta)
       if (s < totalBlocks) {
         const block = photoBlocks[s];
 
@@ -209,7 +214,7 @@ export default function CampaignDetail() {
 
       <main className="pt-24 md:pt-32 pb-32 md:pb-40">
         
-        {/* HERO PORTADA (Restaurado exacto a tu código original con max-h-[85vh]) */}
+        {/* HERO PORTADA */}
         <section className="w-full px-4 md:px-12 max-w-screen-2xl mx-auto mb-12 md:mb-20">
           <div className="w-full relative">
             <picture>
