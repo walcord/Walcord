@@ -89,10 +89,48 @@ export default function ArticleDetail() {
     ? localizedContent.split(/\n+/).filter((p) => p.trim() !== '')
     : [];
 
+  // Configuración de dominio base para Google News
+  const siteUrl = 'https://walcord.com'; // Cambia si tu dominio difiere
+  const articleImage = article.cover_horizontal_url || article.cover_url || article.cover_vertical_url;
+
+  // Esquema NewsArticle estructurado para Google News
+  const newsArticleSchema = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    "headline": localizedTitle,
+    "description": localizedSubtitle || localizedTitle,
+    "image": articleImage ? [articleImage] : [],
+    "datePublished": article.created_at,
+    "dateModified": article.updated_at || article.created_at,
+    "author": [{
+      "@type": "Person",
+      "name": article.author_name || "WALCORD Editorial"
+    }],
+    "publisher": {
+      "@type": "Organization",
+      "name": "WALCORD",
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${siteUrl}/logo.png`
+      }
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": `${siteUrl}${router.asPath}`
+    }
+  };
+
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
         <title>{localizedTitle} - WALCORD</title>
+        <meta name="description" content={localizedSubtitle || localizedTitle} />
+        
+        {/* Marcado de datos estructurados para Google News */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(newsArticleSchema) }}
+        />
       </Head>
 
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
