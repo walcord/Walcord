@@ -13,11 +13,12 @@ export default function Feed() {
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [campaign, setCampaign] = useState(null);
-  const [mixedContent, setMixedContent] = useState([]);
+  const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchFeedData = async () => {
+      // 1. Obtenemos la campaña más reciente para el Hero (opcional)
       const { data: campaignData } = await supabase
         .from('campaigns')
         .select('*')
@@ -27,37 +28,17 @@ export default function Feed() {
 
       if (campaignData) setCampaign(campaignData);
 
-      let photosData = [];
-      if (campaignData) {
-        const { data: pData } = await supabase
-          .from('campaign_photos')
-          .select('*')
-          .eq('campaign_id', campaignData.id)
-          .order('display_order', { ascending: true })
-          .limit(6); // Subimos a 6 fotos para un feed más rico
-          
-        if (pData) photosData = pData;
-      }
-
+      // 2. Obtenemos solo los artículos para el grid inferior
       const { data: articlesData } = await supabase
         .from('articles')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(20);
 
-      const combined = [];
-      const maxLen = Math.max(photosData?.length || 0, articlesData?.length || 0);
-      
-      for (let i = 0; i < maxLen; i++) {
-        if (articlesData && articlesData[i]) {
-          combined.push({ type: 'article', data: articlesData[i] });
-        }
-        if (photosData && photosData[i]) {
-          combined.push({ type: 'photo', data: photosData[i] });
-        }
+      if (articlesData) {
+        setArticles(articlesData);
       }
       
-      setMixedContent(combined);
       setLoading(false);
     };
 
@@ -66,15 +47,14 @@ export default function Feed() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex justify-center items-center">
+      <div className="min-h-[100dvh] bg-white flex justify-center items-center">
         <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">{t('loading')}</span>
       </div>
     );
   }
 
-  if (!campaign && mixedContent.length === 0) {
+  if (!campaign && articles.length === 0) {
     return (
-      // ... (Tu estado de empty se mantiene igual)
       <div className="min-h-[100dvh] bg-white flex items-center justify-center">
          <span className="text-xs uppercase tracking-widest text-gray-400">Coming Soon</span>
       </div>
@@ -91,7 +71,7 @@ export default function Feed() {
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
       <main className="pb-32">
-        {/* HERO CAMPAIGN FEED - Picture Tag */}
+        {/* HERO CAMPAIGN FEED */}
         {campaign && (
           <Link href={`/campaigns/${campaign.id}`} className="group relative block w-full h-[70vh] lg:h-[85vh] overflow-hidden cursor-pointer mb-12 lg:mb-24">
             <picture>
@@ -113,28 +93,13 @@ export default function Feed() {
           </Link>
         )}
 
-        {/* FEED GRID - Estilo Editorial con Masonry CSS */}
+        {/* FEED GRID - Estilo Editorial solo con Artículos */}
         <div className={`columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-8 md:gap-12 space-y-8 md:space-y-12 px-6 md:px-12 lg:px-16 max-w-[2000px] mx-auto ${!campaign ? 'pt-32 md:pt-40' : ''}`}>
-          {mixedContent.map((item, index) => {
-            if (item.type === 'article') {
-              return (
-                <div key={`art-${item.data.id}`} className="break-inside-avoid">
-                  <ArticleCard article={item.data} />
-                </div>
-              );
-            } else {
-              return (
-                <div key={`photo-${item.data.id}`} className="break-inside-avoid w-full overflow-hidden bg-gray-50 group">
-                  {/* h-auto permite que la foto viva en su proporción nativa */}
-                  <img 
-                    src={item.data.image_url} 
-                    alt="Campaign visual" 
-                    className="w-full h-auto object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
-                  />
-                </div>
-              );
-            }
-          })}
+          {articles.map((article) => (
+            <div key={`art-${article.id}`} className="break-inside-avoid">
+              <ArticleCard article={article} />
+            </div>
+          ))}
         </div>
       </main>
     </div>
