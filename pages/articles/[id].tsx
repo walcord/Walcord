@@ -90,7 +90,7 @@ export default function ArticleDetail() {
     : [];
 
   // Configuración de dominio base para Google News
-  const siteUrl = 'https://walcord.com'; // Cambia si tu dominio difiere
+  const siteUrl = 'https://walcord.com';
   const articleImage = article.cover_horizontal_url || article.cover_url || article.cover_vertical_url;
 
   // Esquema NewsArticle estructurado para Google News
@@ -120,10 +120,13 @@ export default function ArticleDetail() {
     }
   };
 
+  const coverHorizontalLocation = article.cover_horizontal_location || article.cover_vertical_location;
+  const coverVerticalLocation = article.cover_vertical_location || article.cover_horizontal_location;
+
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
-        <title>{localizedTitle} - WALCORD</title>
+        <title>{localizedTitle} — WALCORD</title>
         <meta name="description" content={localizedSubtitle || localizedTitle} />
         
         {/* Marcado de datos estructurados para Google News */}
@@ -149,6 +152,24 @@ export default function ArticleDetail() {
                 className="w-full h-auto max-h-[85vh] object-cover bg-gray-50"
               />
             </picture>
+
+            {/* UBICACIÓN DE LA COVER HORIZONTAL (DESKTOP) */}
+            {coverHorizontalLocation && (
+              <div className="hidden md:block mt-3 text-right">
+                <span className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 font-light">
+                  {coverHorizontalLocation}
+                </span>
+              </div>
+            )}
+
+            {/* UBICACIÓN DE LA COVER VERTICAL (MOBILE) */}
+            {coverVerticalLocation && (
+              <div className="block md:hidden mt-3 text-right">
+                <span className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 font-light">
+                  {coverVerticalLocation}
+                </span>
+              </div>
+            )}
           </div>
         </section>
 
@@ -170,12 +191,11 @@ export default function ArticleDetail() {
             )}
           </header>
 
-          {/* 1. TEXTO PRINCIPAL (Todo seguido) */}
+          {/* 1. TEXTO PRINCIPAL */}
           <div className="prose prose-stone prose-lg md:prose-xl max-w-none text-gray-800 font-serif">
             {paragraphs.map((p, idx) => {
               const trimmedText = p.trim();
               
-              // Si empieza por "/", es una pregunta
               if (trimmedText.startsWith('/')) {
                 const questionText = trimmedText.substring(1).trim();
                 return (
@@ -185,7 +205,6 @@ export default function ArticleDetail() {
                 );
               }
 
-              // Si no, es texto normal
               return (
                 <p key={`text-${idx}`} className="whitespace-pre-wrap font-serif leading-relaxed md:leading-loose text-gray-800 mb-8 md:mb-10">
                   {p}
@@ -194,9 +213,19 @@ export default function ArticleDetail() {
             })}
           </div>
 
-          {/* 2. GALERÍA DE FOTOS AL FINAL (Grid: 2 móvil, 4 ordenador) */}
+          {/* 2. GALERÍA DE FOTOS AL FINAL */}
           {photos && photos.length > 0 && (
             <div className="mt-20 md:mt-32 pt-12 border-t border-gray-200">
+              
+              {/* UBICACIÓN GENERAL DE LA GALERÍA */}
+              {article.gallery_location && (
+                <div className="mb-8 md:mb-10 text-center">
+                  <span className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 font-light">
+                    {article.gallery_location}
+                  </span>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                 {photos.map((photo, idx) => (
                   <figure key={`photo-${photo.id || idx}`} className="w-full flex flex-col">
