@@ -11,6 +11,9 @@ class MyDocument extends Document {
             content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
           />
 
+          {/* Verificación de dominio para Pinterest */}
+          <meta name="p:domain_verify" content="6ebba9c771916698d4a62a70c36b0ca8" />
+
           {/* Favicons apuntando directamente a tu logo en Supabase con ?v=2 para matar la caché */}
           <link 
             rel="icon" 
