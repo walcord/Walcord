@@ -11,7 +11,7 @@ class MyDocument extends Document {
             content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
           />
 
-          {/* Verificación de dominio para Pinterest (Corregido: 9c7) */}
+          {/* Verificación de dominio para Pinterest */}
           <meta name="p:domain_verify" content="6ebba9c771916698d4a62a70c36b0ca8" />
 
           {/* Favicons apuntando directamente a tu logo en Supabase con ?v=2 para matar la caché */}
@@ -24,9 +24,6 @@ class MyDocument extends Document {
             rel="apple-touch-icon" 
             href="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png?v=2" 
           />
-          
-          {/* Manifest comentado porque no existe el archivo local /site.webmanifest */}
-          {/* <link rel="manifest" href="/site.webmanifest" /> */}
           
           {/* Color del navegador: Blanco puro para estética minimalista */}
           <meta name="theme-color" content="#ffffff" />
