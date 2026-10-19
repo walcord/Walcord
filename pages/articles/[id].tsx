@@ -13,31 +13,45 @@ export default function ArticleDetail() {
   const { language, t } = useLanguage();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [article, setArticle] = useState(null); 
-  const [photos, setPhotos] = useState([]);
+  const [article, setArticle] = useState<any>(null); 
+  const [photos, setPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
 
     const fetchArticleData = async () => {
-      const { data: articleData, error: articleError } = await supabase
+      // 1. First fetch from 'articles' table (where existing content lives)
+      let { data: articleData } = await supabase
         .from('articles')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
-      const { data: photosData, error: photosError } = await supabase
+      // 2. Fallback to 'interviews' table if not found in 'articles'
+      if (!articleData) {
+        const { data: interviewData } = await supabase
+          .from('interviews')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        if (interviewData) {
+          articleData = interviewData;
+        }
+      }
+
+      // 3. Fetch associated gallery photos
+      const { data: photosData } = await supabase
         .from('article_photos')
         .select('*')
         .eq('article_id', id)
         .order('display_order', { ascending: true });
 
-      if (!articleError && articleData) {
+      if (articleData) {
         setArticle(articleData);
       }
       
-      if (!photosError && photosData && photosData.length > 0) {
+      if (photosData && photosData.length > 0) {
         setPhotos(photosData);
       }
 
@@ -64,7 +78,7 @@ export default function ArticleDetail() {
     );
   }
 
-  const getLocalizedField = (fieldName) => {
+  const getLocalizedField = (fieldName: string) => {
     const langKey = language ? language.toLowerCase() : 'fr';
     if (langKey === 'en') {
       return article[fieldName] || article[`${fieldName}_en`] || article[`${fieldName}_fr`] || '';
@@ -84,16 +98,14 @@ export default function ArticleDetail() {
   }).toUpperCase();
   const finalDate = article.display_date || fallbackDate;
 
-  // Separamos el texto por saltos de línea
+  // Split content by paragraph line breaks
   const paragraphs = localizedContent 
-    ? localizedContent.split(/\n+/).filter((p) => p.trim() !== '')
+    ? localizedContent.split(/\n+/).filter((p: string) => p.trim() !== '')
     : [];
 
-  // Configuración de dominio base para Google News
   const siteUrl = 'https://walcord.com';
   const articleImage = article.cover_horizontal_url || article.cover_url || article.cover_vertical_url;
 
-  // Esquema NewsArticle estructurado para Google News
   const newsArticleSchema = {
     "@context": "https://schema.org",
     "@type": "NewsArticle",
@@ -129,7 +141,6 @@ export default function ArticleDetail() {
         <title>{localizedTitle} — WALCORD</title>
         <meta name="description" content={localizedSubtitle || localizedTitle} />
         
-        {/* Marcado de datos estructurados para Google News */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(newsArticleSchema) }}
@@ -141,7 +152,7 @@ export default function ArticleDetail() {
 
       <main className="pb-32 md:pb-40">
         
-        {/* CABECERA (COVER) */}
+        {/* COVER HEADER */}
         <section className="w-full px-4 md:px-12 max-w-screen-2xl mx-auto mb-12 md:mb-20 pt-24 md:pt-32">
           <div className="w-full relative">
             <picture>
@@ -153,7 +164,6 @@ export default function ArticleDetail() {
               />
             </picture>
 
-            {/* UBICACIÓN DE LA COVER HORIZONTAL (DESKTOP) */}
             {coverHorizontalLocation && (
               <div className="hidden md:block mt-3 text-right">
                 <span className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 font-light">
@@ -162,7 +172,6 @@ export default function ArticleDetail() {
               </div>
             )}
 
-            {/* UBICACIÓN DE LA COVER VERTICAL (MOBILE) */}
             {coverVerticalLocation && (
               <div className="block md:hidden mt-3 text-right">
                 <span className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 font-light">
@@ -173,7 +182,7 @@ export default function ArticleDetail() {
           </div>
         </section>
 
-        {/* CONTENIDO DEL ARTÍCULO */}
+        {/* ARTICLE CONTENT */}
         <article className="max-w-4xl mx-auto px-6 sm:px-10">
           <header className="mb-16 md:mb-24 text-center">
             <span className="block text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 mb-6 font-light">
@@ -191,9 +200,9 @@ export default function ArticleDetail() {
             )}
           </header>
 
-          {/* 1. TEXTO PRINCIPAL */}
+          {/* MAIN TEXT */}
           <div className="prose prose-stone prose-lg md:prose-xl max-w-none text-gray-800 font-serif">
-            {paragraphs.map((p, idx) => {
+            {paragraphs.map((p: string, idx: number) => {
               const trimmedText = p.trim();
               
               if (trimmedText.startsWith('/')) {
@@ -213,11 +222,10 @@ export default function ArticleDetail() {
             })}
           </div>
 
-          {/* 2. GALERÍA DE FOTOS AL FINAL */}
+          {/* GALLERY PHOTOS AT BOTTOM */}
           {photos && photos.length > 0 && (
             <div className="mt-20 md:mt-32 pt-12 border-t border-gray-200">
               
-              {/* UBICACIÓN GENERAL DE LA GALERÍA */}
               {article.gallery_location && (
                 <div className="mb-8 md:mb-10 text-center">
                   <span className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 font-light">

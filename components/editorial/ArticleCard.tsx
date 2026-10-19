@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useLanguage } from '../../context/LanguageContext';
 
-export default function ArticleCard({ article }) {
+export default function ArticleCard({ article }: { article: any }) {
   const { language, t } = useLanguage();
   const langKey = language ? language.toLowerCase() : 'fr';
   
@@ -45,7 +45,7 @@ export default function ArticleCard({ article }) {
 
         <div className="mt-auto pt-2">
           <span className="text-[9px] tracking-[0.2em] uppercase text-black font-medium border-b border-black pb-1 inline-block">
-            {t('read_article')}
+            {t('read_interview') || t('read_article')}
           </span>
         </div>
       </div>

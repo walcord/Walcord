@@ -13,7 +13,6 @@ export default function MenuDrawer({ isOpen, onClose }: MenuDrawerProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { t } = useLanguage();
 
-  // EFECTO PARA BLOQUEAR EL SCROLL DEL FONDO EN MÓVILES
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -68,7 +67,6 @@ export default function MenuDrawer({ isOpen, onClose }: MenuDrawerProps) {
 
   return (
     <>
-      {/* Fondo oscuro z-50 para cubrir la barra de meses y todo el contenido */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/20 z-50 transition-opacity duration-700" 
@@ -76,7 +74,6 @@ export default function MenuDrawer({ isOpen, onClose }: MenuDrawerProps) {
         />
       )}
 
-      {/* Menú lateral con z-[60] por encima del fondo oscuro */}
       <div 
         className={`fixed top-0 left-0 h-[100dvh] w-[85vw] md:w-[420px] bg-white z-[60] transform transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col border-r border-gray-50 overscroll-none ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
@@ -92,6 +89,7 @@ export default function MenuDrawer({ isOpen, onClose }: MenuDrawerProps) {
           <nav className="flex-grow flex flex-col space-y-7 text-[15px] tracking-[0.15em] uppercase font-light text-gray-900 shrink-0">
             <Link href="/feed" onClick={onClose} className="hover:opacity-50 transition-opacity">{t('latest')}</Link>
             <Link href="/campaigns" onClick={onClose} className="hover:opacity-50 transition-opacity">{t('campaigns')}</Link>
+            <Link href="/interviews" onClick={onClose} className="hover:opacity-50 transition-opacity">{t('interviews')}</Link>
             <Link href="/lifestyle" onClick={onClose} className="hover:opacity-50 transition-opacity">{t('lifestyle')}</Link>
             <Link href="/events" onClick={onClose} className="hover:opacity-50 transition-opacity">{t('season')}</Link>
             <Link href="/about" onClick={onClose} className="hover:opacity-50 transition-opacity">{t('about')}</Link>

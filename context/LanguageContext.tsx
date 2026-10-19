@@ -12,6 +12,7 @@ const translations: Record<Language, Record<string, string>> = {
   EN: {
     latest: 'Latest',
     campaigns: 'Campaigns',
+    interviews: 'Interviews',
     lifestyle: 'Videos',
     season: 'Season',
     about: 'About',
@@ -39,6 +40,8 @@ const translations: Record<Language, Record<string, string>> = {
     loading: 'Loading...',
     not_found: 'Not Found',
     read_article: 'Read Article',
+    read_interview: 'Read Interview',
+    read_report: 'Read Report',
     explore_campaign: 'Explore',
     back: 'Back',
     coming_soon: 'Coming Soon',
@@ -47,6 +50,7 @@ const translations: Record<Language, Record<string, string>> = {
   ES: {
     latest: 'Principal', 
     campaigns: 'Campañas', 
+    interviews: 'Entrevistas',
     lifestyle: 'Vídeos', 
     season: 'Temporada', 
     about: 'Nosotros',
@@ -74,6 +78,8 @@ const translations: Record<Language, Record<string, string>> = {
     loading: 'Cargando...',
     not_found: 'No Encontrado',
     read_article: 'Leer Artículo',
+    read_interview: 'Leer Entrevista',
+    read_report: 'Leer Crónica',
     explore_campaign: 'Explorar',
     back: 'Volver',
     coming_soon: 'Próximamente',
@@ -82,6 +88,7 @@ const translations: Record<Language, Record<string, string>> = {
   FR: {
     latest: 'Principal',
     campaigns: 'Campagnes',
+    interviews: 'Interviews',
     lifestyle: 'Vidéos',
     season: 'Saison',
     about: 'À Propos',
@@ -109,6 +116,8 @@ const translations: Record<Language, Record<string, string>> = {
     loading: 'Chargement...',
     not_found: 'Non Trouvé',
     read_article: 'Lire l\'Article',
+    read_interview: 'Lire l\'Interview',
+    read_report: 'Lire le Reportage',
     explore_campaign: 'Explorer',
     back: 'Retour',
     coming_soon: 'Bientôt',
@@ -117,6 +126,7 @@ const translations: Record<Language, Record<string, string>> = {
   IT: {
     latest: 'Principale',
     campaigns: 'Campagne',
+    interviews: 'Interviste',
     lifestyle: 'Video',
     season: 'Stagione',
     about: 'Chi Siamo',
@@ -144,6 +154,8 @@ const translations: Record<Language, Record<string, string>> = {
     loading: 'Caricamento...',
     not_found: 'Non Trovato',
     read_article: 'Leggi l\'Articolo',
+    read_interview: 'Leggi l\'Intervista',
+    read_report: 'Leggi il Reportage',
     explore_campaign: 'Esplora',
     back: 'Indietro',
     coming_soon: 'Prossimamente',
@@ -154,7 +166,7 @@ const translations: Record<Language, Record<string, string>> = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('EN');
+  const [language, setLanguageState] = useState<Language>('FR'); // Cambiado a FR por defecto para Walcord
 
   useEffect(() => {
     const savedLang = localStorage.getItem('walcord_lang') as Language;
@@ -169,7 +181,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   };
 
   const t = (key: string): string => {
-    return translations[language]?.[key] || translations['EN']?.[key] || key;
+    return translations[language]?.[key] || translations['FR']?.[key] || key;
   };
 
   return (
@@ -182,7 +194,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 export function useLanguage() {
   const context = useContext(LanguageContext);
   if (!context) {
-    return { language: 'EN' as Language, setLanguage: () => {}, t: (k: string) => k };
+    return { language: 'FR' as Language, setLanguage: () => {}, t: (k: string) => k };
   }
   return context;
 }
