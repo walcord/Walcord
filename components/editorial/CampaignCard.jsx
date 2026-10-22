@@ -36,6 +36,7 @@ export default function CampaignCard({ campaign }) {
         <div className="flex flex-col items-center text-center 
                         translate-y-0 md:translate-y-4 md:group-hover:translate-y-0 
                         transition-transform duration-700 ease-out">
+          {/* Título de Campaña en font-serif (Playfair / Didot) */}
           <h3 className="text-3xl md:text-5xl font-serif font-normal mb-3 md:mb-4 tracking-tight px-4">
             {localizedTitle}
           </h3>

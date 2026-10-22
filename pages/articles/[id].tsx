@@ -185,22 +185,20 @@ export default function ArticleDetail() {
         {/* ARTICLE CONTENT */}
         <article className="max-w-4xl mx-auto px-6 sm:px-10">
           <header className="mb-16 md:mb-24 text-center">
-            <span className="block text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-gray-400 mb-6 font-light">
-              {finalDate}
-            </span>
             
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-normal text-gray-900 tracking-tight leading-[1.05] mb-8">
+            {/* Título de la Entrevista en Times New Roman */}
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-times font-normal text-gray-900 tracking-tight leading-[1.08] mb-8">
               {localizedTitle}
             </h1>
 
             {localizedSubtitle && (
-              <p className="text-xl md:text-2xl font-serif text-gray-600 max-w-2xl mx-auto leading-snug italic">
+              <p className="text-xl md:text-2xl font-times text-gray-600 max-w-2xl mx-auto leading-relaxed italic">
                 {localizedSubtitle}
               </p>
             )}
           </header>
 
-          {/* MAIN TEXT */}
+          {/* MAIN TEXT - Restaurada la fuente anterior (font-serif) */}
           <div className="prose prose-stone prose-lg md:prose-xl max-w-none text-gray-800 font-serif">
             {paragraphs.map((p: string, idx: number) => {
               const trimmedText = p.trim();

@@ -1,12 +1,16 @@
 /* === Tipografías === */
-/* 1. Importamos la fuente editorial (Playfair Display) y tu Roboto base */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap');
 @import "tailwindcss";
 
-/* 2. Forzamos que Tailwind use Playfair Display cuando escribas 'font-serif' */
-.font-serif {
-  font-family: 'Playfair Display', 'Times New Roman', Times, serif !important;
+/* 1. Fuente Serif para Campañas (Playfair Display / Didot) */
+.font-serif, .font-campaign {
+  font-family: 'Playfair Display', Didot, 'Bodoni MT', serif !important;
+}
+
+/* 2. Times New Roman para Logo, Títulos de Entrevistas y Cuerpo de Texto */
+.font-times {
+  font-family: 'Times New Roman', Times, serif !important;
 }
 
 /* Variables + Safe Area */
@@ -31,7 +35,6 @@ html, body{
 /* Utilidades tipográficas */
 .font-light{ font-weight:300; }
 .font-roboto{ font-family:'Roboto', sans-serif; }
-.font-times{ font-family:'Times New Roman', serif; }
 
 /* Contenedor central */
 .wc-container{ max-width:820px; margin:0 auto; padding:0 16px; }
@@ -51,7 +54,6 @@ html, body{
 }
 
 /* ===== MODO APP ===== */
-/* Oculta headers/navbars/banners/logos que puedan existir en la web */
 .is-app header,
 .is-app .topbar,
 .is-app .navbar,
@@ -65,7 +67,6 @@ html, body{
   display:none !important;
 }
 
-/* Overlay azul para tapar cualquier resto del banner al hacer scroll */
 .app-overlay{
   position:fixed;
   top:0; left:0; right:0;
@@ -76,7 +77,6 @@ html, body{
 }
 html:not(.is-app) .app-overlay{ display:none; }
 
-/* Botones flotantes (arriba-derecha) */
 .wc-fabs{
   position:fixed; top:calc(var(--safe-top) + 10px); right:10px;
   display:flex; gap:8px; z-index:10000;
@@ -96,21 +96,14 @@ html:not(.is-app) .wc-fabs{ display:none; }
   display:flex; align-items:center; justify-content:center;
 }
 
-/* Modo compacto (más minimalista) */
 .wc-fabs--compact .wc-fab{ padding:6px 10px; border-radius:10px; }
 .wc-fabs--compact .wc-fab-icon{ width:30px; height:30px; box-shadow:0 1px 5px rgba(0,0,0,.18); }
 
 /* ===== ANDROID APP ONLY ===== */
-/* Muy importante:
-   esto SOLO afecta a Android dentro de la app Walcord.
-   No toca iPhone ni la web normal.
-*/
-
 html.is-android-app body{
   padding-bottom: max(88px, env(safe-area-inset-bottom));
 }
 
-/* Texto general estable en Android app */
 html.is-android-app,
 html.is-android-app body,
 html.is-android-app button,
@@ -121,13 +114,7 @@ html.is-android-app select{
   font-weight: 300;
 }
 
-/* Cuando en la app uses serif/títulos elegantes, en Android
-   forzamos Times New Roman para que no coja una serif cutre del sistema */
-html.is-android-app .font-times,
-html.is-android-app .font-serif,
-html.is-android-app h1.font-serif,
-html.is-android-app h2.font-serif,
-html.is-android-app h3.font-serif{
+html.is-android-app .font-times{
   font-family: 'Times New Roman', Times, serif !important;
   font-weight: 400;
 }

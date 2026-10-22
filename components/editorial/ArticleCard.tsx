@@ -35,7 +35,8 @@ export default function ArticleCard({ article }: { article: any }) {
       </div>
       
       <div className="flex flex-col flex-grow">
-        <h3 className="text-xl md:text-2xl font-serif text-black leading-snug mb-2 group-hover:text-gray-600 transition-colors">
+        {/* Título de Entrevista en Times New Roman */}
+        <h3 className="text-xl md:text-2xl font-times text-black leading-snug mb-2 group-hover:text-gray-600 transition-colors">
           {title}
         </h3>
 

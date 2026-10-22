@@ -95,7 +95,7 @@ export default function Feed() {
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
       <main className="pb-32">
-        {/* HERO CAMPAIGN FEED */}
+        {/* HERO CAMPAIGN FEED - Usa font-serif (Playfair/Didot) */}
         {campaign && (
           <Link href={`/campaigns/${campaign.id}`} className="group relative block w-full h-[65vh] lg:h-[75vh] overflow-hidden cursor-pointer mb-12 lg:mb-20">
             <picture>

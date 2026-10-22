@@ -24,8 +24,8 @@ export default function Header({ onOpenMenu }: HeaderProps) {
         <span className="block w-6 h-[1px] bg-black"></span>
       </button>
 
-      {/* Logo (Centro) */}
-      <Link href="/" className="absolute left-1/2 -translate-x-1/2 text-4xl tracking-tight text-black font-serif">
+      {/* Logo (Centro) - Forzado a Times New Roman (font-times) */}
+      <Link href="/" className="absolute left-1/2 -translate-x-1/2 text-4xl tracking-tight text-black font-times">
         Walcord
       </Link>
 
