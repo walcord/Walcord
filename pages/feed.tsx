@@ -87,9 +87,55 @@ export default function Feed() {
   const campaignTitle = campaign ? (campaign[`title_${langKey}`] || campaign.title) : '';
   const hasReport = reportsList.length > 0;
 
+  // Datos estructurados JSON-LD para la vista del Feed
+  const schemaData = {
+    "@context": "https://schema.org",
+    "@type": "Periodical",
+    "name": "WALCORD",
+    "alternateName": "Walcord Magazine Feed",
+    "url": "https://walcord.com/feed",
+    "logo": "https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png",
+    "description": "Revue culturelle française consacrée à la danse classique et au ballet.",
+    "publisher": {
+      "@type": "Organization",
+      "name": "WALCORD",
+      "url": "https://walcord.com"
+    }
+  };
+
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
-      <Head><title>WALCORD</title></Head>
+      <Head>
+        {/* Título optimizado para el buscador en la vista /feed */}
+        <title>WALCORD — Revue Culturelle de Danse Classique & Ballet</title>
+        
+        {/* URL Canónica del Feed */}
+        <link rel="canonical" href="https://walcord.com/feed" />
+
+        {/* Meta descripción e idiomas */}
+        <meta 
+          name="description" 
+          content="Revue culturelle française dédiée à la danse classique et au ballet. Campagnes conceptuelles, vidéos lifestyle, agenda des événements européens et interviews exclusives." 
+        />
+        <meta 
+          name="keywords" 
+          content="Walcord, danse classique, ballet, revue culturelle, entrevistas danza, agenda ballet europe, lifestyle ballet, Adrian Germont" 
+        />
+        <meta httpEquiv="content-language" content="fr, es, en, it" />
+
+        {/* Open Graph para la vista /feed */}
+        <meta property="og:title" content="WALCORD — Revue Culturelle de Danse Classique" />
+        <meta property="og:description" content="Revue culturelle française consacrée à la danse classique, campagnes conceptuelles, agenda des événements en Europe et interviews." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://walcord.com/feed" />
+        <meta property="og:image" content="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png" />
+
+        {/* Marcado JSON-LD */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaData) }}
+        />
+      </Head>
 
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />

@@ -51,6 +51,9 @@ export default function Home() {
         {/* Título optimizado para el buscador */}
         <title>WALCORD — Revue Culturelle de Danse Classique & Ballet</title>
         
+        {/* URL Canónica principal */}
+        <link rel="canonical" href="https://walcord.com" />
+
         {/* Meta descripción e idiomas */}
         <meta 
           name="description" 
