@@ -87,7 +87,10 @@ export default function Feed() {
   const campaignTitle = campaign ? (campaign[`title_${langKey}`] || campaign.title) : '';
   const hasReport = reportsList.length > 0;
 
-  // Datos estructurados JSON-LD para la vista del Feed
+  // Separación dinámica de artículos para las dos columnas laterales
+  const leftArticles = articlesList.filter((_, index) => index % 2 === 0);
+  const rightArticles = articlesList.filter((_, index) => index % 2 === 1);
+
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "Periodical",
@@ -106,42 +109,23 @@ export default function Feed() {
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
-        {/* Título optimizado para el buscador en la vista /feed */}
         <title>WALCORD — Revue Culturelle de Danse Classique & Ballet</title>
-        
-        {/* URL Canónica del Feed */}
         <link rel="canonical" href="https://walcord.com/feed" />
-
-        {/* Meta descripción e idiomas */}
-        <meta 
-          name="description" 
-          content="Revue culturelle française dédiée à la danse classique et au ballet. Campagnes conceptuelles, vidéos lifestyle, agenda des événements européens et interviews exclusives." 
-        />
-        <meta 
-          name="keywords" 
-          content="Walcord, danse classique, ballet, revue culturelle, entrevistas danza, agenda ballet europe, lifestyle ballet, Adrian Germont" 
-        />
+        <meta name="description" content="Revue culturelle française dédiée à la danse classique et au ballet. Campagnes conceptuelles, vidéos lifestyle, agenda des événements européens et interviews exclusives." />
+        <meta name="keywords" content="Walcord, danse classique, ballet, revue culturelle, entrevistas danza, agenda ballet europe, lifestyle ballet, Adrian Germont" />
         <meta httpEquiv="content-language" content="fr, es, en, it" />
-
-        {/* Open Graph para la vista /feed */}
         <meta property="og:title" content="WALCORD — Revue Culturelle de Danse Classique" />
         <meta property="og:description" content="Revue culturelle française consacrée à la danse classique, campagnes conceptuelles, agenda des événements en Europe et interviews." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://walcord.com/feed" />
         <meta property="og:image" content="https://mbrdycxpztjtgsiyxikt.supabase.co/storage/v1/object/public/Assets/logo-walcord.png" />
-
-        {/* Marcado JSON-LD */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaData) }}
-        />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaData) }} />
       </Head>
 
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
       <main className="pb-32">
-        {/* HERO CAMPAIGN FEED - Usa font-serif (Playfair/Didot) */}
         {campaign && (
           <Link href={`/campaigns/${campaign.id}`} className="group relative block w-full h-[65vh] lg:h-[75vh] overflow-hidden cursor-pointer mb-12 lg:mb-20">
             <picture>
@@ -163,61 +147,58 @@ export default function Feed() {
           </Link>
         )}
 
-        {/* CONTENEDOR COMPACTO RESTRINGIDO (MAX-W-5XL) PARA TARJETAS PEQUEÑAS Y ELEGANTES */}
-        <div className={`px-6 md:px-10 max-w-5xl mx-auto ${!campaign ? 'pt-28 md:pt-36' : ''}`}>
+        <div className={`px-6 md:px-10 max-w-7xl mx-auto ${!campaign ? 'pt-28 md:pt-36' : ''}`}>
           
-          {/* ESCENARIO 1: CUANDO HAY UN REPORT PUBLICADO -> Layout de 3 elementos por fila [Entrevista | Report | Entrevista] */}
           {hasReport ? (
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8 items-start">
+            /* Estructura de 3 columnas continuas: Izquierda (Interviews), Centro (Article/Report), Derecha (Interviews) */
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-14 md:gap-12 lg:gap-16 items-start">
               
-              {/* Elemento Izquierdo: Entrevista */}
-              <div className="lg:col-span-1 max-w-[280px] mx-auto lg:max-w-none w-full">
-                {articlesList[0] && <ArticleCard article={articlesList[0]} />}
+              {/* Columna 1: Entrevistas en el lado izquierdo */}
+              <div className="lg:col-span-1 w-full flex flex-col gap-14 md:gap-12 lg:gap-16">
+                {leftArticles.map((article) => (
+                  <ArticleCard key={article.id} article={article} />
+                ))}
               </div>
 
-              {/* Elemento Central: Report Horizontal */}
-              <div className="lg:col-span-2 w-full py-6 lg:py-0 border-t border-b lg:border-t-0 lg:border-b-0 border-gray-100">
-                {reportsList[0] && <ReportCard report={reportsList[0]} />}
+              {/* Columna 2 & 3: Reports / Artículos en la columna central */}
+              <div className="lg:col-span-2 w-full flex flex-col gap-14 md:gap-12 lg:gap-16">
+                {reportsList.map((report) => (
+                  <ReportCard key={report.id} report={report} />
+                ))}
               </div>
 
-              {/* Elemento Derecho: Entrevista */}
-              <div className="lg:col-span-1 max-w-[280px] mx-auto lg:max-w-none w-full">
-                {articlesList[1] ? (
-                  <ArticleCard article={articlesList[1]} />
-                ) : (
-                  /* Si solo hay 1 entrevista + 1 report, mantiene el espacio limpio */
-                  <div className="hidden lg:block" />
-                )}
+              {/* Columna 4: Entrevistas en el lado derecho */}
+              <div className="lg:col-span-1 w-full flex flex-col gap-14 md:gap-12 lg:gap-16">
+                {rightArticles.map((article) => (
+                  <ArticleCard key={article.id} article={article} />
+                ))}
               </div>
 
             </div>
           ) : (
             
-            /* ESCENARIO 2: AÚN NO HAY REPORTS -> Reorganización automática según cantidad de artículos */
+            /* Escenario cuando aún no hay reports */
             <div>
-              {/* Si solo hay 1 artículo (como Karl Paquette ahora) -> Centrado y tamaño compacto */}
               {articlesList.length === 1 && (
-                <div className="max-w-xs mx-auto">
+                <div className="max-w-md mx-auto">
                   <ArticleCard article={articlesList[0]} />
                 </div>
               )}
 
-              {/* Si hay 2 artículos -> 2 columnas centradas */}
               {articlesList.length === 2 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-2xl mx-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-14 md:gap-12 max-w-4xl mx-auto items-start">
                   {articlesList.map((article) => (
-                    <div key={article.id} className="max-w-[280px] mx-auto w-full">
+                    <div key={article.id} className="w-full flex flex-col">
                       <ArticleCard article={article} />
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Si hay 3 o más artículos -> Fila limpia de 3 por fila */}
               {articlesList.length >= 3 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-14 md:gap-12 items-start">
                   {articlesList.map((article) => (
-                    <div key={article.id} className="max-w-[280px] mx-auto w-full">
+                    <div key={article.id} className="w-full flex flex-col">
                       <ArticleCard article={article} />
                     </div>
                   ))}

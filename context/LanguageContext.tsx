@@ -41,7 +41,7 @@ const translations: Record<Language, Record<string, string>> = {
     not_found: 'Not Found',
     read_article: 'Read Article',
     read_interview: 'Read Interview',
-    read_report: 'Read Report',
+    read_report: 'Read Article',
     explore_campaign: 'Explore',
     back: 'Back',
     coming_soon: 'Coming Soon',
@@ -79,7 +79,7 @@ const translations: Record<Language, Record<string, string>> = {
     not_found: 'No Encontrado',
     read_article: 'Leer Artículo',
     read_interview: 'Leer Entrevista',
-    read_report: 'Leer Crónica',
+    read_report: 'Leer Artículo',
     explore_campaign: 'Explorar',
     back: 'Volver',
     coming_soon: 'Próximamente',
@@ -117,7 +117,7 @@ const translations: Record<Language, Record<string, string>> = {
     not_found: 'Non Trouvé',
     read_article: 'Lire l\'Article',
     read_interview: 'Lire l\'Interview',
-    read_report: 'Lire le Reportage',
+    read_report: 'Lire l\'Article',
     explore_campaign: 'Explorer',
     back: 'Retour',
     coming_soon: 'Bientôt',
@@ -155,7 +155,7 @@ const translations: Record<Language, Record<string, string>> = {
     not_found: 'Non Trovato',
     read_article: 'Leggi l\'Articolo',
     read_interview: 'Leggi l\'Intervista',
-    read_report: 'Leggi il Reportage',
+    read_report: 'Leggi l\'Articolo',
     explore_campaign: 'Esplora',
     back: 'Indietro',
     coming_soon: 'Prossimamente',
@@ -166,7 +166,7 @@ const translations: Record<Language, Record<string, string>> = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('FR'); // Cambiado a FR por defecto para Walcord
+  const [language, setLanguageState] = useState<Language>('FR');
 
   useEffect(() => {
     const savedLang = localStorage.getItem('walcord_lang') as Language;

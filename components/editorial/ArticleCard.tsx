@@ -19,8 +19,8 @@ export default function ArticleCard({ article }: { article: any }) {
   const imageUrl = article.cover_vertical_url || article.cover_url;
 
   return (
-    <Link href={`/articles/${article.id}`} className="group flex flex-col w-full cursor-pointer h-full">
-      <div className="w-full aspect-[3/4] overflow-hidden mb-4 bg-gray-50">
+    <Link href={`/articles/${article.id}`} className="group flex flex-col w-full h-full cursor-pointer">
+      <div className="w-full aspect-square md:aspect-[3/4] overflow-hidden mb-4 bg-gray-50 flex-shrink-0">
         {imageUrl ? (
           <img 
             src={imageUrl} 
@@ -34,17 +34,17 @@ export default function ArticleCard({ article }: { article: any }) {
         )}
       </div>
       
-      <div className="flex flex-col flex-grow">
-        {/* Título de Entrevista en Times New Roman */}
-        <h3 className="text-xl md:text-2xl font-times text-black leading-snug mb-2 group-hover:text-gray-600 transition-colors">
+      <div className="flex flex-col">
+        <h3 className="text-xl md:text-2xl font-times text-black leading-snug mb-1 group-hover:text-gray-600 transition-colors">
           {title}
         </h3>
 
-        <span className="text-[10px] tracking-[0.15em] uppercase text-gray-400 mb-4 font-light">
+        <span className="text-[10px] tracking-[0.15em] uppercase text-gray-400 mb-2 font-light">
           {displayDate}
         </span>
 
-        <div className="mt-auto pt-2">
+        {/* mt-1 fijo sin empujarlo al fondo */}
+        <div className="mt-1">
           <span className="text-[9px] tracking-[0.2em] uppercase text-black font-medium border-b border-black pb-1 inline-block">
             {t('read_interview') || t('read_article')}
           </span>
