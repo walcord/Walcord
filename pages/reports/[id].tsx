@@ -20,6 +20,8 @@ export default function ReportDetail() {
     if (!id) return;
 
     const fetchReportData = async () => {
+      setLoading(true);
+
       const { data: reportData, error: reportError } = await supabase
         .from('reports')
         .select('*')
@@ -48,7 +50,9 @@ export default function ReportDetail() {
   if (loading) {
     return (
       <div className="min-h-[100dvh] flex justify-center items-center bg-white">
-        <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">{t('loading')}</span>
+        <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 animate-pulse">
+          {t('loading')}
+        </span>
       </div>
     );
   }
@@ -56,7 +60,9 @@ export default function ReportDetail() {
   if (!report) {
     return (
       <div className="min-h-[100dvh] flex justify-center items-center bg-white">
-        <p className="text-xs tracking-[0.2em] uppercase text-gray-900">{t('not_found')}</p>
+        <p className="text-xs tracking-[0.2em] uppercase text-gray-900">
+          {t('not_found')}
+        </p>
       </div>
     );
   }
@@ -73,22 +79,21 @@ export default function ReportDetail() {
 
   const localizedTitle = getLocalizedField('title');
   const localizedSubtitle = getLocalizedField('subtitle');
-  const localizedContent = getLocalizedField('content'); // Usamos 'content' en lugar de 'interview'
+  const localizedContent = getLocalizedField('content');
 
   const date = new Date(report.created_at);
   const fallbackDate = `${date.toLocaleString('en-US', { month: 'short' })}. ${date.getFullYear().toString().slice(2)}'`.toUpperCase();
   const finalDate = report.display_date || fallbackDate;
 
-  // Extraer los párrafos individuales
+  // Extraer párrafos individuales
   const paragraphs = localizedContent 
     ? localizedContent.split(/\n\s*\n/).filter((p) => p.trim() !== '')
     : [];
 
-  // Mantuvimos la lógica de renderizado por si el reporte contiene formato Q&A
+  // Renderizado de texto (soporta Q&A si existe el separador " : ")
   const renderParagraph = (text, key) => {
     const colonIndex = text.indexOf(' : ');
     
-    // Solo aplicamos el estilo "Interview" si encuentra el separador y la pregunta no es excesivamente larga
     if (colonIndex !== -1 && text.substring(0, colonIndex).split(' ').length < 15) {
       const question = text.substring(0, colonIndex).trim();
       const answer = text.substring(colonIndex + 3).trim();
@@ -112,7 +117,7 @@ export default function ReportDetail() {
     );
   };
 
-  // Algoritmo de distribución proporcional de texto e imágenes (IDÉNTICO a CampaignDetail)
+  // Algoritmo dinámico de interleaving de texto e imágenes (idéntico a Campaign)
   const renderEditorialStream = () => {
     if (!paragraphs.length && !photos.length) return null;
 
@@ -174,7 +179,7 @@ export default function ReportDetail() {
                   <div key={photo.id} className="w-full">
                     <img 
                       src={photo.image_url} 
-                      alt="Report shot" 
+                      alt={localizedTitle || "Report shot"} 
                       className="w-full h-auto object-cover"
                       loading="lazy"
                     />
@@ -189,7 +194,7 @@ export default function ReportDetail() {
               <div className="w-full">
                 <img 
                   src={block[0].image_url} 
-                  alt="Report shot" 
+                  alt={localizedTitle || "Report shot"} 
                   className="w-full h-auto object-cover"
                   loading="lazy"
                 />
@@ -206,7 +211,7 @@ export default function ReportDetail() {
   return (
     <div className="min-h-[100dvh] bg-white text-black font-sans selection:bg-black selection:text-white">
       <Head>
-        <title>{localizedTitle} — WALCORD</title>
+        <title>{localizedTitle ? `${localizedTitle} — WALCORD` : 'WALCORD'}</title>
       </Head>
 
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
@@ -244,7 +249,7 @@ export default function ReportDetail() {
           </div>
         </section>
 
-        {/* EDITORIAL STREAM (Texto e Imágenes Distribuidos) */}
+        {/* STREAM EDITORIAL */}
         <section className="w-full">
           {renderEditorialStream()}
         </section>
