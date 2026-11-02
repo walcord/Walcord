@@ -6,23 +6,23 @@ import MenuDrawer from '../../components/editorial/MenuDrawer';
 import { supabase } from '../../lib/supabaseClient';
 import { useLanguage } from '../../context/LanguageContext';
 
-export default function ReportDetail() {
+export default function ArticleDetail() {
   const router = useRouter();
   const { id } = router.query;
   const { language, t } = useLanguage();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [report, setReport] = useState(null);
+  const [article, setArticle] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
 
-    const fetchReportData = async () => {
+    const fetchArticleData = async () => {
       setLoading(true);
 
-      const { data: reportData, error: reportError } = await supabase
+      const { data: articleData, error: articleError } = await supabase
         .from('reports')
         .select('*')
         .eq('id', id)
@@ -34,8 +34,8 @@ export default function ReportDetail() {
         .eq('report_id', id)
         .order('display_order', { ascending: true });
 
-      if (!reportError && reportData) {
-        setReport(reportData);
+      if (!articleError && articleData) {
+        setArticle(articleData);
       }
       if (!photosError && photosData) {
         setPhotos(photosData);
@@ -44,7 +44,7 @@ export default function ReportDetail() {
       setLoading(false);
     };
 
-    fetchReportData();
+    fetchArticleData();
   }, [id]);
 
   if (loading) {
@@ -57,7 +57,7 @@ export default function ReportDetail() {
     );
   }
 
-  if (!report) {
+  if (!article) {
     return (
       <div className="min-h-[100dvh] flex justify-center items-center bg-white">
         <p className="text-xs tracking-[0.2em] uppercase text-gray-900">
@@ -71,53 +71,94 @@ export default function ReportDetail() {
     const langKey = language ? language.toLowerCase() : 'fr';
     
     if (langKey === 'en') {
-      return report[fieldName] || report[`${fieldName}_en`] || report[`${fieldName}_fr`] || '';
+      return article[fieldName] || article[`${fieldName}_en`] || article[`${fieldName}_fr`] || '';
     }
     
-    return report[`${fieldName}_${langKey}`] || report[fieldName] || report[`${fieldName}_fr`] || '';
+    return article[`${fieldName}_${langKey}`] || article[fieldName] || article[`${fieldName}_fr`] || '';
   };
 
   const localizedTitle = getLocalizedField('title');
   const localizedSubtitle = getLocalizedField('subtitle');
   const localizedContent = getLocalizedField('content');
 
-  const date = new Date(report.created_at);
+  const date = new Date(article.created_at);
   const fallbackDate = `${date.toLocaleString('en-US', { month: 'short' })}. ${date.getFullYear().toString().slice(2)}'`.toUpperCase();
-  const finalDate = report.display_date || fallbackDate;
+  const finalDate = article.display_date || fallbackDate;
 
   // Extraer párrafos individuales
   const paragraphs = localizedContent 
     ? localizedContent.split(/\n\s*\n/).filter((p) => p.trim() !== '')
     : [];
 
-  // Renderizado de texto (soporta Q&A si existe el separador " : ")
+  // Renderizado de texto ajustado a formato de Cita/Declaración de Persona
   const renderParagraph = (text, key) => {
     const colonIndex = text.indexOf(' : ');
     
     if (colonIndex !== -1 && text.substring(0, colonIndex).split(' ').length < 15) {
-      const question = text.substring(0, colonIndex).trim();
-      const answer = text.substring(colonIndex + 3).trim();
+      const speaker = text.substring(0, colonIndex).trim();
+      const statement = text.substring(colonIndex + 3).trim();
 
       return (
-        <div key={key} className="mb-8 text-left">
-          <span className="block font-sans font-semibold text-xs md:text-sm tracking-wider uppercase text-black mb-1.5">
-            {question}
-          </span>
-          <p className="whitespace-pre-line text-gray-800 font-serif">
-            {answer}
-          </p>
+        <div key={key} className="mb-10 text-left">
+          {/* Indicador de persona que habla */}
+          <div className="flex items-center gap-3 mb-3">
+            <span className="w-5 h-[1px] bg-black"></span>
+            <span className="font-sans font-bold text-[11px] md:text-xs tracking-[0.2em] uppercase text-black">
+              {speaker}
+            </span>
+          </div>
+
+          {/* Bloque de declaración en fuente Serif */}
+          <blockquote className="whitespace-pre-line text-gray-900 font-serif border-l border-black/30 pl-4 md:pl-6 py-0.5 text-base md:text-lg leading-relaxed">
+            {statement}
+          </blockquote>
         </div>
       );
     }
 
     return (
-      <p key={key} className="mb-6 whitespace-pre-line text-justify md:text-left text-gray-800 font-serif">
+      <p key={key} className="mb-6 whitespace-pre-line text-justify md:text-left text-gray-800 font-serif text-base md:text-lg leading-relaxed">
         {text}
       </p>
     );
   };
 
-  // Algoritmo dinámico de interleaving de texto e imágenes (idéntico a Campaign)
+  // Renderizado de un bloque de fotos (individual o pareja)
+  const renderPhotoBlock = (block, key) => {
+    if (block.length === 2) {
+      return (
+        <div key={key} className="max-w-6xl mx-auto px-4 md:px-12 my-10 md:my-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
+            {block.map((photo) => (
+              <div key={photo.id} className="w-full">
+                <img 
+                  src={photo.image_url} 
+                  alt={localizedTitle || "Article shot"} 
+                  className="w-full h-auto object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div key={key} className="w-full max-w-5xl mx-auto px-4 md:px-12 my-10 md:my-16">
+        <div className="w-full">
+          <img 
+            src={block[0].image_url} 
+            alt={localizedTitle || "Article shot"} 
+            className="w-full h-auto object-cover"
+            loading="lazy"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // Algoritmo dinámico de intercalación equilibrada de imágenes y texto
   const renderEditorialStream = () => {
     if (!paragraphs.length && !photos.length) return null;
 
@@ -129,6 +170,7 @@ export default function ReportDetail() {
       );
     }
 
+    // Agrupar fotos en bloques (parejas e individuales)
     const photoBlocks = [];
     let i = 0;
     while (i < photos.length) {
@@ -141,69 +183,43 @@ export default function ReportDetail() {
       }
     }
 
-    const totalBlocks = photoBlocks.length;
-    const totalParagraphs = paragraphs.length;
-    const numSegments = totalBlocks + 1;
-
-    const baseItemsPerSegment = Math.floor(totalParagraphs / numSegments);
-    const remainder = totalParagraphs % numSegments;
+    if (!paragraphs.length) {
+      return (
+        <div className="w-full space-y-12 my-12">
+          {photoBlocks.map((block, idx) => renderPhotoBlock(block, `photo-standalone-${idx}`))}
+        </div>
+      );
+    }
 
     const stream = [];
-    let pIdx = 0;
+    const totalParagraphs = paragraphs.length;
+    const totalBlocks = photoBlocks.length;
+    let blockIdx = 0;
 
-    for (let s = 0; s < numSegments; s++) {
-      const count = baseItemsPerSegment + (s < remainder ? 1 : 0);
+    paragraphs.forEach((paragraph, pIdx) => {
+      // Párrafo o declaración de texto
+      stream.push(
+        <div 
+          key={`text-seg-${pIdx}`} 
+          className="max-w-2xl mx-auto px-6 md:px-0 my-8 md:my-12 font-serif text-gray-900 leading-relaxed text-base md:text-lg selection:bg-black selection:text-white"
+        >
+          {renderParagraph(paragraph, pIdx)}
+        </div>
+      );
 
-      if (count > 0 && pIdx < totalParagraphs) {
-        const textChunk = paragraphs.slice(pIdx, pIdx + count);
-        pIdx += count;
+      // Reparto proporcional de fotos restantes tras este párrafo
+      const remainingParagraphs = totalParagraphs - pIdx;
+      const remainingBlocks = totalBlocks - blockIdx;
 
-        stream.push(
-          <div 
-            key={`text-seg-${s}`} 
-            className="max-w-2xl mx-auto px-6 md:px-0 my-10 md:my-16 font-serif text-gray-900 leading-relaxed text-base md:text-lg selection:bg-black selection:text-white"
-          >
-            {textChunk.map((p, idx) => renderParagraph(p, `${s}-${idx}`))}
-          </div>
-        );
-      }
+      if (remainingBlocks > 0) {
+        const blocksForThisStep = Math.ceil(remainingBlocks / remainingParagraphs);
 
-      if (s < totalBlocks) {
-        const block = photoBlocks[s];
-
-        if (block.length === 2) {
-          stream.push(
-            <div key={`photo-pair-${s}`} className="max-w-6xl mx-auto px-4 md:px-12 my-12 md:my-20">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
-                {block.map((photo) => (
-                  <div key={photo.id} className="w-full">
-                    <img 
-                      src={photo.image_url} 
-                      alt={localizedTitle || "Report shot"} 
-                      className="w-full h-auto object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        } else {
-          stream.push(
-            <div key={`photo-single-${s}-${block[0].id}`} className="w-full max-w-5xl mx-auto px-4 md:px-12 my-12 md:my-20">
-              <div className="w-full">
-                <img 
-                  src={block[0].image_url} 
-                  alt={localizedTitle || "Report shot"} 
-                  className="w-full h-auto object-cover"
-                  loading="lazy"
-                />
-              </div>
-            </div>
-          );
+        for (let b = 0; b < blocksForThisStep && blockIdx < totalBlocks; b++) {
+          stream.push(renderPhotoBlock(photoBlocks[blockIdx], `photo-seg-${pIdx}-${blockIdx}`));
+          blockIdx++;
         }
       }
-    }
+    });
 
     return stream;
   };
@@ -223,9 +239,9 @@ export default function ReportDetail() {
         <section className="w-full px-4 md:px-12 max-w-screen-2xl mx-auto mb-12 md:mb-20">
           <div className="w-full relative">
             <picture>
-              <source media="(min-width: 768px)" srcSet={report.cover_horizontal_url || report.cover_url} />
+              <source media="(min-width: 768px)" srcSet={article.cover_horizontal_url || article.cover_url} />
               <img 
-                src={report.cover_vertical_url || report.cover_url} 
+                src={article.cover_vertical_url || article.cover_url} 
                 alt={localizedTitle} 
                 className="w-full h-auto max-h-[85vh] object-cover"
               />
@@ -234,7 +250,7 @@ export default function ReportDetail() {
           
           <div className="mt-8 md:mt-16 flex flex-col items-center text-center px-4 max-w-4xl mx-auto">
             <span className="text-[9px] md:text-[10px] tracking-[0.3em] uppercase text-gray-400 mb-6 font-light">
-              Report — {finalDate}
+              ARTICLE — {finalDate}
             </span>
             
             <h1 className="text-4xl md:text-7xl font-serif font-normal text-gray-900 tracking-tight leading-[1.1]">
