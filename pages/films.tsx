@@ -43,7 +43,7 @@ export default function Films() {
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-      <main className="pt-24 md:pt-40 px-4 sm:px-8 md:px-12 max-w-[1600px] mx-auto pb-24 md:pb-32">
+      <main className="pt-28 md:pt-40 px-4 sm:px-8 md:px-12 max-w-[1600px] mx-auto pb-24 md:pb-32">
         {/* Cabecera de sección */}
         <div className="flex flex-col items-center mb-10 md:mb-24">
           <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-3 md:mb-4">
