@@ -43,13 +43,13 @@ export default function Films() {
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-      <main className="pt-28 md:pt-40 px-6 sm:px-10 md:px-12 max-w-[1600px] mx-auto pb-24 md:pb-32">
-        {/* Cabecera de sección limpia, idéntica al resto de Walcord */}
-        <div className="flex flex-col items-center mb-12 md:mb-24">
-          <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-4">
+      <main className="pt-24 md:pt-40 px-4 sm:px-8 md:px-12 max-w-[1600px] mx-auto pb-24 md:pb-32">
+        {/* Cabecera de sección */}
+        <div className="flex flex-col items-center mb-10 md:mb-24">
+          <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-3 md:mb-4">
             {t('films')}
           </h1>
-          <div className="w-[1px] h-10 md:h-12 bg-gray-300"></div>
+          <div className="w-[1px] h-8 md:h-12 bg-gray-300"></div>
         </div>
 
         {loading ? (
@@ -65,8 +65,8 @@ export default function Films() {
             </span>
           </div>
         ) : (
-          /* Catálogo de Pósters ajustado para móvil y escritorio */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-12 gap-x-8 md:gap-y-24 md:gap-x-12 max-w-7xl mx-auto">
+          /* 2 columnas en móvil (pósters proporcionados) y 3 en escritorio */
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-y-10 gap-x-4 sm:gap-x-8 md:gap-y-24 md:gap-x-12 max-w-7xl mx-auto">
             {films.map((film) => (
               <FilmCard key={film.id} film={film} />
             ))}
