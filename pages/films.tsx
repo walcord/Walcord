@@ -43,13 +43,13 @@ export default function Films() {
       <Header onOpenMenu={() => setIsMenuOpen(true)} />
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-      <main className="pt-28 md:pt-40 px-4 sm:px-8 md:px-12 max-w-[1600px] mx-auto pb-24 md:pb-32">
-        {/* Cabecera de sección */}
-        <div className="flex flex-col items-center mb-10 md:mb-24">
-          <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-3 md:mb-4">
+      <main className="pt-36 md:pt-40 px-6 sm:px-10 md:px-12 max-w-[1600px] mx-auto pb-32">
+        {/* Cabecera idéntica a Vídeos, Entrevistas y Campañas */}
+        <div className="flex flex-col items-center mb-16 md:mb-24">
+          <h1 className="text-xs tracking-[0.4em] uppercase text-gray-900 font-light mb-4">
             {t('films')}
           </h1>
-          <div className="w-[1px] h-8 md:h-12 bg-gray-300"></div>
+          <div className="w-[1px] h-12 bg-gray-300"></div>
         </div>
 
         {loading ? (
@@ -65,8 +65,8 @@ export default function Films() {
             </span>
           </div>
         ) : (
-          /* 2 columnas en móvil (pósters proporcionados) y 3 en escritorio */
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-y-10 gap-x-4 sm:gap-x-8 md:gap-y-24 md:gap-x-12 max-w-7xl mx-auto">
+          /* 1 columna centrada en móvil (editorial) y 2 columnas amplias en escritorio (como Vídeos) */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-20 md:gap-y-28 md:gap-x-16 max-w-5xl mx-auto">
             {films.map((film) => (
               <FilmCard key={film.id} film={film} />
             ))}
