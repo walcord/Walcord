@@ -20,7 +20,7 @@ export default function FilmCard({ film }: FilmCardProps) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
-      setIsPlaying(false); // Detener vídeo al cerrar el modal
+      setIsPlaying(false);
     }
     return () => {
       document.body.style.overflow = '';
@@ -188,7 +188,7 @@ export default function FilmCard({ film }: FilmCardProps) {
                       </div>
                     )}
 
-                    {/* Tabla de Ficha Técnica */}
+                    {/* Tabla de Ficha Técnica (Sin Música) */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8 text-xs">
                       {film.director && (
                         <div className="border-b border-gray-100 pb-3">
@@ -208,17 +208,6 @@ export default function FilmCard({ film }: FilmCardProps) {
                           </span>
                           <span className="text-gray-900 font-normal tracking-wide">
                             {film.duration}
-                          </span>
-                        </div>
-                      )}
-
-                      {film.music && (
-                        <div className="border-b border-gray-100 pb-3">
-                          <span className="block text-[9px] tracking-[0.25em] uppercase text-gray-400 mb-1">
-                            {t('music')}
-                          </span>
-                          <span className="text-gray-900 font-normal tracking-wide">
-                            {film.music}
                           </span>
                         </div>
                       )}
