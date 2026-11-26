@@ -14,6 +14,9 @@ export default function FilmCard({ film }: FilmCardProps) {
   const localizedTitle = film[`title_${langKey}`] || film.title;
   const localizedSynopsis = film[`synopsis_${langKey}`] || film.synopsis;
 
+  // Usa el cartel oficial dentro de la ficha si existe; si no, mantiene la portada del catálogo
+  const modalPosterUrl = film.official_poster_url || film.poster_url || 'https://via.placeholder.com/800x1200';
+
   useEffect(() => {
     if (isDetailsOpen) {
       document.body.style.overflow = 'hidden';
@@ -42,7 +45,7 @@ export default function FilmCard({ film }: FilmCardProps) {
 
   return (
     <>
-      {/* 1. PRESENTACIÓN EDITORIAL DEL PÓSTER (1 columna centrada en móvil, galería en PC) */}
+      {/* 1. PRESENTACIÓN EDITORIAL EN EL CATÁLOGO (Usa poster_url) */}
       <article
         onClick={() => setIsDetailsOpen(true)}
         className="group cursor-pointer flex flex-col w-full max-w-[330px] sm:max-w-[380px] md:max-w-none mx-auto"
@@ -63,7 +66,7 @@ export default function FilmCard({ film }: FilmCardProps) {
           </div>
         </div>
 
-        {/* Pie editorial idéntico al estilo de Entrevistas */}
+        {/* Pie editorial */}
         <div className="flex flex-col space-y-1.5">
           <h2 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-gray-900 md:group-hover:opacity-60 transition-opacity">
             {localizedTitle}
@@ -79,7 +82,7 @@ export default function FilmCard({ film }: FilmCardProps) {
         </div>
       </article>
 
-      {/* 2. FICHA TÉCNICA EDITORIAL AL HACER CLIC */}
+      {/* 2. FICHA TÉCNICA EDITORIAL AL HACER CLIC (Usa official_poster_url) */}
       {isDetailsOpen && !isPlaying && (
         <div
           className="fixed inset-0 z-[100] bg-white md:bg-black/75 md:backdrop-blur-sm md:flex md:items-center md:justify-center md:p-8 lg:p-12 overflow-y-auto"
@@ -105,12 +108,12 @@ export default function FilmCard({ film }: FilmCardProps) {
             {/* Contenido de la ficha */}
             <div className="p-6 pb-24 md:p-12 lg:p-14 flex flex-col md:grid md:grid-cols-12 md:gap-12 items-start">
               
-              {/* Póster en la ficha */}
+              {/* Póster oficial en la ficha */}
               <div className="w-40 sm:w-48 mx-auto mb-6 md:mb-0 md:w-full md:col-span-5 lg:col-span-4 shrink-0">
-                <div className="relative aspect-[2/3] w-full bg-gray-50 overflow-hidden">
+                <div className="relative aspect-[2/3] w-full bg-gray-50 overflow-hidden shadow-sm">
                   <img
-                    src={film.poster_url}
-                    alt={localizedTitle}
+                    src={modalPosterUrl}
+                    alt={`${localizedTitle} — Poster`}
                     className="w-full h-full object-cover"
                   />
                 </div>
