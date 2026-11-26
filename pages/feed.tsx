@@ -85,11 +85,19 @@ export default function Feed() {
   }
 
   const campaignTitle = campaign ? (campaign[`title_${langKey}`] || campaign.title) : '';
+  const campaignSubjects = campaign ? (campaign[`subjects_${langKey}`] || campaign.subjects) : '';
+
   const hasReport = reportsList.length > 0;
 
-  // Separación dinámica de artículos para las dos columnas laterales
+  // Separación dinámica de artículos para las dos columnas laterales (Escritorio)
   const leftArticles = articlesList.filter((_, index) => index % 2 === 0);
   const rightArticles = articlesList.filter((_, index) => index % 2 === 1);
+
+  // Lista única estrictamente cronológica para la versión teléfono
+  const chronologicalMobileFeed = [
+    ...articlesList.map((item) => ({ ...item, _feedType: 'article' })),
+    ...reportsList.map((item) => ({ ...item, _feedType: 'report' })),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const schemaData = {
     "@context": "https://schema.org",
@@ -136,7 +144,12 @@ export default function Feed() {
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-[2s] ease-out group-hover:scale-105"
               />
             </picture>
-            <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-12 lg:px-16 bg-gradient-to-t from-black/60 via-transparent to-transparent">
+            <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-12 lg:px-16 bg-gradient-to-t from-black/65 via-black/15 to-transparent">
+              {campaignSubjects && (
+                <span className="text-[10px] md:text-xs tracking-[0.3em] uppercase text-white/90 font-light mb-2.5 md:mb-3">
+                  {campaignSubjects}
+                </span>
+              )}
               <h1 className="text-3xl md:text-5xl lg:text-7xl font-serif font-normal text-white tracking-tight mb-4 max-w-4xl">
                 {campaignTitle}
               </h1>
@@ -150,31 +163,44 @@ export default function Feed() {
         <div className={`px-6 md:px-10 max-w-7xl mx-auto ${!campaign ? 'pt-28 md:pt-36' : ''}`}>
           
           {hasReport ? (
-            /* Estructura de 3 columnas continuas: Izquierda (Interviews), Centro (Article/Report), Derecha (Interviews) */
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-14 md:gap-12 lg:gap-16 items-start">
-              
-              {/* Columna 1: Entrevistas en el lado izquierdo */}
-              <div className="lg:col-span-1 w-full flex flex-col gap-14 md:gap-12 lg:gap-16">
-                {leftArticles.map((article) => (
-                  <ArticleCard key={article.id} article={article} />
-                ))}
+            <>
+              {/* VISTA MÓVIL / TABLET: Orden 100% cronológico (lo más reciente primero) */}
+              <div className="flex flex-col gap-14 md:gap-16 lg:hidden">
+                {chronologicalMobileFeed.map((item) =>
+                  item._feedType === 'report' ? (
+                    <ReportCard key={`mobile-report-${item.id}`} report={item} />
+                  ) : (
+                    <ArticleCard key={`mobile-article-${item.id}`} article={item} />
+                  )
+                )}
               </div>
 
-              {/* Columna 2 & 3: Reports / Artículos en la columna central */}
-              <div className="lg:col-span-2 w-full flex flex-col gap-14 md:gap-12 lg:gap-16">
-                {reportsList.map((report) => (
-                  <ReportCard key={report.id} report={report} />
-                ))}
-              </div>
+              {/* VISTA ESCRITORIO: Estructura editorial de 3 columnas */}
+              <div className="hidden lg:grid lg:grid-cols-4 lg:gap-16 items-start">
+                
+                {/* Columna 1: Entrevistas en el lado izquierdo */}
+                <div className="lg:col-span-1 w-full flex flex-col lg:gap-16">
+                  {leftArticles.map((article) => (
+                    <ArticleCard key={article.id} article={article} />
+                  ))}
+                </div>
 
-              {/* Columna 4: Entrevistas en el lado derecho */}
-              <div className="lg:col-span-1 w-full flex flex-col gap-14 md:gap-12 lg:gap-16">
-                {rightArticles.map((article) => (
-                  <ArticleCard key={article.id} article={article} />
-                ))}
-              </div>
+                {/* Columna 2 & 3: Reports / Artículos en la columna central */}
+                <div className="lg:col-span-2 w-full flex flex-col lg:gap-16">
+                  {reportsList.map((report) => (
+                    <ReportCard key={report.id} report={report} />
+                  ))}
+                </div>
 
-            </div>
+                {/* Columna 4: Entrevistas en el lado derecho */}
+                <div className="lg:col-span-1 w-full flex flex-col lg:gap-16">
+                  {rightArticles.map((article) => (
+                    <ArticleCard key={article.id} article={article} />
+                  ))}
+                </div>
+
+              </div>
+            </>
           ) : (
             
             /* Escenario cuando aún no hay reports */

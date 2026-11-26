@@ -76,6 +76,8 @@ export default function CampaignDetail() {
   const localizedSubtitle = getLocalizedField('subtitle');
   const localizedInterview = getLocalizedField('interview');
   const localizedSubjects = getLocalizedField('subjects');
+  const localizedCredits = getLocalizedField('credits');
+  const localizedAcknowledgments = getLocalizedField('acknowledgments');
 
   const date = new Date(campaign.created_at);
   const fallbackDate = `${date.toLocaleString('en-US', { month: 'short' })}. ${date.getFullYear().toString().slice(2)}'`.toUpperCase();
@@ -248,6 +250,27 @@ export default function CampaignDetail() {
         <section className="w-full">
           {renderEditorialStream()}
         </section>
+
+        {/* CRÉDITOS Y AGRADECIMIENTOS EDITORIALES */}
+        {(localizedCredits || localizedAcknowledgments) && (
+          <section className="max-w-4xl mx-auto px-6 md:px-12 mt-20 md:mt-28">
+            <div className="border-t border-gray-200 pt-12 md:pt-16 flex flex-col items-center text-center space-y-8">
+              
+              {localizedCredits && (
+                <div className="text-[9px] md:text-[10px] tracking-[0.28em] uppercase text-gray-500 font-light leading-[2.2] whitespace-pre-line">
+                  {localizedCredits}
+                </div>
+              )}
+
+              {localizedAcknowledgments && (
+                <p className="text-[9px] md:text-[10px] tracking-[0.3em] uppercase text-gray-400 font-light leading-relaxed max-w-2xl whitespace-pre-line">
+                  {localizedAcknowledgments}
+                </p>
+              )}
+
+            </div>
+          </section>
+        )}
 
       </main>
     </div>
